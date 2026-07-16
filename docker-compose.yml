@@ -1,0 +1,61 @@
+# Timeweb Cloud App Platform (Docker Compose)
+# - nginx должен быть первым сервисом (на него вешается домен)
+# - нельзя использовать host-порты 80/443 и volumes
+# - PostgreSQL подключается снаружи (Managed DB в Timeweb)
+
+services:
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: rassrochka-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-9000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - rassrochka-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+    container_name: rassrochka-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - rassrochka-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rassrochka-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
+      RUN_SEED: ${RUN_SEED:-true}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      - rassrochka-net
+
+networks:
+  rassrochka-net:
+    driver: bridge

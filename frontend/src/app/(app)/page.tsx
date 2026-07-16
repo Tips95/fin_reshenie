@@ -1,0 +1,225 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+import { Badge, Button, Card, LoadingState, PageHeader, SectionTitle, StatCard } from "@/components/ui";
+import { clientsApi, dashboardApi, exportsApi, tasksApi } from "@/lib/api-client";
+import { formatDate, formatMoney, formatShortName, isFullClient, statusLabel } from "@/lib/format";
+import type { Client, DashboardSummary } from "@/lib/types";
+import { useAuth } from "@/modules/auth/AuthProvider";
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [overdueClients, setOverdueClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [exportingOverdue, setExportingOverdue] = useState(false);
+  const [openTasksCount, setOpenTasksCount] = useState(0);
+  const showFinance = user?.role === "owner" || user?.role === "manager";
+  const showProfit = user?.role === "owner";
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [summaryData, overdue, tasks] = await Promise.all([
+          dashboardApi.summary(),
+          showFinance ? clientsApi.list({ overdue: true }) : Promise.resolve([]),
+          showFinance ? tasksApi.list("open") : Promise.resolve([]),
+        ]);
+        setSummary(summaryData);
+        setOpenTasksCount(tasks.length);
+        setOverdueClients(
+          overdue.filter((client): client is Client => isFullClient(client)),
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [showFinance]);
+
+  if (loading) return <LoadingState text="Загрузка дашборда..." />;
+  if (!summary) return <LoadingState text="Не удалось загрузить дашборд" />;
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title="Дашборд"
+        subtitle={`Добро пожаловать, ${user?.full_name}`}
+        action={
+          showFinance ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/tasks"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50/50"
+              >
+                Задачи{openTasksCount > 0 ? ` (${openTasksCount})` : ""}
+              </Link>
+              <Link
+                href="/analytics"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50/50"
+              >
+                Аналитика →
+              </Link>
+            </div>
+          ) : undefined
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Всего клиентов" value={summary.clients_total} tone="brand" />
+        <StatCard label="Активных" value={summary.clients_active} tone="success" />
+        <StatCard label="С просрочкой" value={summary.clients_overdue} tone="danger" />
+        {showFinance && (
+          <StatCard
+            label="Объём активных договоров"
+            value={formatMoney(summary.active_debt_total)}
+            tone="default"
+          />
+        )}
+      </div>
+
+      {showFinance && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <StatCard
+            label="Ожидается в этом месяце"
+            value={formatMoney(summary.expected_this_month)}
+            tone="brand"
+          />
+          <StatCard
+            label="Получено в этом месяце"
+            value={formatMoney(summary.collected_this_month)}
+            tone="success"
+          />
+          {showProfit && (
+            <>
+              <StatCard
+                label="Расходы в месяц"
+                value={formatMoney(summary.monthly_expenses)}
+                tone="warning"
+              />
+              <StatCard
+                label="Чистая прибыль"
+                value={formatMoney(summary.net_profit_this_month)}
+                tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
+                hint="Получено − обязательные расходы"
+              />
+            </>
+          )}
+          <StatCard
+            label="Сумма просрочки"
+            value={formatMoney(summary.overdue_amount)}
+            tone="danger"
+          />
+          <StatCard
+            label="Остаток по графикам"
+            value={formatMoney(summary.total_remainder)}
+            tone="default"
+          />
+          <StatCard
+            label="Всего получено"
+            value={formatMoney(summary.total_collected)}
+            tone="accent"
+          />
+        </div>
+      )}
+
+      {showProfit && (
+        <Card variant="accent">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Формула чистой прибыли</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {formatMoney(summary.collected_this_month)} −{" "}
+                {formatMoney(summary.monthly_expenses)} ={" "}
+                <span className="font-bold text-slate-900">
+                  {formatMoney(summary.net_profit_this_month)}
+                </span>
+              </p>
+            </div>
+            <Link
+              href="/expenses"
+              className="rounded-full bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
+            >
+              Управление расходами
+            </Link>
+          </div>
+        </Card>
+      )}
+
+      {showFinance && (
+        <Card>
+          <SectionTitle
+            title="Клиенты с просрочкой"
+            action={
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  disabled={exportingOverdue}
+                  onClick={async () => {
+                    setExportingOverdue(true);
+                    try {
+                      await exportsApi.overdueClients();
+                    } finally {
+                      setExportingOverdue(false);
+                    }
+                  }}
+                >
+                  {exportingOverdue ? "Выгрузка..." : "Excel"}
+                </Button>
+                <Link
+                  href="/clients?overdue=true"
+                  className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                >
+                  Все клиенты →
+                </Link>
+              </div>
+            }
+          />
+          {overdueClients.length === 0 ? (
+            <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-6 text-sm text-emerald-700">
+              Просроченных платежей нет — отличная работа!
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>ФИО</th>
+                    <th>Телефон</th>
+                    <th>Договор</th>
+                    <th>Сумма</th>
+                    <th>Статус</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overdueClients.slice(0, 10).map((client) => (
+                    <tr key={client.id}>
+                      <td>
+                        <Link
+                          href={`/clients/${client.id}`}
+                          className="font-semibold text-brand-700 hover:text-brand-600"
+                        >
+                          {formatShortName(client.full_name)}
+                        </Link>
+                      </td>
+                      <td className="text-slate-600">{client.phone}</td>
+                      <td className="text-slate-600">{formatDate(client.contract_date)}</td>
+                      <td className="font-medium text-slate-800">
+                        {formatMoney(client.debt_amount)}
+                      </td>
+                      <td>
+                        <Badge tone="danger">{statusLabel(client.status)}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
