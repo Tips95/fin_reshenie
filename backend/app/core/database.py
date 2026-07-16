@@ -16,24 +16,15 @@ def build_connect_args(database_url: str) -> dict[str, object]:
     if not database_url.startswith("postgresql"):
         return {}
 
-    ssl_mode = os.environ.get("DATABASE_SSL_MODE", "").strip()
+    # Timeweb Managed PostgreSQL: verify-full часто падает из-за hostname в сертификате.
+    # require шифрует соединение и стабильно работает в Docker.
+    ssl_mode = os.environ.get("DATABASE_SSL_MODE", "require").strip() or "require"
     ssl_root_cert = os.environ.get("PGSSLROOTCERT", "/app/certs/root.crt")
-    if ssl_mode:
-        args: dict[str, object] = {"sslmode": ssl_mode}
-        if ssl_mode in {"verify-full", "verify-ca"} and Path(ssl_root_cert).is_file():
-            args["sslrootcert"] = ssl_root_cert
-        return args
 
-    if Path(ssl_root_cert).is_file():
-        return {
-            "sslmode": "verify-full",
-            "sslrootcert": ssl_root_cert,
-        }
-
-    if "sslmode=" in database_url:
-        return {"sslmode": "require"}
-
-    return {}
+    args: dict[str, object] = {"sslmode": ssl_mode}
+    if ssl_mode in {"verify-full", "verify-ca"} and Path(ssl_root_cert).is_file():
+        args["sslrootcert"] = ssl_root_cert
+    return args
 
 
 connect_args = build_connect_args(settings.DATABASE_URL)
