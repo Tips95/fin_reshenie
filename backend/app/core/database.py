@@ -9,11 +9,21 @@ from app.core.config import settings
 from app.models.base import Base
 
 
-def _postgres_connect_args(database_url: str) -> dict[str, object]:
+def build_connect_args(database_url: str) -> dict[str, object]:
+    if database_url.startswith("sqlite"):
+        return {"check_same_thread": False}
+
     if not database_url.startswith("postgresql"):
         return {}
 
+    ssl_mode = os.environ.get("DATABASE_SSL_MODE", "").strip()
     ssl_root_cert = os.environ.get("PGSSLROOTCERT", "/app/certs/root.crt")
+    if ssl_mode:
+        args: dict[str, object] = {"sslmode": ssl_mode}
+        if ssl_mode in {"verify-full", "verify-ca"} and Path(ssl_root_cert).is_file():
+            args["sslrootcert"] = ssl_root_cert
+        return args
+
     if Path(ssl_root_cert).is_file():
         return {
             "sslmode": "verify-full",
@@ -26,11 +36,7 @@ def _postgres_connect_args(database_url: str) -> dict[str, object]:
     return {}
 
 
-connect_args = (
-    {"check_same_thread": False}
-    if settings.DATABASE_URL.startswith("sqlite")
-    else _postgres_connect_args(settings.DATABASE_URL)
-)
+connect_args = build_connect_args(settings.DATABASE_URL)
 
 engine = create_engine(
     settings.DATABASE_URL,
