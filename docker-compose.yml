@@ -14,7 +14,7 @@ services:
       - "${NGINX_PORT:-9000}:80"
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
       frontend:
         condition: service_started
     networks:
@@ -32,7 +32,7 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     networks:
       - rassrochka-net
 
@@ -48,11 +48,11 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
       RUN_SEED: ${RUN_SEED:-true}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 8
-      start_period: 30s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
     networks:
       - rassrochka-net
 

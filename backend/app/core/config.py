@@ -1,3 +1,6 @@
+import json
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +23,16 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: object) -> list[str]:
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.startswith("["):
+                return json.loads(raw)
+            return [raw]
+        return value  # type: ignore[return-value]
 
 
 settings = Settings()
