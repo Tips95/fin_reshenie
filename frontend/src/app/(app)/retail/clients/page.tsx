@@ -38,20 +38,26 @@ export default function RetailClientsPage() {
   });
 
   useEffect(() => {
-    const requests = [retailApi.listClients()];
-    if (isOwner) {
-      requests.push(retailApi.listInvestors(), retailApi.termRates());
-    }
-    Promise.all(requests)
-      .then((results) => {
-        setClients(results[0] as RetailClient[]);
+    void (async () => {
+      try {
         if (isOwner) {
-          setInvestors(results[1] as User[]);
-          setRates(results[2] as RetailTermRate[]);
+          const [clientsData, investorsData, ratesData] = await Promise.all([
+            retailApi.listClients(),
+            retailApi.listInvestors(),
+            retailApi.termRates(),
+          ]);
+          setClients(clientsData);
+          setInvestors(investorsData);
+          setRates(ratesData);
+        } else {
+          setClients(await retailApi.listClients());
         }
-      })
-      .catch(() => setClients([]))
-      .finally(() => setLoading(false));
+      } catch {
+        setClients([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [isOwner]);
 
   async function handleCreateClient(event: React.FormEvent) {
