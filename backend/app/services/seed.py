@@ -8,7 +8,7 @@ from app.core.security import get_password_hash
 from app.models.enums import OrganizationType, UserRole
 from app.models.organization import Organization
 from app.models.user import User
-from app.services.retail_seed import seed_retail_organization
+from app.services.retail_seed import _upsert_owner, seed_retail_organization
 
 
 def upsert_initial_admin(db: Session) -> bool:
@@ -33,29 +33,13 @@ def upsert_initial_admin(db: Session) -> bool:
         db.add(organization)
         db.flush()
 
-    user = db.scalar(
-        select(User).where(
-            User.organization_id == organization.id,
-            User.email == email,
-        )
+    _upsert_owner(
+        db,
+        organization=organization,
+        email=email,
+        password=password,
+        full_name=full_name,
     )
-    if user is None:
-        user = User(
-            id=uuid.uuid4(),
-            organization_id=organization.id,
-            full_name=full_name,
-            email=email,
-            phone=None,
-            password_hash=get_password_hash(password),
-            role=UserRole.OWNER,
-            is_active=True,
-        )
-        db.add(user)
-    else:
-        user.full_name = full_name
-        user.password_hash = get_password_hash(password)
-        user.role = UserRole.OWNER
-        user.is_active = True
 
     db.commit()
     print(f"Owner ready for legal workspace: {email}")
