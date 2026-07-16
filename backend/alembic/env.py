@@ -4,7 +4,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 from app.core.config import settings
-from app.core.database import build_connect_args
+from app.core.database import build_connect_args, sanitize_database_url
 from app.models import Base
 import app.models  # noqa: F401 — регистрация всех моделей в metadata
 
@@ -14,11 +14,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+database_url = sanitize_database_url(settings.DATABASE_URL)
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.DATABASE_URL,
+        url=database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -31,7 +32,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     connectable = create_engine(
-        settings.DATABASE_URL,
+        database_url,
         poolclass=pool.NullPool,
         connect_args=build_connect_args(settings.DATABASE_URL),
     )
