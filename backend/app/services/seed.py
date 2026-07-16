@@ -1,3 +1,4 @@
+import os
 import uuid
 
 from sqlalchemy import select
@@ -10,8 +11,63 @@ from app.models.user import User
 from app.services.retail_seed import seed_retail_organization
 
 
+def upsert_initial_admin(db: Session) -> bool:
+    email = os.environ.get("INITIAL_ADMIN_EMAIL", "").strip()
+    password = os.environ.get("INITIAL_ADMIN_PASSWORD", "").strip()
+    full_name = os.environ.get("INITIAL_ADMIN_NAME", "Администратор").strip() or "Администратор"
+
+    if not email or not password:
+        return False
+
+    organization = db.scalar(
+        select(Organization)
+        .where(Organization.organization_type == OrganizationType.BANKRUPTCY)
+        .limit(1)
+    )
+    if organization is None:
+        organization = Organization(
+            id=uuid.uuid4(),
+            name="Решение",
+            organization_type=OrganizationType.BANKRUPTCY,
+        )
+        db.add(organization)
+        db.flush()
+
+    user = db.scalar(
+        select(User).where(
+            User.organization_id == organization.id,
+            User.email == email,
+        )
+    )
+    if user is None:
+        user = User(
+            id=uuid.uuid4(),
+            organization_id=organization.id,
+            full_name=full_name,
+            email=email,
+            phone=None,
+            password_hash=get_password_hash(password),
+            role=UserRole.OWNER,
+            is_active=True,
+        )
+        db.add(user)
+    else:
+        user.full_name = full_name
+        user.password_hash = get_password_hash(password)
+        user.role = UserRole.OWNER
+        user.is_active = True
+
+    db.commit()
+    print(f"Owner ready for legal workspace: {email}")
+    return True
+
+
 def seed_demo_user(db: Session) -> None:
-    """Создаёт тестовую организацию и owner-пользователя, если БД пустая."""
+    """Создаёт организации и пользователей при первом запуске."""
+    if upsert_initial_admin(db):
+        seed_retail_organization(db)
+        return
+
     existing = db.scalar(select(User).limit(1))
     if existing is not None:
         org = db.scalar(select(Organization).limit(1))
@@ -49,7 +105,10 @@ def main() -> None:
     db = SessionLocal()
     try:
         seed_demo_user(db)
-        print("Seed completed: admin@reshenie.local / admin123")
+        if os.environ.get("INITIAL_ADMIN_EMAIL"):
+            print("Seed completed with INITIAL_ADMIN_EMAIL")
+        else:
+            print("Seed completed: admin@reshenie.local / admin123")
     finally:
         db.close()
 
