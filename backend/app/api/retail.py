@@ -28,7 +28,12 @@ from app.schemas.retail import (
     RetailPaymentScheduleResponse,
     RetailTermRateResponse,
 )
-from app.schemas.user import RetailInvestorCreate, RetailInvestorUpdate, UserResponse
+from app.schemas.user import (
+    RetailInvestorCreate,
+    RetailInvestorSelfUpdate,
+    RetailInvestorUpdate,
+    UserResponse,
+)
 from app.services.audit import log_audit
 from app.services.retail_access import (
     apply_investor_contract_filter,
@@ -435,10 +440,57 @@ def list_investors(
             .where(
                 User.organization_id == current_user.organization_id,
                 User.role == UserRole.INVESTOR,
+                User.is_active.is_(True),
             )
             .order_by(User.full_name)
         )
     )
+
+
+@router.get("/investors/me", response_model=UserResponse)
+def get_my_investor_profile(
+    current_user: User = Depends(require_retail_user),
+    db: Session = Depends(get_db),
+) -> User:
+    ensure_retail_organization(db, current_user)
+    if current_user.role != UserRole.INVESTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Раздел доступен только инвесторам",
+        )
+    return current_user
+
+
+@router.patch("/investors/me", response_model=UserResponse)
+def update_my_investment(
+    payload: RetailInvestorSelfUpdate,
+    current_user: User = Depends(require_retail_user),
+    db: Session = Depends(get_db),
+) -> User:
+    ensure_retail_organization(db, current_user)
+    if current_user.role != UserRole.INVESTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Раздел доступен только инвесторам",
+        )
+
+    old_value = current_user.investment_amount
+    if old_value != payload.investment_amount:
+        log_audit(
+            db,
+            user=current_user,
+            entity_type="user",
+            entity_id=current_user.id,
+            action=AuditAction.UPDATE,
+            field_name="investment_amount",
+            old_value=old_value,
+            new_value=payload.investment_amount,
+        )
+        current_user.investment_amount = payload.investment_amount
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 @router.post("/investors", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -518,3 +570,49 @@ def update_investor(
     db.commit()
     db.refresh(investor)
     return investor
+
+
+@router.delete("/investors/{investor_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_investor(
+    investor_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    ensure_retail_organization(db, current_user)
+    investor = _get_retail_investor(
+        db,
+        investor_id=investor_id,
+        organization_id=current_user.organization_id,
+    )
+
+    active_contracts = db.scalar(
+        select(func.count()).where(
+            RetailContract.investor_id == investor.id,
+            RetailContract.is_deleted.is_(False),
+        )
+    )
+    if active_contracts:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Сначала удалите активные договоры инвестора",
+        )
+
+    any_contracts = db.scalar(
+        select(func.count()).where(RetailContract.investor_id == investor.id)
+    )
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="user",
+        entity_id=investor.id,
+        action=AuditAction.DELETE,
+        field_name="hard_delete" if not any_contracts else "is_active",
+        old_value=investor.full_name,
+    )
+
+    if any_contracts:
+        investor.is_active = False
+    else:
+        db.delete(investor)
+
+    db.commit()

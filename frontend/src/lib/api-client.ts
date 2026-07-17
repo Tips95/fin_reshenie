@@ -201,6 +201,13 @@ export const retailApi = {
     apiFetch<User>("/retail/investors", { method: "POST", body: JSON.stringify(data) }),
   updateInvestor: (id: string, data: Record<string, unknown>) =>
     apiFetch<User>(`/retail/investors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteInvestor: (id: string) => apiFetch<void>(`/retail/investors/${id}`, { method: "DELETE" }),
+  getMyInvestment: () => apiFetch<User>("/retail/investors/me"),
+  updateMyInvestment: (investment_amount: string) =>
+    apiFetch<User>("/retail/investors/me", {
+      method: "PATCH",
+      body: JSON.stringify({ investment_amount }),
+    }),
 };
 
 export const dashboardApi = {

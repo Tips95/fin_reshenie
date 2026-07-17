@@ -18,6 +18,7 @@ export default function RetailInvestorsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     full_name: "",
@@ -81,6 +82,27 @@ export default function RetailInvestorsPage() {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось сохранить сумму");
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function handleDeleteInvestor(investor: User) {
+    if (
+      !window.confirm(
+        `Удалить инвестора «${investor.full_name}»? Если у него были договоры, аккаунт будет отключён.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(investor.id);
+    setError(null);
+    try {
+      await retailApi.deleteInvestor(investor.id);
+      setInvestors((current) => current.filter((item) => item.id !== investor.id));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить инвестора");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -165,6 +187,7 @@ export default function RetailInvestorsPage() {
                 <th>Телефон</th>
                 <th>Сумма вклада</th>
                 <th>Статус</th>
+                <th>Действие</th>
               </tr>
             </thead>
             <tbody>
@@ -199,6 +222,16 @@ export default function RetailInvestorsPage() {
                     </p>
                   </td>
                   <td>{investor.is_active ? "Активен" : "Отключён"}</td>
+                  <td>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      disabled={deletingId === investor.id}
+                      onClick={() => handleDeleteInvestor(investor)}
+                    >
+                      {deletingId === investor.id ? "..." : "Удалить"}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -21,6 +21,7 @@ def _user_response(user: User) -> UserResponse:
         email=user.email,
         role=user.role,
         is_active=user.is_active,
+        investment_amount=user.investment_amount,
     )
 
 

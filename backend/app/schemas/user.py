@@ -33,6 +33,10 @@ class RetailInvestorUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class RetailInvestorSelfUpdate(BaseModel):
+    investment_amount: Decimal = Field(ge=0, decimal_places=2)
+
+
 class UserUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
     phone: str | None = Field(default=None, max_length=32)

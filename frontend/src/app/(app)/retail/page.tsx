@@ -57,6 +57,21 @@ export default function RetailDashboardPage() {
         <StatCard label="Первоначальные взносы" value={formatMoney(data.down_payment_total)} tone="default" />
       </div>
 
+      {user?.role === "investor" && (
+        <Card>
+          <SectionTitle title="Мой вклад" description="Сумма, которую вы инвестируете в договоры" />
+          <p className="text-2xl font-bold text-slate-900">
+            {formatMoney(user.investment_amount ?? "0")}
+          </p>
+          <Link
+            href="/retail/capital"
+            className="mt-4 inline-block rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Изменить сумму вклада
+          </Link>
+        </Card>
+      )}
+
       {user?.role === "owner" && data.investors.length > 0 && (
         <Card>
           <SectionTitle title="Инвесторы" description="Каждый финансирует свои договоры" />
@@ -102,9 +117,14 @@ export default function RetailDashboardPage() {
             Договоры
           </Link>
           {user?.role === "investor" && (
-            <Link href="/retail/clients" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">
-              Мои клиенты
-            </Link>
+            <>
+              <Link href="/retail/clients" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">
+                Мои клиенты
+              </Link>
+              <Link href="/retail/capital" className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+                Мой вклад
+              </Link>
+            </>
           )}
           {user?.role === "owner" && (
             <>

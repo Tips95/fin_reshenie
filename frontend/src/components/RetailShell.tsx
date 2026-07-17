@@ -10,10 +10,11 @@ import { statusLabel } from "@/lib/format";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const retailNavItems = [
-  { href: "/retail", label: "Дашборд", icon: "◈", ownerOnly: false },
-  { href: "/retail/contracts", label: "Договоры", icon: "◎", ownerOnly: false },
-  { href: "/retail/clients", label: "Клиенты", icon: "◉", ownerOnly: false, investorLabel: "Мои клиенты" },
-  { href: "/retail/investors", label: "Инвесторы", icon: "◌", ownerOnly: true },
+  { href: "/retail", label: "Дашборд", icon: "◈", ownerOnly: false, investorOnly: false },
+  { href: "/retail/contracts", label: "Договоры", icon: "◎", ownerOnly: false, investorOnly: false },
+  { href: "/retail/clients", label: "Клиенты", icon: "◉", ownerOnly: false, investorOnly: false, investorLabel: "Мои клиенты" },
+  { href: "/retail/capital", label: "Мой вклад", icon: "◇", ownerOnly: false, investorOnly: true },
+  { href: "/retail/investors", label: "Инвесторы", icon: "◌", ownerOnly: true, investorOnly: false },
 ] as const;
 
 function pageTitle(pathname: string): string {
@@ -22,6 +23,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith("/retail/contracts")) return "Договоры";
   if (pathname.startsWith("/retail/clients/")) return "Клиент";
   if (pathname.startsWith("/retail/clients")) return "Клиенты";
+  if (pathname.startsWith("/retail/capital")) return "Мой вклад";
   if (pathname.startsWith("/retail/investors")) return "Инвесторы";
   return "Товарная рассрочка";
 }
@@ -30,9 +32,11 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  const visibleNav = retailNavItems.filter(
-    (item) => !item.ownerOnly || user?.role === "owner",
-  );
+  const visibleNav = retailNavItems.filter((item) => {
+    if (item.ownerOnly && user?.role !== "owner") return false;
+    if (item.investorOnly && user?.role !== "investor") return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen mesh-bg">

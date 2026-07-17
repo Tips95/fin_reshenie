@@ -1,4 +1,5 @@
 from typing import Literal
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,3 +35,4 @@ class UserResponse(BaseModel):
     email: str | None
     role: UserRole
     is_active: bool
+    investment_amount: Decimal | None = None
