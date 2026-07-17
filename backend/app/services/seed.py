@@ -8,6 +8,7 @@ from app.core.security import get_password_hash
 from app.models.enums import OrganizationType, UserRole
 from app.models.organization import Organization
 from app.models.user import User
+from app.services.organization_defaults import seed_all_bankruptcy_organization_defaults
 from app.services.retail_seed import _upsert_owner, seed_retail_organization
 
 
@@ -50,37 +51,36 @@ def seed_demo_user(db: Session) -> None:
     """Создаёт организации и пользователей при первом запуске."""
     if upsert_initial_admin(db):
         seed_retail_organization(db)
-        return
-
-    existing = db.scalar(select(User).limit(1))
-    if existing is not None:
+    elif db.scalar(select(User).limit(1)) is not None:
         org = db.scalar(select(Organization).limit(1))
         if org is not None and getattr(org, "organization_type", None) is None:
             org.organization_type = OrganizationType.BANKRUPTCY
         seed_retail_organization(db)
-        return
+    else:
+        organization = Organization(
+            id=uuid.uuid4(),
+            name="Решение",
+            organization_type=OrganizationType.BANKRUPTCY,
+        )
+        db.add(organization)
+        db.flush()
 
-    organization = Organization(
-        id=uuid.uuid4(),
-        name="Решение",
-        organization_type=OrganizationType.BANKRUPTCY,
-    )
-    db.add(organization)
-    db.flush()
+        user = User(
+            id=uuid.uuid4(),
+            organization_id=organization.id,
+            full_name="Администратор",
+            email="admin@reshenie.local",
+            phone="+79990000000",
+            password_hash=get_password_hash("admin123"),
+            role=UserRole.OWNER,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        seed_retail_organization(db)
 
-    user = User(
-        id=uuid.uuid4(),
-        organization_id=organization.id,
-        full_name="Администратор",
-        email="admin@reshenie.local",
-        phone="+79990000000",
-        password_hash=get_password_hash("admin123"),
-        role=UserRole.OWNER,
-        is_active=True,
-    )
-    db.add(user)
+    seed_all_bankruptcy_organization_defaults(db)
     db.commit()
-    seed_retail_organization(db)
 
 
 def main() -> None:
