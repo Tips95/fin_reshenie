@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner_or_manager
+from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
 from app.core.database import get_db
 from app.models.enums import AuditAction, UserRole
 from app.models.payment import Payment
@@ -123,7 +123,7 @@ def get_payment(
 @router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_payment(
     payment_id: UUID,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> None:
     payment = db.get(Payment, payment_id)

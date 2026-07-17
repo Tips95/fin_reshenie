@@ -263,6 +263,7 @@ export const clientsApi = {
     apiFetch<Client>("/clients", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: Record<string, unknown>) =>
     apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: string) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
 };
 
 export const documentCollectionApi = {

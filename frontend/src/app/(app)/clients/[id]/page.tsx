@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import {
   BackLink,
@@ -61,6 +61,7 @@ function progressTone(status: string): "default" | "success" | "warning" | "dang
 
 export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { user } = useAuth();
   const [client, setClient] = useState<ClientDetail | ClientBrief | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,6 +94,7 @@ export default function ClientDetailPage() {
   const [convertSaving, setConvertSaving] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [convertForm, setConvertForm] = useState({ debt_amount: "", contract_date: "" });
+  const [deletingClient, setDeletingClient] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -184,7 +186,11 @@ export default function ClientDetailPage() {
   }
 
   async function handleDeletePayment(paymentId: string) {
-    if (!window.confirm("Удалить эту запись? График платежей будет пересчитан.")) {
+    if (
+      !window.confirm(
+        "Отменить этот платёж? Запись будет удалена, график платежей пересчитается.",
+      )
+    ) {
       return;
     }
 
@@ -192,8 +198,42 @@ export default function ClientDetailPage() {
     try {
       await paymentsApi.delete(paymentId);
       load();
+    } catch (error) {
+      alert(
+        error instanceof ApiRequestError
+          ? error.message
+          : "Не удалось отменить платёж",
+      );
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleDeleteClient() {
+    if (!client) return;
+    if (
+      !window.confirm(
+        `Удалить клиента «${client.full_name}» и все связанные данные без возможности восстановления?`,
+      )
+    ) {
+      return;
+    }
+    if (!window.confirm("Подтвердите окончательное удаление.")) {
+      return;
+    }
+
+    setDeletingClient(true);
+    try {
+      await clientsApi.delete(client.id);
+      router.push("/clients");
+    } catch (error) {
+      alert(
+        error instanceof ApiRequestError
+          ? error.message
+          : "Не удалось удалить клиента",
+      );
+    } finally {
+      setDeletingClient(false);
     }
   }
 
@@ -416,6 +456,15 @@ export default function ClientDetailPage() {
         back={<BackLink href="/clients">К списку клиентов</BackLink>}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {isOwner && (
+              <Button
+                variant="danger"
+                disabled={deletingClient}
+                onClick={handleDeleteClient}
+              >
+                {deletingClient ? "Удаление..." : "Удалить клиента"}
+              </Button>
+            )}
             {user?.role !== "call_center" && (
               <Button
                 variant="secondary"
@@ -1091,14 +1140,14 @@ export default function ClientDetailPage() {
                         {payment.comment ? ` · ${payment.comment}` : ""}
                       </p>
                     </div>
-                    {canRecordPayment && (
+                    {isOwner && (
                       <Button
                         type="button"
                         variant="ghost"
                         disabled={deletingId === payment.id}
                         onClick={() => handleDeletePayment(payment.id)}
                       >
-                        {deletingId === payment.id ? "Удаление..." : "Удалить"}
+                        {deletingId === payment.id ? "Отмена..." : "Отменить"}
                       </Button>
                     )}
                   </div>

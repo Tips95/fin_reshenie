@@ -27,6 +27,7 @@ from app.services.access import (
     ensure_client_read_access,
     ensure_client_write_access,
     find_pricing_tier,
+    get_organization_client,
     get_organization_user,
     pricing_tier_not_found_message,
 )
@@ -37,6 +38,7 @@ from app.schemas.mandatory_payment import MandatoryPaymentResponse
 from app.schemas.payment import PaymentResponse
 from app.schemas.payment_schedule import PaymentScheduleResponse
 from app.services.installment_schedule import create_payment_schedule_models
+from app.services.client_deletion import hard_delete_client
 from app.services.mandatory_payments import create_default_mandatory_payments
 from app.services.document_collection import (
     create_document_collection,
@@ -343,19 +345,23 @@ def update_client(
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_client(
     client_id: UUID,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> None:
-    client = ensure_client_write_access(db, current_user, client_id)
-    client.is_deleted = True
+    client = get_organization_client(
+        db,
+        client_id=client_id,
+        organization_id=current_user.organization_id,
+        include_deleted=True,
+    )
     log_audit(
         db,
         user=current_user,
         entity_type="client",
         entity_id=client.id,
         action=AuditAction.DELETE,
-        field_name="is_deleted",
-        old_value=False,
-        new_value=True,
+        field_name="hard_delete",
+        old_value=client.full_name,
     )
+    hard_delete_client(db, client)
     db.commit()
