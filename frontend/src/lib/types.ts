@@ -55,6 +55,7 @@ export interface User {
   email: string | null;
   role: UserRole;
   is_active: boolean;
+  investment_amount?: string | null;
   created_at?: string;
 }
 
@@ -394,6 +395,7 @@ export interface RetailContractDetail extends RetailContractBrief {
 export interface InvestorSummaryItem {
   investor_id: string;
   investor_name: string;
+  investment_amount: string;
   contracts_count: number;
   total_amount: string;
   collected_total: string;

@@ -65,6 +65,7 @@ export default function RetailDashboardPage() {
               <thead>
                 <tr>
                   <th>Инвестор</th>
+                  <th>Вклад</th>
                   <th>Договоров</th>
                   <th>Сумма</th>
                   <th>Получено</th>
@@ -76,6 +77,7 @@ export default function RetailDashboardPage() {
                 {data.investors.map((item) => (
                   <tr key={item.investor_id}>
                     <td className="font-medium text-slate-900">{item.investor_name}</td>
+                    <td>{formatMoney(item.investment_amount)}</td>
                     <td>{item.contracts_count}</td>
                     <td>{formatMoney(item.total_amount)}</td>
                     <td>{formatMoney(item.collected_total)}</td>

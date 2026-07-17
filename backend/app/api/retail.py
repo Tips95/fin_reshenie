@@ -28,7 +28,7 @@ from app.schemas.retail import (
     RetailPaymentScheduleResponse,
     RetailTermRateResponse,
 )
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import RetailInvestorCreate, RetailInvestorUpdate, UserResponse
 from app.services.audit import log_audit
 from app.services.retail_access import (
     apply_investor_contract_filter,
@@ -39,7 +39,8 @@ from app.services.retail_access import (
 )
 from app.services.retail_contracts import create_retail_contract, sync_contract_status
 from app.services.retail_dashboard import build_contract_brief, get_retail_dashboard
-from app.services.retail_payments import record_retail_payment
+from app.services.retail_deletion import hard_delete_retail_client, hard_delete_retail_contract
+from app.services.retail_payments import cancel_retail_payment, record_retail_payment
 from app.models.retail_term_rate import RetailTermRate
 
 router = APIRouter()
@@ -157,6 +158,27 @@ def create_client(
     return RetailClientResponse.model_validate(client)
 
 
+@router.delete("/clients/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_client(
+    client_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    ensure_retail_organization(db, current_user)
+    client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_client",
+        entity_id=client.id,
+        action=AuditAction.DELETE,
+        field_name="hard_delete",
+        old_value=client.full_name,
+    )
+    hard_delete_retail_client(db, client.id)
+    db.commit()
+
+
 @router.get("/clients/{client_id}", response_model=RetailClientResponse)
 def get_client(
     client_id: UUID,
@@ -265,6 +287,27 @@ def create_contract(
     )
 
 
+@router.delete("/contracts/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_contract(
+    contract_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    ensure_retail_organization(db, current_user)
+    contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_contract",
+        entity_id=contract.id,
+        action=AuditAction.DELETE,
+        field_name="hard_delete",
+        old_value=contract.product_name,
+    )
+    hard_delete_retail_contract(db, contract.id)
+    db.commit()
+
+
 @router.get("/contracts/{contract_id}", response_model=RetailContractDetail)
 def get_contract(
     contract_id: UUID,
@@ -314,6 +357,33 @@ def create_payment(
     db.commit()
     db.refresh(payment)
     return payment
+
+
+@router.delete("/payments/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_payment(
+    payment_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    ensure_retail_organization(db, current_user)
+    payment = db.get(RetailPayment, payment_id)
+    if payment is None or payment.is_deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Платёж не найден")
+    if payment.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Платёж не найден")
+
+    cancel_retail_payment(db, payment)
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_payment",
+        entity_id=payment.id,
+        action=AuditAction.DELETE,
+        field_name="is_deleted",
+        old_value=False,
+        new_value=True,
+    )
+    db.commit()
 
 
 @router.post("/contracts/{contract_id}/overdue-logs", response_model=RetailOverdueLogResponse)
@@ -373,7 +443,7 @@ def list_investors(
 
 @router.post("/investors", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_investor(
-    payload: UserCreate,
+    payload: RetailInvestorCreate,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> User:
@@ -391,6 +461,7 @@ def create_investor(
         password_hash=get_password_hash(payload.password),
         role=UserRole.INVESTOR,
         is_active=payload.is_active,
+        investment_amount=payload.investment_amount,
     )
     db.add(investor)
     db.flush()
@@ -401,6 +472,49 @@ def create_investor(
         entity_id=investor.id,
         action=AuditAction.CREATE,
     )
+    db.commit()
+    db.refresh(investor)
+    return investor
+
+
+def _get_retail_investor(db: Session, *, investor_id: UUID, organization_id: UUID) -> User:
+    investor = db.get(User, investor_id)
+    if (
+        investor is None
+        or investor.organization_id != organization_id
+        or investor.role != UserRole.INVESTOR
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Инвестор не найден")
+    return investor
+
+
+@router.patch("/investors/{investor_id}", response_model=UserResponse)
+def update_investor(
+    investor_id: UUID,
+    payload: RetailInvestorUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> User:
+    ensure_retail_organization(db, current_user)
+    investor = _get_retail_investor(
+        db,
+        investor_id=investor_id,
+        organization_id=current_user.organization_id,
+    )
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        old_value = getattr(investor, field)
+        if old_value != value:
+            log_audit(
+                db,
+                user=current_user,
+                entity_type="user",
+                entity_id=investor.id,
+                action=AuditAction.UPDATE,
+                field_name=field,
+                old_value=old_value,
+                new_value=value,
+            )
+            setattr(investor, field, value.strip() if isinstance(value, str) else value)
     db.commit()
     db.refresh(investor)
     return investor

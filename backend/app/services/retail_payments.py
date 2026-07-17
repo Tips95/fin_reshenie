@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.enums import PaymentScheduleStatus, RetailContractStatus, RetailPaymentType, UserRole
-from app.models.retail_contract import RetailPaymentSchedule
+from app.models.retail_contract import RetailContract, RetailPaymentSchedule
 from app.models.retail_payment import RetailPayment
 from app.models.user import User
 from app.services.retail_access import ensure_contract_access, get_retail_contract, money
@@ -122,3 +122,55 @@ def record_retail_payment(
 
     sync_contract_status(contract)
     return payment
+
+
+def reconcile_contract_payments(db: Session, contract: RetailContract) -> None:
+    for item in contract.payment_schedule:
+        item.paid_amount = Decimal("0.00")
+        item.paid_date = None
+        item.status = PaymentScheduleStatus.PENDING
+
+    active_payments = sorted(
+        [payment for payment in contract.payments if not payment.is_deleted],
+        key=lambda row: (row.payment_date, row.created_at),
+    )
+
+    for payment in active_payments:
+        if payment.payment_type == RetailPaymentType.MONTHLY:
+            if payment.payment_schedule_id is None:
+                continue
+            schedule = next(
+                (item for item in contract.payment_schedule if item.id == payment.payment_schedule_id),
+                None,
+            )
+            if schedule is None:
+                continue
+            apply_payment_to_schedule(schedule, payment.amount, payment.payment_date)
+        elif payment.payment_type == RetailPaymentType.EARLY_REPAYMENT:
+            remaining = payment.amount
+            for item in sorted(contract.payment_schedule, key=lambda row: row.month_number):
+                if remaining <= Decimal("0.00"):
+                    break
+                item_remainder = money(item.planned_amount - item.paid_amount)
+                if item_remainder <= Decimal("0.00"):
+                    continue
+                applied = min(item_remainder, remaining)
+                apply_payment_to_schedule(item, applied, payment.payment_date)
+                remaining = money(remaining - applied)
+
+    sync_contract_status(contract, date.today())
+
+
+def cancel_retail_payment(db: Session, payment: RetailPayment) -> RetailContract:
+    if payment.is_deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Платёж не найден")
+
+    contract = get_retail_contract(
+        db,
+        contract_id=payment.retail_contract_id,
+        organization_id=payment.organization_id,
+    )
+    payment.is_deleted = True
+    db.flush()
+    reconcile_contract_payments(db, contract)
+    return contract

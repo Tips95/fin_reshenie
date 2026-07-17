@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Card, EmptyState, FormField, Input, LoadingState, PageHeader, SectionTitle } from "@/components/ui";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
-import { formatShortName } from "@/lib/format";
+import { formatMoney, formatShortName } from "@/lib/format";
 import type { RetailClient, RetailTermRate, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -18,6 +18,7 @@ export default function RetailClientsPage() {
   const [showClientForm, setShowClientForm] = useState(false);
   const [showContractForm, setShowContractForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const [clientForm, setClientForm] = useState({
     full_name: "",
     phone: "",
@@ -82,6 +83,30 @@ export default function RetailClientsPage() {
       window.location.href = `/retail/contracts/${created.id}`;
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось создать договор");
+    }
+  }
+
+  async function handleDeleteClient(clientId: string, clientName: string) {
+    if (
+      !window.confirm(
+        `Удалить клиента «${clientName}» и все договоры без возможности восстановления?`,
+      )
+    ) {
+      return;
+    }
+    if (!window.confirm("Подтвердите окончательное удаление.")) {
+      return;
+    }
+
+    setDeletingClientId(clientId);
+    setError(null);
+    try {
+      await retailApi.deleteClient(clientId);
+      setClients((current) => current.filter((item) => item.id !== clientId));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить клиента");
+    } finally {
+      setDeletingClientId(null);
     }
   }
 
@@ -161,7 +186,9 @@ export default function RetailClientsPage() {
               >
                 <option value="">Выберите инвестора</option>
                 {investors.map((investor) => (
-                  <option key={investor.id} value={investor.id}>{investor.full_name}</option>
+                  <option key={investor.id} value={investor.id}>
+                    {investor.full_name} (вклад {formatMoney(investor.investment_amount ?? "0")})
+                  </option>
                 ))}
               </select>
             </FormField>
@@ -206,6 +233,7 @@ export default function RetailClientsPage() {
                   <th>Паспорт</th>
                   <th>Поручитель</th>
                   <th>Договоров</th>
+                  {isOwner && <th>Действие</th>}
                 </tr>
               </thead>
               <tbody>
@@ -216,6 +244,18 @@ export default function RetailClientsPage() {
                     <td>{client.passport}</td>
                     <td>{formatShortName(client.guarantor_full_name)}</td>
                     <td>{client.contracts_count}</td>
+                    {isOwner && (
+                      <td>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          disabled={deletingClientId === client.id}
+                          onClick={() => handleDeleteClient(client.id, client.full_name)}
+                        >
+                          {deletingClientId === client.id ? "..." : "Удалить"}
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

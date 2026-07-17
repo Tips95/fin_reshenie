@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import {
   BackLink,
@@ -20,6 +20,7 @@ import {
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { RetailContractDetail } from "@/lib/types";
+import { useAuth } from "@/modules/auth/AuthProvider";
 
 function statusTone(status: string): "default" | "success" | "warning" | "danger" {
   if (status === "completed") return "success";
@@ -38,9 +39,14 @@ function statusText(status: string): string {
 
 export default function RetailContractDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user } = useAuth();
+  const isOwner = user?.role === "owner";
   const [contract, setContract] = useState<RetailContractDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     payment_date: new Date().toISOString().slice(0, 10),
@@ -116,6 +122,50 @@ export default function RetailContractDetailPage() {
     }
   }
 
+  async function handleDeleteContract() {
+    if (!contract) return;
+    if (
+      !window.confirm(
+        `Удалить договор «${contract.product_name}» и все платежи без возможности восстановления?`,
+      )
+    ) {
+      return;
+    }
+    if (!window.confirm("Подтвердите окончательное удаление.")) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await retailApi.deleteContract(contract.id);
+      router.push("/retail/contracts");
+    } catch (error) {
+      alert(error instanceof ApiRequestError ? error.message : "Не удалось удалить договор");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleDeletePayment(paymentId: string) {
+    if (
+      !window.confirm(
+        "Отменить этот платёж? Запись будет удалена, график пересчитается.",
+      )
+    ) {
+      return;
+    }
+
+    setDeletingPaymentId(paymentId);
+    try {
+      await retailApi.deletePayment(paymentId);
+      await load();
+    } catch (error) {
+      alert(error instanceof ApiRequestError ? error.message : "Не удалось отменить платёж");
+    } finally {
+      setDeletingPaymentId(null);
+    }
+  }
+
   if (loading) return <LoadingState text="Загрузка договора..." />;
   if (!contract) return <EmptyState>Договор не найден</EmptyState>;
 
@@ -125,7 +175,16 @@ export default function RetailContractDetailPage() {
         title={contract.product_name}
         subtitle={`${contract.client_name} · ${contract.investor_name}`}
         back={<BackLink href="/retail/contracts">К договорам</BackLink>}
-        action={<Badge tone={statusTone(contract.status)}>{statusText(contract.status)}</Badge>}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {isOwner && (
+              <Button variant="danger" disabled={deleting} onClick={handleDeleteContract}>
+                {deleting ? "Удаление..." : "Удалить договор"}
+              </Button>
+            )}
+            <Badge tone={statusTone(contract.status)}>{statusText(contract.status)}</Badge>
+          </div>
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -283,6 +342,16 @@ export default function RetailContractDetailPage() {
                     {payment.comment ? ` · ${payment.comment}` : ""}
                   </p>
                 </div>
+                {isOwner && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={deletingPaymentId === payment.id}
+                    onClick={() => handleDeletePayment(payment.id)}
+                  >
+                    {deletingPaymentId === payment.id ? "Отмена..." : "Отменить"}
+                  </Button>
+                )}
               </div>
             ))}
           </div>

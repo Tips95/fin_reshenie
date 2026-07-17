@@ -147,6 +147,7 @@ class RetailPaymentCreate(BaseModel):
 class InvestorSummaryItem(BaseModel):
     investor_id: UUID
     investor_name: str
+    investment_amount: Decimal = Decimal("0.00")
     contracts_count: int
     total_amount: Decimal
     collected_total: Decimal

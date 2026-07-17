@@ -111,6 +111,7 @@ def get_retail_dashboard(db: Session, user: User) -> RetailDashboardSummary:
                 InvestorSummaryItem(
                     investor_id=investor.id,
                     investor_name=investor.full_name,
+                    investment_amount=investor.investment_amount or Decimal("0.00"),
                     contracts_count=len(investor_contracts),
                     total_amount=money(sum((item.total_amount for item in investor_contracts), zero)),
                     collected_total=money(sum((_contract_collected(item) for item in investor_contracts), zero)),

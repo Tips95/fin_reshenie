@@ -1,6 +1,7 @@
 import uuid
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String
+from sqlalchemy import Boolean, Enum, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -24,6 +25,7 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
         nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    investment_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
     assigned_clients: Mapped[list["Client"]] = relationship(back_populates="assigned_manager")

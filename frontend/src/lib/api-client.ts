@@ -172,6 +172,7 @@ export const retailApi = {
     apiFetch<RetailClient>("/retail/clients", { method: "POST", body: JSON.stringify(data) }),
   updateClient: (id: string, data: Record<string, unknown>) =>
     apiFetch<RetailClient>(`/retail/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteClient: (id: string) => apiFetch<void>(`/retail/clients/${id}`, { method: "DELETE" }),
   listContracts: (status?: string) => {
     const query = status ? `?status_filter=${status}` : "";
     return apiFetch<RetailContractBrief[]>(`/retail/contracts${query}`);
@@ -182,6 +183,7 @@ export const retailApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  deleteContract: (id: string) => apiFetch<void>(`/retail/contracts/${id}`, { method: "DELETE" }),
   recordPayment: (contractId: string, data: Record<string, unknown>) =>
     apiFetch(`/retail/contracts/${contractId}/payments`, {
       method: "POST",
@@ -192,9 +194,13 @@ export const retailApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  deletePayment: (paymentId: string) =>
+    apiFetch<void>(`/retail/payments/${paymentId}`, { method: "DELETE" }),
   listInvestors: () => apiFetch<User[]>("/retail/investors"),
   createInvestor: (data: Record<string, unknown>) =>
     apiFetch<User>("/retail/investors", { method: "POST", body: JSON.stringify(data) }),
+  updateInvestor: (id: string, data: Record<string, unknown>) =>
+    apiFetch<User>(`/retail/investors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 };
 
 export const dashboardApi = {
