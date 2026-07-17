@@ -17,7 +17,15 @@ class OperatingExpense(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    category: Mapped[ExpenseCategory] = mapped_column(nullable=False)
+    category: Mapped[ExpenseCategory] = mapped_column(
+        Enum(
+            ExpenseCategory,
+            name="expensecategory",
+            values_callable=lambda enum: [item.value for item in enum],
+            create_type=False,
+        ),
+        nullable=False,
+    )
     expense_group: Mapped[ExpenseGroup] = mapped_column(
         Enum(
             ExpenseGroup,

@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Numeric, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -22,11 +22,25 @@ class ClientMandatoryPayment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
-    payment_type: Mapped[MandatoryPaymentType] = mapped_column(nullable=False)
+    payment_type: Mapped[MandatoryPaymentType] = mapped_column(
+        Enum(
+            MandatoryPaymentType,
+            name="mandatorypaymenttype",
+            values_callable=lambda enum: [item.value for item in enum],
+            create_type=False,
+        ),
+        nullable=False,
+    )
     planned_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     paid_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     paid_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[MandatoryPaymentStatus] = mapped_column(
+        Enum(
+            MandatoryPaymentStatus,
+            name="mandatorypaymentstatus",
+            values_callable=lambda enum: [item.value for item in enum],
+            create_type=False,
+        ),
         nullable=False,
         default=MandatoryPaymentStatus.PENDING,
     )
