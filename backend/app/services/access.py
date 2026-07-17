@@ -3,16 +3,18 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
-from app.models.enums import ClientStatus, PaymentScheduleStatus, UserRole
+from app.models.enums import ClientStatus, OrganizationType, PaymentScheduleStatus, UserRole
 from app.models.installment_plan import InstallmentPlan
+from app.models.organization import Organization
 from app.models.payment_schedule import PaymentSchedule
 from app.models.pricing_tier import PricingTier
 from app.models.user import User
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
+from app.services.organization_defaults import sync_pricing_tiers
 
 
 def get_organization_client(
@@ -52,21 +54,13 @@ def apply_client_visibility_filter(stmt: Select, user: User) -> Select:
     return stmt
 
 
-def find_pricing_tier(
-    db: Session,
+def _pricing_tier_lookup_stmt(
     *,
     organization_id: UUID,
     debt_amount: Decimal,
     contract_date: date,
-) -> PricingTier | None:
-    """
-    Подбор тарифа по сумме долга.
-
-    Диапазоны из прайса включительные: «300к – 400к» значит
-    min_amount <= долг <= max_amount. На границе (ровно 400к) берётся
-    нижний диапазон (300–400), а не следующий (400–500).
-    """
-    stmt = (
+):
+    return (
         select(PricingTier)
         .where(
             PricingTier.organization_id == organization_id,
@@ -82,6 +76,62 @@ def find_pricing_tier(
         )
         .limit(1)
     )
+
+
+def _ensure_default_pricing_tiers(db: Session, organization_id: UUID) -> None:
+    active_count = db.scalar(
+        select(func.count())
+        .select_from(PricingTier)
+        .where(
+            PricingTier.organization_id == organization_id,
+            PricingTier.is_active.is_(True),
+        )
+    )
+    if active_count:
+        return
+
+    organization = db.get(Organization, organization_id)
+    if organization is None:
+        return
+
+    org_type = getattr(organization, "organization_type", None)
+    if org_type is None:
+        organization.organization_type = OrganizationType.BANKRUPTCY
+    elif org_type != OrganizationType.BANKRUPTCY:
+        return
+
+    created, updated = sync_pricing_tiers(db, organization_id)
+    if created or updated:
+        print(
+            f"Auto-synced pricing tiers for org {organization_id}: "
+            f"created={created}, updated={updated}"
+        )
+
+
+def find_pricing_tier(
+    db: Session,
+    *,
+    organization_id: UUID,
+    debt_amount: Decimal,
+    contract_date: date,
+) -> PricingTier | None:
+    """
+    Подбор тарифа по сумме долга.
+
+    Диапазоны из прайса включительные: «300к – 400к» значит
+    min_amount <= долг <= max_amount. На границе (ровно 400к) берётся
+    нижний диапазон (300–400), а не следующий (400–500).
+    """
+    stmt = _pricing_tier_lookup_stmt(
+        organization_id=organization_id,
+        debt_amount=debt_amount,
+        contract_date=contract_date,
+    )
+    tier = db.scalar(stmt)
+    if tier is not None:
+        return tier
+
+    _ensure_default_pricing_tiers(db, organization_id)
     return db.scalar(stmt)
 
 

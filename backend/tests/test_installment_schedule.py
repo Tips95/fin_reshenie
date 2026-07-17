@@ -269,7 +269,7 @@ class TestFindPricingTier:
 
     def test_returns_none_when_no_tier_found(self):
         db = MagicMock()
-        db.scalar.return_value = None
+        db.scalar.side_effect = [None, 1, None]
 
         result = find_pricing_tier(
             db,

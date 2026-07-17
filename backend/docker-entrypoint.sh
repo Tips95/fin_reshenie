@@ -33,7 +33,9 @@ alembic upgrade head
 
 if [ "${RUN_SEED:-true}" = "true" ]; then
   echo "Running seed (idempotent)..."
-  python -m app.services.seed || echo "WARN: seed failed, continuing startup"
+  if ! python -m app.services.seed; then
+    echo "ERROR: seed failed — pricing tiers may be missing. Check logs above."
+  fi
 fi
 
 echo "Starting API server..."

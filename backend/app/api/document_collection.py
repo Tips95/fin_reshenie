@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_owner_or_manager
@@ -62,27 +62,31 @@ def convert_to_bankruptcy(
     from app.api.clients import _build_client_detail, _create_installment_for_client
 
     client = ensure_client_write_access(db, current_user, client_id)
-    convert_client_to_bankruptcy(
-        db,
-        client,
-        debt_amount=payload.debt_amount,
-        contract_date=payload.contract_date,
-    )
-    _create_installment_for_client(
-        db,
-        client=client,
-        organization_id=current_user.organization_id,
-    )
-    log_audit(
-        db,
-        user=current_user,
-        entity_type="client",
-        entity_id=client.id,
-        action=AuditAction.UPDATE,
-        field_name="engagement_stage",
-        old_value="document_collection",
-        new_value="bankruptcy",
-    )
-    detail = _build_client_detail(db, client)
-    db.commit()
+    try:
+        convert_client_to_bankruptcy(
+            db,
+            client,
+            debt_amount=payload.debt_amount,
+            contract_date=payload.contract_date,
+        )
+        _create_installment_for_client(
+            db,
+            client=client,
+            organization_id=current_user.organization_id,
+        )
+        log_audit(
+            db,
+            user=current_user,
+            entity_type="client",
+            entity_id=client.id,
+            action=AuditAction.UPDATE,
+            field_name="engagement_stage",
+            old_value="document_collection",
+            new_value="bankruptcy",
+        )
+        detail = _build_client_detail(db, client)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     return detail

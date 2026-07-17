@@ -109,8 +109,7 @@ def convert_client_to_bankruptcy(
         )
 
     client.debt_amount = debt_amount
-    if contract_date is not None:
-        client.contract_date = contract_date
+    client.contract_date = contract_date or date.today()
     client.engagement_stage = EngagementStage.BANKRUPTCY
     client.procedure_stage = ProcedureStage.CONTRACT_SIGNED
 
