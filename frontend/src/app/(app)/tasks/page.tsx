@@ -28,7 +28,7 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState<ProcedureStage | "">("");
 
-  const showFinance = user?.role === "owner" || user?.role === "manager";
+  const canUseTasks = user?.role === "owner" || user?.role === "manager";
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -48,12 +48,12 @@ export default function TasksPage() {
   }, []);
 
   useEffect(() => {
-    if (!showFinance) {
+    if (!canUseTasks) {
       router.replace("/");
       return;
     }
     void loadData();
-  }, [loadData, router, showFinance]);
+  }, [loadData, router, canUseTasks]);
 
   async function handleTaskAction(taskId: string, status: "done" | "dismissed") {
     setSavingId(taskId);
@@ -69,7 +69,7 @@ export default function TasksPage() {
     }
   }
 
-  if (!showFinance) return <LoadingState text="Перенаправление..." />;
+  if (!canUseTasks) return <LoadingState text="Перенаправление..." />;
   if (loading) return <LoadingState text="Загрузка задач..." />;
 
   return (

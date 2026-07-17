@@ -319,7 +319,8 @@ export default function ClientDetailPage() {
     }
   }
 
-  const canEditClient = user?.role === "owner" || user?.role === "manager";
+  const isOwner = user?.role === "owner";
+  const canEditClient = isOwner || user?.role === "manager";
   const canAssignManager = user?.role === "owner";
   const canRecordPayment = canEditClient;
 
@@ -657,7 +658,7 @@ export default function ClientDetailPage() {
         )}
       </div>
 
-      {detail && isBankruptcy && (
+      {detail && isBankruptcy && isOwner && (
         <Card variant="accent">
           <SectionTitle
             title="Прибыль по клиенту"

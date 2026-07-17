@@ -12,8 +12,8 @@ import { useAuth } from "@/modules/auth/AuthProvider";
 const navItems = [
   { href: "/", label: "Дашборд", icon: "◈" },
   { href: "/clients", label: "Клиенты", icon: "◎" },
-  { href: "/analytics", label: "Аналитика", icon: "◉", financeOnly: true },
-  { href: "/tasks", label: "Задачи", icon: "◐", financeOnly: true },
+  { href: "/analytics", label: "Аналитика", icon: "◉", ownerOnly: true },
+  { href: "/tasks", label: "Задачи", icon: "◐" },
   { href: "/expenses", label: "Расходы", icon: "◇", ownerOnly: true },
   { href: "/audit", label: "Журнал", icon: "▣", ownerOnly: true },
   { href: "/users", label: "Команда", icon: "◌", ownerOnly: true },
@@ -23,7 +23,6 @@ const navItems = [
   label: string;
   icon: string;
   ownerOnly?: boolean;
-  financeOnly?: boolean;
 }>;
 
 function pageTitle(pathname: string): string {
@@ -45,7 +44,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const visibleNav = navItems.filter((item) => {
     if (item.ownerOnly && user?.role !== "owner") return false;
-    if (item.financeOnly && user?.role === "call_center") return false;
     return true;
   });
 

@@ -32,12 +32,12 @@ export default function AnalyticsPage() {
   const [months, setMonths] = useState(6);
   const [sortField, setSortField] = useState<ProfitSortField>("profit");
 
-  const showFinance = user?.role === "owner" || user?.role === "manager";
-  const showOrgExpenses = user?.role === "owner";
-  const showManagerCommissions = user?.role === "owner";
+  const isOwner = user?.role === "owner";
+  const showOrgExpenses = isOwner;
+  const showManagerCommissions = isOwner;
 
   useEffect(() => {
-    if (!showFinance) {
+    if (!isOwner) {
       router.replace("/");
       return;
     }
@@ -48,7 +48,7 @@ export default function AnalyticsPage() {
         .then((overview) => setData(overview))
         .catch(() => setData(null)),
     ];
-    if (showManagerCommissions) {
+    if (isOwner) {
       requests.push(
         analyticsApi
           .managerCommissions(months)
@@ -59,7 +59,7 @@ export default function AnalyticsPage() {
       setCommissions(null);
     }
     Promise.all(requests).finally(() => setLoading(false));
-  }, [months, router, showFinance, showManagerCommissions]);
+  }, [months, router, isOwner]);
 
   const sortedProfits = useMemo(() => {
     if (!data) return [];
@@ -75,7 +75,7 @@ export default function AnalyticsPage() {
 
   const trendMax = useMemo(() => (data ? maxTrendValue(data.trends) : 1), [data]);
 
-  if (!showFinance) return <LoadingState text="Перенаправление..." />;
+  if (!isOwner) return <LoadingState text="Перенаправление..." />;
   if (loading) return <LoadingState text="Загрузка аналитики..." />;
   if (!data) return <LoadingState text="Не удалось загрузить аналитику" />;
 

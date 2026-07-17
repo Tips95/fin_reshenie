@@ -163,7 +163,7 @@ export default function ClientsPageContent() {
   const canCreate = user?.role === "owner" || user?.role === "manager";
   const canEdit = canCreate;
   const canAssignManager = user?.role === "owner";
-  const showFinance = user?.role !== "call_center";
+  const canSeeClientAmounts = user?.role === "owner" || user?.role === "manager";
 
   function handleSort(field: SortField) {
     if (sortBy === field) {
@@ -428,7 +428,7 @@ export default function ClientsPageContent() {
                     sortDir={sortDir}
                     onSort={handleSort}
                   />
-                  {showFinance && (
+                  {canSeeClientAmounts && (
                     <SortableTh
                       label="Сумма долга"
                       field="debt_amount"
@@ -446,7 +446,7 @@ export default function ClientsPageContent() {
                     sortDir={sortDir}
                     onSort={handleSort}
                   />
-                  {showFinance && (
+                  {canSeeClientAmounts && (
                     <SortableTh
                       label="Просрочка"
                       field="overdue"
@@ -480,7 +480,7 @@ export default function ClientsPageContent() {
                     </td>
                     <td className="text-slate-600">{client.phone}</td>
                     <td className="text-slate-600">{formatDate(client.contract_date)}</td>
-                    {showFinance && isFullClient(client) && (
+                    {canSeeClientAmounts && isFullClient(client) && (
                       <td className="font-medium text-slate-800">
                         {formatMoney(client.debt_amount)}
                       </td>
@@ -568,7 +568,7 @@ export default function ClientsPageContent() {
                         </Badge>
                       )}
                     </td>
-                    {showFinance && (
+                    {canSeeClientAmounts && (
                       <td>
                         {isFullClient(client) && client.has_overdue ? (
                           <Badge tone="danger">Есть</Badge>

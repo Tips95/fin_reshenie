@@ -54,8 +54,8 @@ class TestDashboardSummary:
 
         db = MagicMock()
         db.scalars.side_effect = [
-            [],  # operating expenses
             [client],
+            [],
             [schedule],
             [payment],
         ]
@@ -76,14 +76,36 @@ class TestDashboardSummary:
         assert summary.monthly_expenses == Decimal("0.00")
         assert summary.net_profit_this_month == Decimal("3000.00")
 
-    def test_call_center_gets_limited_summary(self):
+    def test_manager_gets_counts_without_financial_metrics(self, monkeypatch):
         client = make_client()
         db = MagicMock()
         db.scalars.return_value = [client]
+        monkeypatch.setattr(
+            "app.services.dashboard.client_has_overdue_payments",
+            lambda *_args, **_kwargs: True,
+        )
+
+        summary = get_dashboard_summary(db, make_user(UserRole.MANAGER))
+
+        assert summary.clients_total == 1
+        assert summary.clients_overdue == 1
+        assert summary.expected_this_month == Decimal("0.00")
+        assert summary.total_collected == Decimal("0.00")
+        assert summary.active_debt_total == Decimal("0.00")
+
+    def test_call_center_gets_limited_summary(self, monkeypatch):
+        client = make_client()
+        db = MagicMock()
+        db.scalars.return_value = [client]
+        monkeypatch.setattr(
+            "app.services.dashboard.client_has_overdue_payments",
+            lambda *_args, **_kwargs: False,
+        )
 
         summary = get_dashboard_summary(db, make_user(UserRole.CALL_CENTER))
 
         assert summary.clients_total == 1
+        assert summary.clients_overdue == 0
         assert summary.expected_this_month == Decimal("0.00")
         assert summary.total_collected == Decimal("0.00")
         assert summary.monthly_expenses == Decimal("0.00")

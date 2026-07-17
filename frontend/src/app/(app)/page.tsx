@@ -16,16 +16,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [exportingOverdue, setExportingOverdue] = useState(false);
   const [openTasksCount, setOpenTasksCount] = useState(0);
-  const showFinance = user?.role === "owner" || user?.role === "manager";
-  const showProfit = user?.role === "owner";
+  const isOwner = user?.role === "owner";
+  const canManageClients = isOwner || user?.role === "manager";
+  const showOrgFinance = isOwner;
 
   useEffect(() => {
     async function load() {
       try {
         const [summaryData, overdue, tasks] = await Promise.all([
           dashboardApi.summary(),
-          showFinance ? clientsApi.list({ overdue: true }) : Promise.resolve([]),
-          showFinance ? tasksApi.list("open") : Promise.resolve([]),
+          canManageClients ? clientsApi.list({ overdue: true }) : Promise.resolve([]),
+          canManageClients ? tasksApi.list("open") : Promise.resolve([]),
         ]);
         setSummary(summaryData);
         setOpenTasksCount(tasks.length);
@@ -37,7 +38,7 @@ export default function DashboardPage() {
       }
     }
     load();
-  }, [showFinance]);
+  }, [canManageClients]);
 
   if (loading) return <LoadingState text="Загрузка дашборда..." />;
   if (!summary) return <LoadingState text="Не удалось загрузить дашборд" />;
@@ -48,7 +49,7 @@ export default function DashboardPage() {
         title="Дашборд"
         subtitle={`Добро пожаловать, ${user?.full_name}`}
         action={
-          showFinance ? (
+          canManageClients ? (
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/tasks"
@@ -56,12 +57,14 @@ export default function DashboardPage() {
               >
                 Задачи{openTasksCount > 0 ? ` (${openTasksCount})` : ""}
               </Link>
-              <Link
-                href="/analytics"
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50/50"
-              >
-                Аналитика →
-              </Link>
+              {isOwner && (
+                <Link
+                  href="/analytics"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50/50"
+                >
+                  Аналитика →
+                </Link>
+              )}
             </div>
           ) : undefined
         }
@@ -71,7 +74,7 @@ export default function DashboardPage() {
         <StatCard label="Всего клиентов" value={summary.clients_total} tone="brand" />
         <StatCard label="Активных" value={summary.clients_active} tone="success" />
         <StatCard label="С просрочкой" value={summary.clients_overdue} tone="danger" />
-        {showFinance && (
+        {showOrgFinance && (
           <StatCard
             label="Объём активных договоров"
             value={formatMoney(summary.active_debt_total)}
@@ -80,7 +83,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {showFinance && (
+      {showOrgFinance && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <StatCard
             label="Ожидается в этом месяце"
@@ -92,7 +95,7 @@ export default function DashboardPage() {
             value={formatMoney(summary.collected_this_month)}
             tone="success"
           />
-          {showProfit && (
+          {isOwner && (
             <>
               <StatCard
                 label="Расходы в месяц"
@@ -125,7 +128,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showProfit && (
+      {isOwner && (
         <Card variant="accent">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -148,7 +151,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {showFinance && (
+      {canManageClients && (
         <Card>
           <SectionTitle
             title="Клиенты с просрочкой"

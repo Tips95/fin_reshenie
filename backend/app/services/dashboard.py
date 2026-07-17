@@ -47,16 +47,17 @@ def _monthly_expenses_total(db: Session, organization_id) -> Decimal:
 
 
 def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
-    monthly_expenses = Decimal("0.00")
-    if user.role != UserRole.CALL_CENTER:
-        monthly_expenses = _monthly_expenses_total(db, user.organization_id)
+    clients = list(db.scalars(_visible_clients_stmt(user)))
+    active_clients = [client for client in clients if client.status == ClientStatus.ACTIVE]
+    clients_overdue = sum(
+        1 for client in clients if client_has_overdue_payments(db, client.id)
+    )
 
-    if user.role == UserRole.CALL_CENTER:
-        clients = list(db.scalars(_visible_clients_stmt(user)))
+    if user.role != UserRole.OWNER:
         return DashboardSummary(
             clients_total=len(clients),
-            clients_active=sum(1 for client in clients if client.status == ClientStatus.ACTIVE),
-            clients_overdue=0,
+            clients_active=len(active_clients),
+            clients_overdue=clients_overdue,
             expected_this_month=Decimal("0.00"),
             collected_this_month=Decimal("0.00"),
             overdue_amount=Decimal("0.00"),
@@ -67,17 +68,12 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
             net_profit_this_month=Decimal("0.00"),
         )
 
+    monthly_expenses = _monthly_expenses_total(db, user.organization_id)
     today = date.today()
     month_start, month_end = _month_bounds(today)
 
-    clients = list(db.scalars(_visible_clients_stmt(user)))
     client_ids = [client.id for client in clients]
-    active_clients = [client for client in clients if client.status == ClientStatus.ACTIVE]
     active_client_ids = [client.id for client in active_clients]
-
-    clients_overdue = sum(
-        1 for client in clients if client_has_overdue_payments(db, client.id)
-    )
     active_debt_total = sum(
         (client.debt_amount for client in active_clients),
         Decimal("0.00"),
