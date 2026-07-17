@@ -11,7 +11,8 @@ import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
   { href: "/", label: "Дашборд", icon: "◈" },
-  { href: "/clients", label: "Клиенты", icon: "◎" },
+  { href: "/clients/collection", label: "Сбор документов", icon: "◫" },
+  { href: "/clients/contracts", label: "Договоры", icon: "◎" },
   { href: "/analytics", label: "Аналитика", icon: "◉", ownerOnly: true },
   { href: "/tasks", label: "Задачи", icon: "◐" },
   { href: "/expenses", label: "Расходы", icon: "◇", ownerOnly: true },
@@ -28,6 +29,8 @@ const navItems = [
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
   if (pathname.startsWith("/clients/")) return "Карточка клиента";
+  if (pathname.startsWith("/clients/collection")) return "Сбор документов";
+  if (pathname.startsWith("/clients/contracts")) return "Договоры";
   if (pathname.startsWith("/clients")) return "Клиенты";
   if (pathname.startsWith("/analytics")) return "Аналитика";
   if (pathname.startsWith("/tasks")) return "Задачи";
@@ -64,7 +67,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               const active =
                 item.href === "/"
                   ? pathname === "/"
-                  : pathname.startsWith(item.href);
+                  : item.href === "/clients/collection"
+                    ? pathname.startsWith("/clients/collection")
+                    : item.href === "/clients/contracts"
+                      ? pathname.startsWith("/clients/contracts") ||
+                        (pathname.startsWith("/clients/") &&
+                          !pathname.startsWith("/clients/collection"))
+                      : pathname.startsWith(item.href);
               return (
                 <Link
                   key={item.href}
@@ -150,7 +159,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 const active =
                   item.href === "/"
                     ? pathname === "/"
-                    : pathname.startsWith(item.href);
+                    : item.href === "/clients/collection"
+                      ? pathname.startsWith("/clients/collection")
+                      : item.href === "/clients/contracts"
+                        ? pathname.startsWith("/clients/contracts") ||
+                          (pathname.startsWith("/clients/") &&
+                            !pathname.startsWith("/clients/collection"))
+                        : pathname.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}

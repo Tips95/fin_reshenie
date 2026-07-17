@@ -60,7 +60,34 @@ function SortableTh({
   );
 }
 
-export default function ClientsPageContent() {
+type ClientWorkspace = "collection" | "contracts";
+
+const WORKSPACE_CONFIG: Record<
+  ClientWorkspace,
+  {
+    title: string;
+    subtitle: string;
+    engagementStage: "document_collection" | "bankruptcy";
+    emptyText: string;
+  }
+> = {
+  collection: {
+    title: "Сбор документов",
+    subtitle: "Клиенты на этапе сбора: оплата 10 000 / 13 000 ₽ до перевода на банкротство",
+    engagementStage: "document_collection",
+    emptyText: "Клиенты на этапе сбора не найдены",
+  },
+  contracts: {
+    title: "Договоры",
+    subtitle: "Клиенты с договором банкротства: график рассрочки и обязательные платежи",
+    engagementStage: "bankruptcy",
+    emptyText: "Договоры не найдены",
+  },
+};
+
+export default function ClientsPageContent({ workspace }: { workspace: ClientWorkspace }) {
+  const workspaceConfig = WORKSPACE_CONFIG[workspace];
+  const isCollectionView = workspace === "collection";
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -72,9 +99,6 @@ export default function ClientsPageContent() {
   );
   const [procedureFilter, setProcedureFilter] = useState(
     searchParams.get("procedure_stage") ?? "",
-  );
-  const [engagementFilter, setEngagementFilter] = useState(
-    searchParams.get("engagement_stage") ?? "",
   );
   const [managerFilter, setManagerFilter] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
@@ -104,7 +128,7 @@ export default function ClientsPageContent() {
         status: statusFilter || undefined,
         overdue: overdueFilter || undefined,
         procedure_stage: procedureFilter || undefined,
-        engagement_stage: engagementFilter || undefined,
+        engagement_stage: workspaceConfig.engagementStage,
         manager_id: managerFilter || undefined,
         phone: phoneSearch.trim() || undefined,
         name: nameSearch.trim() || undefined,
@@ -117,7 +141,7 @@ export default function ClientsPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, procedureFilter, engagementFilter, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir]);
+  }, [statusFilter, procedureFilter, workspaceConfig.engagementStage, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir]);
 
   useEffect(() => {
     loadClients();
@@ -203,7 +227,7 @@ export default function ClientsPageContent() {
         status: statusFilter || undefined,
         overdue: overdueFilter || undefined,
         procedure_stage: procedureFilter || undefined,
-        engagement_stage: engagementFilter || undefined,
+        engagement_stage: workspaceConfig.engagementStage,
         manager_id: managerFilter || undefined,
         phone: phoneSearch.trim() || undefined,
         name: nameSearch.trim() || undefined,
@@ -223,15 +247,42 @@ export default function ClientsPageContent() {
 
   return (
     <div className="space-y-8">
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/clients/collection"
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+            isCollectionView
+              ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Сбор документов
+        </Link>
+        <Link
+          href="/clients/contracts"
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+            !isCollectionView
+              ? "bg-brand-100 text-brand-900 ring-1 ring-brand-200"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          Договоры
+        </Link>
+      </div>
+
       <PageHeader
-        title="Клиенты"
-        subtitle="Список, фильтры и создание новых карточек"
+        title={workspaceConfig.title}
+        subtitle={
+          loading
+            ? workspaceConfig.subtitle
+            : `${workspaceConfig.subtitle} · ${clients.length} в списке`
+        }
         action={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={handleExport} disabled={exporting}>
               {exporting ? "Выгрузка..." : "Excel"}
             </Button>
-            {canCreate ? (
+            {canCreate && isCollectionView ? (
               <Button onClick={() => setShowForm((v) => !v)}>
                 {showForm ? "Скрыть форму" : "Добавить клиента"}
               </Button>
@@ -283,31 +334,22 @@ export default function ClientsPageContent() {
               <option value="cancelled">Отменён</option>
             </Select>
           </div>
-          <div className="min-w-[180px]">
-            <label className="mb-1 block text-sm text-slate-600">Услуга</label>
-            <Select
-              value={engagementFilter}
-              onChange={(e) => setEngagementFilter(e.target.value)}
-            >
-              <option value="">Все</option>
-              <option value="document_collection">Сбор документов</option>
-              <option value="bankruptcy">Банкротство</option>
-            </Select>
-          </div>
-          <div className="min-w-[180px]">
-            <label className="mb-1 block text-sm text-slate-600">Этап процедуры</label>
-            <Select
-              value={procedureFilter}
-              onChange={(e) => setProcedureFilter(e.target.value)}
-            >
-              <option value="">Все</option>
-              {PROCEDURE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+          {!isCollectionView && (
+            <div className="min-w-[180px]">
+              <label className="mb-1 block text-sm text-slate-600">Этап процедуры</label>
+              <Select
+                value={procedureFilter}
+                onChange={(e) => setProcedureFilter(e.target.value)}
+              >
+                <option value="">Все</option>
+                {PROCEDURE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div className="min-w-[180px]">
             <label className="mb-1 block text-sm text-slate-600">Месяц договора</label>
             <Input
@@ -316,24 +358,28 @@ export default function ClientsPageContent() {
               onChange={(e) => setContractMonth(e.target.value)}
             />
           </div>
-          <div className="min-w-[180px]">
-            <label className="mb-1 block text-sm text-slate-600">Платёж в месяце</label>
-            <Input
-              type="month"
-              value={dueMonth}
-              onChange={(e) => setDueMonth(e.target.value)}
-            />
-          </div>
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={overdueFilter}
-                onChange={(e) => setOverdueFilter(e.target.checked)}
+          {!isCollectionView && (
+            <div className="min-w-[180px]">
+              <label className="mb-1 block text-sm text-slate-600">Платёж в месяце</label>
+              <Input
+                type="month"
+                value={dueMonth}
+                onChange={(e) => setDueMonth(e.target.value)}
               />
-              Только с просрочкой
-            </label>
-          </div>
+            </div>
+          )}
+          {!isCollectionView && (
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={overdueFilter}
+                  onChange={(e) => setOverdueFilter(e.target.checked)}
+                />
+                Только с просрочкой
+              </label>
+            </div>
+          )}
           {user?.role === "owner" && managers.length > 0 && (
             <div className="min-w-[180px]">
               <label className="mb-1 block text-sm text-slate-600">Менеджер</label>
@@ -353,7 +399,7 @@ export default function ClientsPageContent() {
         </div>
       </Card>
 
-      {showForm && (
+      {showForm && isCollectionView && (
         <Card variant="accent">
           <SectionTitle
             title="Новый клиент"
@@ -406,7 +452,7 @@ export default function ClientsPageContent() {
           <LoadingState text="Загрузка клиентов..." />
         ) : clients.length === 0 ? (
           <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-            Клиенты не найдены
+            {workspaceConfig.emptyText}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -428,7 +474,7 @@ export default function ClientsPageContent() {
                     sortDir={sortDir}
                     onSort={handleSort}
                   />
-                  {canSeeClientAmounts && (
+                  {canSeeClientAmounts && !isCollectionView && (
                     <SortableTh
                       label="Сумма долга"
                       field="debt_amount"
@@ -446,7 +492,7 @@ export default function ClientsPageContent() {
                     sortDir={sortDir}
                     onSort={handleSort}
                   />
-                  {canSeeClientAmounts && (
+                  {canSeeClientAmounts && !isCollectionView && (
                     <SortableTh
                       label="Просрочка"
                       field="overdue"
@@ -480,7 +526,7 @@ export default function ClientsPageContent() {
                     </td>
                     <td className="text-slate-600">{client.phone}</td>
                     <td className="text-slate-600">{formatDate(client.contract_date)}</td>
-                    {canSeeClientAmounts && isFullClient(client) && (
+                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && (
                       <td className="font-medium text-slate-800">
                         {formatMoney(client.debt_amount)}
                       </td>
@@ -509,7 +555,9 @@ export default function ClientsPageContent() {
                       </td>
                     )}
                     <td>
-                      {isFullClient(client) && client.engagement_stage === "document_collection" ? (
+                      {isCollectionView ? (
+                        <Badge tone="warning">Сбор документов</Badge>
+                      ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
                         <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
                       ) : canEdit ? (
                         <Select
@@ -568,7 +616,7 @@ export default function ClientsPageContent() {
                         </Badge>
                       )}
                     </td>
-                    {canSeeClientAmounts && (
+                    {canSeeClientAmounts && !isCollectionView && (
                       <td>
                         {isFullClient(client) && client.has_overdue ? (
                           <Badge tone="danger">Есть</Badge>
