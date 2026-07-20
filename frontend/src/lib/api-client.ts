@@ -379,6 +379,11 @@ export const mandatoryPaymentsApi = {
 export const installmentApi = {
   list: (clientId: string) =>
     apiFetch<InstallmentPlan[]>(`/clients/${clientId}/installment-plans`),
+  update: (clientId: string, planId: string, data: { total_amount: string }) =>
+    apiFetch<InstallmentPlan>(`/clients/${clientId}/installment-plans/${planId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   schedule: (clientId: string, planId: string) =>
     apiFetch<PaymentScheduleItem[]>(
       `/payment-schedule/${clientId}/installment-plans/${planId}/payment-schedule`,

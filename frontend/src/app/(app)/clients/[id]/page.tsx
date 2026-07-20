@@ -18,7 +18,7 @@ import {
   Select,
   StatCard,
 } from "@/components/ui";
-import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
+import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
 import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -84,6 +84,12 @@ export default function ClientDetailPage() {
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneValue, setPhoneValue] = useState("");
   const [phoneSaving, setPhoneSaving] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [editingContractAmount, setEditingContractAmount] = useState(false);
+  const [contractAmountValue, setContractAmountValue] = useState("");
+  const [contractAmountSaving, setContractAmountSaving] = useState(false);
   const [deferringId, setDeferringId] = useState<string | null>(null);
   const [deferForm, setDeferForm] = useState({ deferred_until: "", comment: "" });
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
@@ -330,6 +336,38 @@ export default function ClientDetailPage() {
     }
   }
 
+  async function handleSaveName() {
+    if (!client) return;
+    setNameSaving(true);
+    try {
+      await clientsApi.update(client.id, { full_name: nameValue.trim() });
+      setEditingName(false);
+      load();
+    } catch (error) {
+      alert(error instanceof ApiRequestError ? error.message : "Не удалось сохранить ФИО");
+    } finally {
+      setNameSaving(false);
+    }
+  }
+
+  async function handleSaveContractAmount() {
+    if (!client || !detail?.installment_plan) return;
+    setContractAmountSaving(true);
+    try {
+      await installmentApi.update(client.id, detail.installment_plan.id, {
+        total_amount: Number(contractAmountValue).toFixed(2),
+      });
+      setEditingContractAmount(false);
+      load();
+    } catch (error) {
+      alert(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить сумму договора",
+      );
+    } finally {
+      setContractAmountSaving(false);
+    }
+  }
+
   function startDefer(item: PaymentScheduleItem) {
     setDeferringId(item.id);
     setDeferForm({
@@ -436,9 +474,14 @@ export default function ClientDetailPage() {
   const docCollection = detail?.document_collection ?? null;
   const schedule = detail?.payment_schedule ?? [];
   const mandatory = detail?.mandatory_payments ?? [];
-  const paidTotal = schedule.reduce((sum, item) => sum + Number(item.paid_amount), 0);
-  const plannedTotal = schedule.reduce((sum, item) => sum + Number(item.planned_amount), 0);
-  const remainder = plannedTotal - paidTotal;
+  const contractTotal = detail?.installment_plan
+    ? Number(detail.installment_plan.total_amount)
+    : schedule.reduce((sum, item) => sum + Number(item.planned_amount), 0);
+  const paidTotal = (detail?.payments ?? []).reduce((sum, payment) => {
+    if (!payment.payment_schedule_id) return sum;
+    return sum + (payment.is_refund ? -Number(payment.amount) : Number(payment.amount));
+  }, 0);
+  const remainder = contractTotal - paidTotal;
   const collectedTotal = (detail?.payments ?? []).reduce((sum, payment) => {
     const signed = payment.is_refund ? -Number(payment.amount) : Number(payment.amount);
     return sum + signed;
@@ -501,6 +544,55 @@ export default function ClientDetailPage() {
           </div>
         }
       />
+
+      {isOwner && (
+        <Card>
+          <SectionTitle
+            title="ФИО клиента"
+            description="Редактирование доступно только руководителю"
+          />
+          {editingName ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[280px] flex-1">
+                <FormField label="Полное ФИО">
+                  <Input
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    placeholder="Фамилия Имя Отчество"
+                  />
+                </FormField>
+              </div>
+              <Button type="button" disabled={nameSaving} onClick={handleSaveName}>
+                {nameSaving ? "Сохранение..." : "Сохранить"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditingName(false);
+                  setNameValue(client.full_name);
+                }}
+              >
+                Отмена
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-lg font-semibold text-slate-900">{client.full_name}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setNameValue(client.full_name);
+                  setEditingName(true);
+                }}
+              >
+                Изменить ФИО
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
 
       {canEditClient && (
         <Card>
@@ -688,9 +780,10 @@ export default function ClientDetailPage() {
         {detail && isBankruptcy ? (
           <>
             <StatCard label="Сумма долга" value={formatMoney(detail.debt_amount)} tone="default" />
+            <StatCard label="Сумма договора" value={formatMoney(contractTotal)} tone="brand" />
             <StatCard label="Оплачено по графику" value={formatMoney(paidTotal)} tone="success" />
             <StatCard
-              label="Остаток по графику"
+              label="Остаток по договору"
               value={formatMoney(remainder)}
               tone={remainder > 0 ? "warning" : "success"}
             />
@@ -726,11 +819,66 @@ export default function ClientDetailPage() {
               tone={clientProfit >= 0 ? "success" : "danger"}
             />
             <StatCard
-              label="Остаток по графику"
+              label="Остаток по договору"
               value={formatMoney(remainder)}
               tone={remainder > 0 ? "warning" : "success"}
             />
           </div>
+        </Card>
+      )}
+
+      {detail && isBankruptcy && isOwner && detail.installment_plan && (
+        <Card>
+          <SectionTitle
+            title="Сумма договора"
+            description="Для руководителя: можно задать вручную, независимо от тарифа по сумме долга"
+          />
+          {editingContractAmount ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[220px]">
+                <FormField label="Сумма договора, ₽">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={contractAmountValue}
+                    onChange={(e) => setContractAmountValue(e.target.value)}
+                  />
+                </FormField>
+              </div>
+              <Button
+                type="button"
+                disabled={contractAmountSaving}
+                onClick={handleSaveContractAmount}
+              >
+                {contractAmountSaving ? "Сохранение..." : "Сохранить"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditingContractAmount(false);
+                  setContractAmountValue(detail.installment_plan!.total_amount);
+                }}
+              >
+                Отмена
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-2xl font-bold text-slate-900">{formatMoney(contractTotal)}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setContractAmountValue(detail.installment_plan!.total_amount);
+                  setEditingContractAmount(true);
+                }}
+              >
+                Изменить сумму договора
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 
@@ -1116,7 +1264,14 @@ export default function ClientDetailPage() {
           )}
 
           <Card>
-            <SectionTitle title="История платежей" />
+            <SectionTitle
+              title="История платежей"
+              description={
+                isOwner
+                  ? "Руководитель может удалить ошибочный платёж — график пересчитается автоматически"
+                  : undefined
+              }
+            />
             {detail.payments.length === 0 ? (
               <EmptyState>Платежей пока нет</EmptyState>
             ) : (
@@ -1143,11 +1298,11 @@ export default function ClientDetailPage() {
                     {isOwner && (
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="danger"
                         disabled={deletingId === payment.id}
                         onClick={() => handleDeletePayment(payment.id)}
                       >
-                        {deletingId === payment.id ? "Отмена..." : "Отменить"}
+                        {deletingId === payment.id ? "Удаление..." : "Удалить"}
                       </Button>
                     )}
                   </div>

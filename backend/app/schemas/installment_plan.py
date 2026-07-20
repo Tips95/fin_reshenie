@@ -11,6 +11,10 @@ class InstallmentPlanCreate(BaseModel):
     total_amount: Decimal | None = Field(default=None, gt=0, decimal_places=2)
 
 
+class InstallmentPlanUpdate(BaseModel):
+    total_amount: Decimal = Field(gt=0, decimal_places=2)
+
+
 class InstallmentPlanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

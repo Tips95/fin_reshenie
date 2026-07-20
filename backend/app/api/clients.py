@@ -309,6 +309,15 @@ def update_client(
     client = ensure_client_write_access(db, current_user, client_id)
     updates = payload.model_dump(exclude_unset=True)
 
+    owner_only_fields = {"full_name", "debt_amount"}
+    if current_user.role != UserRole.OWNER:
+        forbidden = owner_only_fields.intersection(updates.keys())
+        if forbidden:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Изменение ФИО и суммы долга доступно только руководителю",
+            )
+
     if "assigned_manager_id" in updates:
         if current_user.role != UserRole.OWNER:
             raise HTTPException(

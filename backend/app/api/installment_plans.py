@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner_or_manager
+from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
 from app.core.database import get_db
 from app.models.enums import AuditAction, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.user import User
-from app.schemas.installment_plan import InstallmentPlanCreate, InstallmentPlanResponse
+from app.schemas.installment_plan import InstallmentPlanCreate, InstallmentPlanResponse, InstallmentPlanUpdate
+from app.services.installment_plan import update_installment_plan_total_amount
 from app.services.access import (
     ensure_client_read_access,
     ensure_client_write_access,
@@ -118,3 +119,35 @@ def get_installment_plan(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     ensure_client_read_access(db, current_user, client_id)
     return get_installment_plan_for_client(db, plan_id=plan_id, client_id=client_id)
+
+
+@router.patch(
+    "/{client_id}/installment-plans/{plan_id}",
+    response_model=InstallmentPlanResponse,
+)
+def update_installment_plan(
+    client_id: UUID,
+    plan_id: UUID,
+    payload: InstallmentPlanUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> InstallmentPlan:
+    ensure_client_write_access(db, current_user, client_id)
+    plan = get_installment_plan_for_client(db, plan_id=plan_id, client_id=client_id)
+
+    old_total = plan.total_amount
+    update_installment_plan_total_amount(db, plan, new_total=payload.total_amount)
+
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="installment_plan",
+        entity_id=plan.id,
+        action=AuditAction.UPDATE,
+        field_name="total_amount",
+        old_value=old_total,
+        new_value=payload.total_amount,
+    )
+    db.commit()
+    db.refresh(plan)
+    return plan
