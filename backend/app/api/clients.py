@@ -47,6 +47,7 @@ from app.services.document_collection import (
 )
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.payment_status import refresh_overdue_statuses
+from app.services.payment_sync import sync_client_payment_schedules
 
 router = APIRouter()
 
@@ -63,6 +64,8 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
     matched_tier = None
 
     if plan is not None:
+        sync_client_payment_schedules(db, client.id)
+        db.flush()
         refresh_overdue_statuses(db, plan.id)
         db.flush()
 

@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentResponse
 from app.services.access import ensure_client_read_access, ensure_client_write_access
 from app.services.audit import log_audit
-from app.services.payment_sync import sync_schedule_from_payments
+from app.services.payment_sync import sync_client_payment_schedules
 
 router = APIRouter()
 
@@ -87,8 +87,7 @@ def create_payment(
     db.add(payment)
     db.flush()
 
-    if schedule is not None:
-        sync_schedule_from_payments(db, schedule)
+    sync_client_payment_schedules(db, payload.client_id)
 
     log_audit(
         db,
@@ -132,15 +131,10 @@ def delete_payment(
 
     ensure_client_write_access(db, current_user, payment.client_id)
 
-    schedule: PaymentSchedule | None = None
-    if payment.payment_schedule_id is not None:
-        schedule = db.get(PaymentSchedule, payment.payment_schedule_id)
-
     payment.is_deleted = True
     db.flush()
 
-    if schedule is not None:
-        sync_schedule_from_payments(db, schedule)
+    sync_client_payment_schedules(db, payment.client_id)
 
     log_audit(
         db,

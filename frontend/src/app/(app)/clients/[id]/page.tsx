@@ -478,7 +478,6 @@ export default function ClientDetailPage() {
     ? Number(detail.installment_plan.total_amount)
     : schedule.reduce((sum, item) => sum + Number(item.planned_amount), 0);
   const paidTotal = (detail?.payments ?? []).reduce((sum, payment) => {
-    if (!payment.payment_schedule_id) return sum;
     return sum + (payment.is_refund ? -Number(payment.amount) : Number(payment.amount));
   }, 0);
   const remainder = contractTotal - paidTotal;
@@ -1178,7 +1177,7 @@ export default function ClientDetailPage() {
                       value={paymentForm.payment_schedule_id}
                       onChange={(e) => handleMonthSelect(e.target.value)}
                     >
-                      <option value="">Без привязки к месяцу</option>
+                      <option value="">Автораспределение по графику</option>
                       {schedule.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.month_number} — {formatDate(item.due_date)} (
