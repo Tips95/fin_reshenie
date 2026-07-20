@@ -361,6 +361,30 @@ export const scheduleApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  waiveOverdue: (scheduleId: string, data?: { comment?: string }) =>
+    apiFetch<PaymentScheduleItem>(`/payment-schedule/${scheduleId}/waive-overdue`, {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    }),
+  update: (scheduleId: string, data: { planned_amount?: string; due_date?: string }) =>
+    apiFetch<PaymentScheduleItem>(`/payment-schedule/${scheduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  delete: (scheduleId: string) =>
+    apiFetch<void>(`/payment-schedule/${scheduleId}`, { method: "DELETE" }),
+  addMonth: (
+    clientId: string,
+    planId: string,
+    data: { planned_amount: string; due_date?: string },
+  ) =>
+    apiFetch<PaymentScheduleItem>(
+      `/payment-schedule/${clientId}/installment-plans/${planId}/payment-schedule`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
 };
 
 export const mandatoryPaymentsApi = {

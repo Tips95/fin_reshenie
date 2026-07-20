@@ -18,6 +18,7 @@ def make_schedule(
     paid: str = "0.00",
     status: PaymentScheduleStatus = PaymentScheduleStatus.PENDING,
     deferred_until: date | None = None,
+    overdue_waived: bool = False,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         due_date=due_date,
@@ -25,6 +26,7 @@ def make_schedule(
         planned_amount=Decimal(planned),
         paid_amount=Decimal(paid),
         status=status,
+        overdue_waived=overdue_waived,
     )
 
 
@@ -62,4 +64,8 @@ class TestOverdueRules:
             paid="10000.00",
             status=PaymentScheduleStatus.PAID,
         )
+        assert is_schedule_overdue(schedule, date(2026, 8, 10)) is False
+
+    def test_waived_overdue_is_not_overdue(self):
+        schedule = make_schedule(due_date=date(2026, 7, 15), overdue_waived=True)
         assert is_schedule_overdue(schedule, date(2026, 8, 10)) is False

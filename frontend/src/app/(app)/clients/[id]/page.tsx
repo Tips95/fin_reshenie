@@ -92,6 +92,13 @@ export default function ClientDetailPage() {
   const [contractAmountSaving, setContractAmountSaving] = useState(false);
   const [deferringId, setDeferringId] = useState<string | null>(null);
   const [deferForm, setDeferForm] = useState({ deferred_until: "", comment: "" });
+  const [scheduleEdits, setScheduleEdits] = useState<
+    Record<string, { planned_amount: string; due_date: string }>
+  >({});
+  const [scheduleSavingId, setScheduleSavingId] = useState<string | null>(null);
+  const [waivingId, setWaivingId] = useState<string | null>(null);
+  const [addMonthForm, setAddMonthForm] = useState({ planned_amount: "", due_date: "" });
+  const [addMonthSaving, setAddMonthSaving] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
   const [exporting, setExporting] = useState(false);
   const [managers, setManagers] = useState<User[]>([]);
@@ -394,6 +401,97 @@ export default function ClientDetailPage() {
       alert(error instanceof ApiRequestError ? error.message : "Не удалось оформить отсрочку");
     } finally {
       setDeferringId(null);
+    }
+  }
+
+  function scheduleEditValues(item: PaymentScheduleItem) {
+    return (
+      scheduleEdits[item.id] ?? {
+        planned_amount: item.planned_amount,
+        due_date: item.due_date,
+      }
+    );
+  }
+
+  async function handleSaveScheduleRow(item: PaymentScheduleItem) {
+    const values = scheduleEditValues(item);
+    const payload: { planned_amount?: string; due_date?: string } = {};
+
+    if (values.planned_amount !== item.planned_amount) {
+      payload.planned_amount = Number(values.planned_amount).toFixed(2);
+    }
+    if (values.due_date !== item.due_date) {
+      payload.due_date = values.due_date;
+    }
+    if (Object.keys(payload).length === 0) return;
+
+    setScheduleSavingId(item.id);
+    try {
+      await scheduleApi.update(item.id, payload);
+      setScheduleEdits((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      load();
+    } catch (error) {
+      alert(error instanceof ApiRequestError ? error.message : "Не удалось сохранить график");
+    } finally {
+      setScheduleSavingId(null);
+    }
+  }
+
+  async function handleWaiveOverdue(item: PaymentScheduleItem) {
+    if (
+      !confirm(
+        "Снять просрочку по этому месяцу? Клиент перестанет отображаться в списке просрочек.",
+      )
+    ) {
+      return;
+    }
+    setWaivingId(item.id);
+    try {
+      await scheduleApi.waiveOverdue(item.id);
+      load();
+    } catch (error) {
+      alert(error instanceof ApiRequestError ? error.message : "Не удалось снять просрочку");
+    } finally {
+      setWaivingId(null);
+    }
+  }
+
+  async function handleDeleteScheduleMonth(item: PaymentScheduleItem) {
+    if (!confirm(`Удалить ${item.month_number}-й месяц из графика?`)) return;
+    setScheduleSavingId(item.id);
+    try {
+      await scheduleApi.delete(item.id);
+      load();
+    } catch (error) {
+      alert(error instanceof ApiRequestError ? error.message : "Не удалось удалить месяц");
+    } finally {
+      setScheduleSavingId(null);
+    }
+  }
+
+  async function handleAddScheduleMonth(event: React.FormEvent) {
+    event.preventDefault();
+    if (!client || !detail?.installment_plan) return;
+    if (!addMonthForm.planned_amount || Number(addMonthForm.planned_amount) <= 0) {
+      alert("Укажите сумму нового месяца");
+      return;
+    }
+    setAddMonthSaving(true);
+    try {
+      await scheduleApi.addMonth(client.id, detail.installment_plan.id, {
+        planned_amount: Number(addMonthForm.planned_amount).toFixed(2),
+        due_date: addMonthForm.due_date || undefined,
+      });
+      setAddMonthForm({ planned_amount: "", due_date: "" });
+      load();
+    } catch (error) {
+      alert(error instanceof ApiRequestError ? error.message : "Не удалось добавить месяц");
+    } finally {
+      setAddMonthSaving(false);
     }
   }
 
@@ -1034,7 +1132,14 @@ export default function ClientDetailPage() {
           </Card>
 
           <Card>
-            <SectionTitle title="График платежей" />
+            <SectionTitle
+              title="График платежей"
+              description={
+                isOwner
+                  ? "Руководитель может менять суммы и даты, добавлять или удалять месяцы, снимать просрочку"
+                  : undefined
+              }
+            />
             {schedule.length === 0 ? (
               <EmptyState>График не сформирован</EmptyState>
             ) : (
@@ -1071,29 +1176,76 @@ export default function ClientDetailPage() {
                       <th>Статус</th>
                       <th>Отсрочка</th>
                       {canRecordPayment && <th>Действие</th>}
+                      {isOwner && <th>Управление</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {schedule.map((item) => {
                       const rest = remainingAmount(item);
+                      const editValues = scheduleEditValues(item);
+                      const scheduleDirty =
+                        editValues.planned_amount !== item.planned_amount ||
+                        editValues.due_date !== item.due_date;
                       return (
                         <tr key={item.id}>
                           <td>{item.month_number}</td>
                           <td>
-                            <p>{formatDate(effectiveDueDate(item))}</p>
-                            {item.deferred_until && (
-                              <p className="text-xs text-amber-600">
-                                было {formatDate(item.due_date)}
-                              </p>
+                            {isOwner ? (
+                              <Input
+                                type="date"
+                                value={editValues.due_date}
+                                onChange={(e) =>
+                                  setScheduleEdits({
+                                    ...scheduleEdits,
+                                    [item.id]: {
+                                      ...editValues,
+                                      due_date: e.target.value,
+                                    },
+                                  })
+                                }
+                              />
+                            ) : (
+                              <>
+                                <p>{formatDate(effectiveDueDate(item))}</p>
+                                {item.deferred_until && (
+                                  <p className="text-xs text-amber-600">
+                                    было {formatDate(item.due_date)}
+                                  </p>
+                                )}
+                              </>
                             )}
                           </td>
-                          <td>{formatMoney(item.planned_amount)}</td>
+                          <td>
+                            {isOwner ? (
+                              <Input
+                                type="number"
+                                min={Number(item.paid_amount) || 0.01}
+                                step={0.01}
+                                className="max-w-[120px]"
+                                value={editValues.planned_amount}
+                                onChange={(e) =>
+                                  setScheduleEdits({
+                                    ...scheduleEdits,
+                                    [item.id]: {
+                                      ...editValues,
+                                      planned_amount: e.target.value,
+                                    },
+                                  })
+                                }
+                              />
+                            ) : (
+                              formatMoney(item.planned_amount)
+                            )}
+                          </td>
                           <td>{formatMoney(item.paid_amount)}</td>
                           <td>{formatMoney(rest)}</td>
                           <td>
                             <Badge tone={scheduleTone(item.status)}>
                               {statusLabel(item.status)}
                             </Badge>
+                            {item.overdue_waived && (
+                              <p className="mt-1 text-xs text-slate-500">Просрочка снята</p>
+                            )}
                           </td>
                           <td>
                             {item.deferral_comment ? (
@@ -1157,12 +1309,83 @@ export default function ClientDetailPage() {
                               </div>
                             </td>
                           )}
+                          {isOwner && (
+                            <td>
+                              <div className="flex flex-col gap-2">
+                                {scheduleDirty && (
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={scheduleSavingId === item.id}
+                                    onClick={() => handleSaveScheduleRow(item)}
+                                  >
+                                    {scheduleSavingId === item.id ? "Сохранение..." : "Сохранить"}
+                                  </Button>
+                                )}
+                                {item.status === "overdue" && !item.overdue_waived && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    disabled={waivingId === item.id}
+                                    onClick={() => handleWaiveOverdue(item)}
+                                  >
+                                    {waivingId === item.id ? "..." : "Снять просрочку"}
+                                  </Button>
+                                )}
+                                {Number(item.paid_amount) <= 0 && (
+                                  <Button
+                                    type="button"
+                                    variant="danger"
+                                    disabled={scheduleSavingId === item.id}
+                                    onClick={() => handleDeleteScheduleMonth(item)}
+                                  >
+                                    Удалить месяц
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+
+              {isOwner && detail?.installment_plan && (
+                <form
+                  onSubmit={handleAddScheduleMonth}
+                  className="mt-6 grid gap-4 border-t border-slate-100 pt-6 md:grid-cols-3"
+                >
+                  <FormField label="Сумма нового месяца">
+                    <Input
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      placeholder="15000"
+                      value={addMonthForm.planned_amount}
+                      onChange={(e) =>
+                        setAddMonthForm({ ...addMonthForm, planned_amount: e.target.value })
+                      }
+                      required
+                    />
+                  </FormField>
+                  <FormField label="Дата (необязательно)">
+                    <Input
+                      type="date"
+                      value={addMonthForm.due_date}
+                      onChange={(e) =>
+                        setAddMonthForm({ ...addMonthForm, due_date: e.target.value })
+                      }
+                    />
+                  </FormField>
+                  <div className="flex items-end">
+                    <Button type="submit" disabled={addMonthSaving}>
+                      {addMonthSaving ? "Добавление..." : "Добавить месяц"}
+                    </Button>
+                  </div>
+                </form>
+              )}
               </>
             )}
           </Card>

@@ -23,6 +23,13 @@ def refresh_overdue_statuses(db: Session, installment_plan_id) -> None:
         )
     )
     for item in schedules:
+        if item.overdue_waived:
+            if item.status == PaymentScheduleStatus.OVERDUE:
+                if item.paid_amount > Decimal("0.00"):
+                    item.status = PaymentScheduleStatus.PARTIAL
+                else:
+                    item.status = PaymentScheduleStatus.PENDING
+            continue
         if is_schedule_overdue(item, today):
             item.status = PaymentScheduleStatus.OVERDUE
 

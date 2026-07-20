@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, Numeric, Text
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Integer, Numeric, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, UUIDPrimaryKeyMixin
@@ -33,6 +33,7 @@ class PaymentSchedule(Base, UUIDPrimaryKeyMixin):
     )
     deferred_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     deferral_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    overdue_waived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     installment_plan: Mapped["InstallmentPlan"] = relationship(back_populates="payment_schedules")
     payments: Mapped[list["Payment"]] = relationship(back_populates="payment_schedule")

@@ -20,8 +20,23 @@ class PaymentScheduleResponse(BaseModel):
     status: PaymentScheduleStatus
     deferred_until: date | None = None
     deferral_comment: str | None = None
+    overdue_waived: bool = False
 
 
 class PaymentScheduleDefer(BaseModel):
     deferred_until: date
     comment: str = Field(min_length=1, max_length=2000)
+
+
+class PaymentScheduleWaiveOverdue(BaseModel):
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class PaymentScheduleUpdate(BaseModel):
+    planned_amount: Decimal | None = Field(default=None, gt=0, decimal_places=2)
+    due_date: date | None = None
+
+
+class PaymentScheduleCreate(BaseModel):
+    planned_amount: Decimal = Field(gt=0, decimal_places=2)
+    due_date: date | None = None

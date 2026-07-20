@@ -27,6 +27,8 @@ def schedule_remainder(schedule: PaymentSchedule) -> Decimal:
 
 
 def is_schedule_overdue(schedule: PaymentSchedule, today: date) -> bool:
+    if schedule.overdue_waived:
+        return False
     if schedule_remainder(schedule) <= Decimal("0.00"):
         return False
 
