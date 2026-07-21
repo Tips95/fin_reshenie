@@ -525,7 +525,25 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       </Link>
                     </td>
                     <td className="text-slate-600">{client.phone}</td>
-                    <td className="text-slate-600">{formatDate(client.contract_date)}</td>
+                    <td className="text-slate-600">
+                      {canEdit ? (
+                        <Input
+                          type="date"
+                          className="min-w-[140px]"
+                          value={client.contract_date}
+                          disabled={savingField === `${client.id}:contract_date`}
+                          onChange={(e) =>
+                            handleClientUpdate(
+                              client.id,
+                              { contract_date: e.target.value },
+                              "contract_date",
+                            )
+                          }
+                        />
+                      ) : (
+                        formatDate(client.contract_date)
+                      )}
+                    </td>
                     {canSeeClientAmounts && !isCollectionView && isFullClient(client) && (
                       <td className="font-medium text-slate-800">
                         {formatMoney(client.debt_amount)}

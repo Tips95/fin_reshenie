@@ -895,6 +895,16 @@ export default function ClientDetailPage() {
             </Badge>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <FormField label="Дата договора">
+              <Input
+                type="date"
+                value={client.contract_date}
+                disabled={cardSaving === "contract_date"}
+                onChange={(e) =>
+                  handleCardUpdate({ contract_date: e.target.value }, "contract_date")
+                }
+              />
+            </FormField>
             <FormField label="Статус клиента">
               <Select
                 value={client.status}
