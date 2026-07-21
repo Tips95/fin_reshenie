@@ -47,8 +47,7 @@ from app.services.document_collection import (
 )
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.payment_status import refresh_overdue_statuses
-from app.services.payment_dates import align_client_payment_dates
-from app.services.payment_sync import sync_client_payment_schedules
+from app.services.payment_dates import realign_client_legacy_finances
 
 router = APIRouter()
 
@@ -307,7 +306,9 @@ def align_client_payment_dates_route(
     db: Session = Depends(get_db),
 ) -> PaymentAlignResult:
     client = ensure_client_write_access(db, current_user, client_id)
-    schedule_updated, mandatory_updated = align_client_payment_dates(db, client)
+    schedule_dates_updated, schedule_payments_updated, mandatory_updated = (
+        realign_client_legacy_finances(db, client)
+    )
     log_audit(
         db,
         user=current_user,
@@ -315,11 +316,15 @@ def align_client_payment_dates_route(
         entity_id=client.id,
         action=AuditAction.UPDATE,
         field_name="payment_dates_aligned",
-        new_value=f"schedule={schedule_updated}, mandatory={mandatory_updated}",
+        new_value=(
+            f"schedule_dates={schedule_dates_updated}, "
+            f"payments={schedule_payments_updated}, mandatory={mandatory_updated}"
+        ),
     )
     db.commit()
     return PaymentAlignResult(
-        schedule_payments_updated=schedule_updated,
+        schedule_dates_updated=schedule_dates_updated,
+        schedule_payments_updated=schedule_payments_updated,
         mandatory_records_updated=mandatory_updated,
     )
 
@@ -382,6 +387,9 @@ def update_client(
                 new_value=value,
             )
             setattr(client, field, value)
+
+    if "contract_date" in updates:
+        realign_client_legacy_finances(db, client)
 
     db.commit()
     db.refresh(client)

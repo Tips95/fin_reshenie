@@ -12,6 +12,21 @@ def effective_due_date(schedule: PaymentSchedule) -> date:
     return schedule.deferred_until or schedule.due_date
 
 
+def schedule_month_key(value: date) -> tuple[int, int]:
+    return value.year, value.month
+
+
+def find_schedule_by_payment_month(
+    schedules: list[PaymentSchedule],
+    payment_date: date,
+) -> PaymentSchedule | None:
+    target = schedule_month_key(payment_date)
+    for schedule in schedules:
+        if schedule_month_key(effective_due_date(schedule)) == target:
+            return schedule
+    return None
+
+
 def payment_window_start(due: date) -> date:
     return date(due.year, due.month, PAYMENT_WINDOW_START_DAY)
 

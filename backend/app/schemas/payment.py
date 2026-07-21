@@ -19,6 +19,7 @@ class PaymentUpdate(BaseModel):
 
 
 class PaymentAlignResult(BaseModel):
+    schedule_dates_updated: int
     schedule_payments_updated: int
     mandatory_records_updated: int
 

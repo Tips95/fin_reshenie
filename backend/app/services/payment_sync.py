@@ -8,6 +8,7 @@ from app.models.enums import PaymentScheduleStatus
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
+from app.services.schedule_dates import effective_due_date, find_schedule_by_payment_month
 
 
 def get_active_schedule_payments(db: Session, schedule_id: UUID) -> list[Payment]:
@@ -119,11 +120,17 @@ def sync_client_payment_schedules(db: Session, client_id: UUID) -> None:
                     _set_schedule_status(schedule, payment.payment_date)
             continue
 
+        start_schedule_id = payment.payment_schedule_id
+        if start_schedule_id is None:
+            matched = find_schedule_by_payment_month(schedules, payment.payment_date)
+            if matched is not None:
+                start_schedule_id = matched.id
+
         _apply_amount_to_schedules(
             schedules,
             payment.amount,
             payment.payment_date,
-            start_schedule_id=payment.payment_schedule_id,
+            start_schedule_id=start_schedule_id,
         )
 
 

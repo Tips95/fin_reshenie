@@ -216,6 +216,10 @@ export default function ClientDetailPage() {
     setPaymentForm((prev) => ({ ...prev, payment_date: client.contract_date }));
     setRefundForm((prev) => ({ ...prev, payment_date: client.contract_date }));
     setDocCollectionPaymentDate(client.contract_date);
+    setConvertForm((prev) => ({
+      ...prev,
+      contract_date: client.contract_date,
+    }));
   }, [client?.id, client?.contract_date]);
 
   useEffect(() => {
@@ -323,7 +327,7 @@ export default function ClientDetailPage() {
     if (!client) return;
     if (
       !window.confirm(
-        "Исправить даты платежей по графику и обязательным платежам по дате договора? Это нужно для уже внесённых старых клиентов.",
+        "Перестроить график от даты договора и перераспределить платежи по месяцам? Используйте для старых клиентов с нестандартными суммами.",
       )
     ) {
       return;
@@ -334,7 +338,7 @@ export default function ClientDetailPage() {
       const result = await clientsApi.alignPaymentDates(client.id);
       await refreshClient();
       showToast(
-        `Обновлено: ${result.schedule_payments_updated} по графику, ${result.mandatory_records_updated} обязательных`,
+        `График: ${result.schedule_dates_updated} мес., платежи: ${result.schedule_payments_updated}, обязательные: ${result.mandatory_records_updated}`,
       );
     } catch (error) {
       showToast(
@@ -571,6 +575,9 @@ export default function ClientDetailPage() {
       planned_amount = edited.planned_amount;
     } else if (detailData?.installment_plan) {
       due_date = detailData.installment_plan.start_date;
+      planned_amount = "15000.00";
+    } else if (client?.contract_date) {
+      due_date = client.contract_date;
       planned_amount = "15000.00";
     } else {
       due_date = new Date().toISOString().slice(0, 10);
@@ -961,7 +968,7 @@ export default function ClientDetailPage() {
             </Badge>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <FormField label="Дата договора">
+            <FormField label="Дата договора (1-й месяц графика)">
               <Input
                 type="date"
                 value={client.contract_date}
@@ -1093,7 +1100,7 @@ export default function ClientDetailPage() {
                     required
                   />
                 </FormField>
-                <FormField label="Дата договора банкротства (необязательно)">
+                <FormField label="Дата первого платежа / договора">
                   <Input
                     type="date"
                     value={convertForm.contract_date}
@@ -1247,8 +1254,8 @@ export default function ClientDetailPage() {
               </div>
               {detail.installment_plan && (
                 <p className="mt-3 text-xs text-slate-500">
-                  График с {formatDate(detail.installment_plan.start_date)} · автоматически
-                  сформирован при создании клиента
+                  График с {formatDate(detail.installment_plan.start_date)}. Для старых клиентов
+                  суммы месяцев можно менять вручную — тариф только отправная точка.
                 </p>
               )}
             </Card>
@@ -1376,7 +1383,7 @@ export default function ClientDetailPage() {
               title="График платежей"
               description={
                 isOwner
-                  ? "Измените суммы, даты и месяцы, затем нажмите «Сохранить график»"
+                  ? "1-й месяц = дата договора, дальше по месяцам. Для legacy-клиентов меняйте суммы (20k, 30k…) и сохраняйте график"
                   : undefined
               }
               action={
@@ -1699,7 +1706,7 @@ export default function ClientDetailPage() {
               <Card>
                 <SectionTitle
                   title="Зафиксировать платёж вручную"
-                  description="Дата по умолчанию — дата договора или выбранного месяца графика"
+                  description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
                 />
                 <form onSubmit={handlePayment} className="grid gap-4 md:grid-cols-2">
                   <FormField label="Месяц графика">
@@ -1801,7 +1808,7 @@ export default function ClientDetailPage() {
               title="История платежей"
               description={
                 isOwner
-                  ? "Даты влияют на доход в дашборде по месяцам. Можно исправить уже внесённые платежи."
+                  ? "Даты влияют на доход по месяцам. Платёж без месяца графика попадает в месяц по дате платежа."
                   : undefined
               }
               action={
@@ -1812,7 +1819,7 @@ export default function ClientDetailPage() {
                     disabled={aligningDates}
                     onClick={handleAlignPaymentDates}
                   >
-                    {aligningDates ? "Исправление..." : "Исправить даты по графику"}
+                    {aligningDates ? "Перестройка..." : "Перестроить от даты договора"}
                   </Button>
                 ) : undefined
               }

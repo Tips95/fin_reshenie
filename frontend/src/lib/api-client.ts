@@ -280,10 +280,11 @@ export const clientsApi = {
     apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: string) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
   alignPaymentDates: (id: string) =>
-    apiFetch<{ schedule_payments_updated: number; mandatory_records_updated: number }>(
-      `/clients/${id}/payments/align-schedule-dates`,
-      { method: "POST" },
-    ),
+    apiFetch<{
+      schedule_dates_updated: number;
+      schedule_payments_updated: number;
+      mandatory_records_updated: number;
+    }>(`/clients/${id}/payments/align-schedule-dates`, { method: "POST" }),
 };
 
 export const documentCollectionApi = {
