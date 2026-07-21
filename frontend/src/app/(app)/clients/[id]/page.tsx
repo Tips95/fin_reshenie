@@ -171,10 +171,16 @@ export default function ClientDetailPage() {
     setLoading(true);
     try {
       setClient(await fetchClient());
+    } catch (error) {
+      setClient(null);
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось загрузить карточку клиента",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
-  }, [fetchClient]);
+  }, [fetchClient, showToast]);
 
   const refreshClient = useCallback(async () => {
     setRefreshing(true);

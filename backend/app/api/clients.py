@@ -48,6 +48,7 @@ from app.services.document_collection import (
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.payment_status import refresh_overdue_statuses
 from app.services.payment_dates import realign_client_legacy_finances
+from app.services.payment_sync import sync_client_payment_schedules
 
 router = APIRouter()
 
