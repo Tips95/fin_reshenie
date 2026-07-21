@@ -5,8 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.models.enums import ClientStatus
-from app.schemas.dashboard import MandatoryPaymentBreakdown
-
+from app.schemas.dashboard import DocumentCollectionBreakdown, MandatoryPaymentBreakdown
 
 class ClientProfitItem(BaseModel):
     client_id: UUID
@@ -31,6 +30,9 @@ class MonthlyTrendPoint(BaseModel):
     mandatory_paid: Decimal
     net_profit: Decimal
     payments_count: int
+    collections_paid_count: int
+    contracts_signed_count: int
+    collection_cash: Decimal
 
 
 class AnalyticsSummary(BaseModel):
@@ -40,6 +42,7 @@ class AnalyticsSummary(BaseModel):
     schedule_remainder_total: Decimal
     monthly_expenses: Decimal
     mandatory_paid_total: MandatoryPaymentBreakdown
+    document_collection_total: DocumentCollectionBreakdown
 
 
 class AnalyticsOverview(BaseModel):

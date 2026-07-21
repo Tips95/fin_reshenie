@@ -21,8 +21,13 @@ from app.schemas.analytics import (
     ClientProfitItem,
     MonthlyTrendPoint,
 )
+from app.schemas.dashboard import DocumentCollectionBreakdown
 from app.services.access import apply_client_visibility_filter, client_has_overdue_payments
 from app.services.dashboard import _monthly_expenses_total, _schedule_remainder
+from app.services.document_collection_stats import (
+    count_contracts_signed_in_period,
+    get_document_collection_paid_totals,
+)
 from app.services.mandatory_payment_stats import breakdown_from_totals, get_mandatory_paid_totals
 
 
@@ -123,6 +128,12 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
                 schedule_remainder_total=Decimal("0.00"),
                 monthly_expenses=Decimal("0.00"),
                 mandatory_paid_total=empty_breakdown,
+                document_collection_total=DocumentCollectionBreakdown(
+                    collection_cash=Decimal("0.00"),
+                    notary_fee=Decimal("0.00"),
+                    manager_commission=Decimal("0.00"),
+                    paid_count=0,
+                ),
             ),
             trends=[],
             client_profits=[],
@@ -223,6 +234,18 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
             date_from=period_start,
             date_to=period_end,
         )
+        collection_totals = get_document_collection_paid_totals(
+            db,
+            client_ids,
+            date_from=period_start,
+            date_to=period_end,
+        )
+        contracts_signed_count = count_contracts_signed_in_period(
+            db,
+            client_ids,
+            date_from=period_start,
+            date_to=period_end,
+        )
         trends.append(
             MonthlyTrendPoint(
                 month=month_key,
@@ -231,22 +254,34 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
                 expenses=monthly_expenses,
                 mandatory_paid=mandatory_totals.total,
                 net_profit=collected_by_month[month_key]
+                + collection_totals.collection_cash
                 - monthly_expenses
                 - mandatory_totals.total,
                 payments_count=payments_count_by_month[month_key],
+                collections_paid_count=collection_totals.paid_count,
+                contracts_signed_count=contracts_signed_count,
+                collection_cash=collection_totals.collection_cash,
             )
         )
 
+    collection_summary = get_document_collection_paid_totals(db, client_ids)
     summary = AnalyticsSummary(
         clients_count=len(clients),
         collected_total=sum((item.collected_total for item in client_profits), Decimal("0.00")),
-        profit_total=sum((item.profit for item in client_profits), Decimal("0.00")),
+        profit_total=sum((item.profit for item in client_profits), Decimal("0.00"))
+        + collection_summary.collection_cash,
         schedule_remainder_total=sum(
             (item.schedule_remainder for item in client_profits),
             Decimal("0.00"),
         ),
         monthly_expenses=monthly_expenses,
         mandatory_paid_total=breakdown_from_totals(get_mandatory_paid_totals(db, client_ids)),
+        document_collection_total=DocumentCollectionBreakdown(
+            collection_cash=collection_summary.collection_cash,
+            notary_fee=collection_summary.notary_fee,
+            manager_commission=collection_summary.manager_commission,
+            paid_count=collection_summary.paid_count,
+        ),
     )
 
     return AnalyticsOverview(summary=summary, trends=trends, client_profits=client_profits)

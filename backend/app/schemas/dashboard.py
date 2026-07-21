@@ -12,6 +12,13 @@ class MandatoryPaymentBreakdown(BaseModel):
     total: Decimal
 
 
+class DocumentCollectionBreakdown(BaseModel):
+    collection_cash: Decimal
+    notary_fee: Decimal
+    manager_commission: Decimal
+    paid_count: int
+
+
 class DashboardSummary(BaseModel):
     clients_total: int
     clients_active: int
@@ -25,5 +32,8 @@ class DashboardSummary(BaseModel):
     monthly_expenses: Decimal
     mandatory_paid_total: MandatoryPaymentBreakdown
     mandatory_paid_this_month: MandatoryPaymentBreakdown
+    document_collection_total: DocumentCollectionBreakdown
+    document_collection_this_month: DocumentCollectionBreakdown
+    contracts_signed_this_month: int
     org_profit_total: Decimal
     net_profit_this_month: Decimal

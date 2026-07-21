@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import ClientStatus, EngagementStage, ProcedureStage
+from app.models.enums import ClientStatus, DocumentCollectionStatus, EngagementStage, ProcedureStage
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 
 
@@ -48,6 +48,8 @@ class ClientResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     has_overdue: bool | None = None
+    document_collection_status: DocumentCollectionStatus | None = None
+    document_collection_paid_date: date | None = None
 
 
 class ClientBriefResponse(BaseModel):

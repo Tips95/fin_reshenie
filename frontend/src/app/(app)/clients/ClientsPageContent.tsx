@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { Badge, Button, Card, Input, LoadingState, PageHeader, PhoneInput, SectionTitle, Select } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
-import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
+import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel, documentCollectionStatusLabel } from "@/lib/format";
 import { PHONE_PREFIX } from "@/lib/phone";
 import type { Client, ClientBrief, ClientStatus, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -62,6 +62,14 @@ function SortableTh({
 }
 
 type ClientWorkspace = "collection" | "contracts";
+type CollectionViewFilter = "active" | "paid" | "converted" | "all";
+
+const COLLECTION_VIEW_OPTIONS: Array<{ value: CollectionViewFilter; label: string }> = [
+  { value: "active", label: "В работе" },
+  { value: "paid", label: "Оплатили сбор" },
+  { value: "converted", label: "На банкротстве" },
+  { value: "all", label: "Все" },
+];
 
 const WORKSPACE_CONFIG: Record<
   ClientWorkspace,
@@ -113,6 +121,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [exportError, setExportError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [collectionView, setCollectionView] = useState<CollectionViewFilter>("active");
   const [savingField, setSavingField] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -129,7 +138,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         status: statusFilter || undefined,
         overdue: overdueFilter || undefined,
         procedure_stage: procedureFilter || undefined,
-        engagement_stage: workspaceConfig.engagementStage,
+        engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
+        collection_view: isCollectionView ? collectionView : undefined,
         manager_id: managerFilter || undefined,
         phone: phoneSearch.trim() || undefined,
         name: nameSearch.trim() || undefined,
@@ -142,7 +152,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, procedureFilter, workspaceConfig.engagementStage, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir]);
+  }, [statusFilter, procedureFilter, workspaceConfig.engagementStage, isCollectionView, collectionView, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir]);
 
   useEffect(() => {
     loadClients();
@@ -228,7 +238,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         status: statusFilter || undefined,
         overdue: overdueFilter || undefined,
         procedure_stage: procedureFilter || undefined,
-        engagement_stage: workspaceConfig.engagementStage,
+        engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
+        collection_view: isCollectionView ? collectionView : undefined,
         manager_id: managerFilter || undefined,
         phone: phoneSearch.trim() || undefined,
         name: nameSearch.trim() || undefined,
@@ -270,6 +281,25 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           Договоры
         </Link>
       </div>
+
+      {isCollectionView && (
+        <div className="flex flex-wrap gap-2">
+          {COLLECTION_VIEW_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setCollectionView(option.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                collectionView === option.value
+                  ? "bg-amber-600 text-white"
+                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <PageHeader
         title={workspaceConfig.title}
@@ -574,7 +604,24 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     )}
                     <td>
                       {isCollectionView ? (
-                        <Badge tone="warning">Сбор документов</Badge>
+                        isFullClient(client) ? (
+                          <div className="flex flex-col gap-1">
+                            {client.engagement_stage === "bankruptcy" ? (
+                              <Badge tone="success">На банкротстве</Badge>
+                            ) : client.document_collection_status === "paid" ? (
+                              <Badge tone="success">Оплачен сбор</Badge>
+                            ) : (
+                              <Badge tone="warning">Ожидает оплату</Badge>
+                            )}
+                            {client.document_collection_paid_date && (
+                              <span className="text-xs text-slate-500">
+                                {formatDate(client.document_collection_paid_date)}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge tone="warning">Сбор документов</Badge>
+                        )
                       ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
                         <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
                       ) : canEdit ? (

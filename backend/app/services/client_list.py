@@ -5,7 +5,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
-from app.models.enums import ClientStatus, EngagementStage, ProcedureStage
+from app.models.document_collection import DocumentCollection
+from app.models.enums import ClientStatus, DocumentCollectionStatus, EngagementStage, ProcedureStage
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
@@ -25,6 +26,13 @@ class ClientSortField(str, Enum):
 class SortDirection(str, Enum):
     ASC = "asc"
     DESC = "desc"
+
+
+class CollectionViewFilter(str, Enum):
+    ACTIVE = "active"
+    PAID = "paid"
+    CONVERTED = "converted"
+    ALL = "all"
 
 
 def sort_clients(
@@ -68,6 +76,7 @@ def query_clients(
     name: str | None = None,
     contract_month: str | None = None,
     due_month: str | None = None,
+    collection_view: CollectionViewFilter | None = None,
     sort_by: ClientSortField = ClientSortField.CREATED_AT,
     sort_dir: SortDirection = SortDirection.DESC,
 ) -> list[Client]:
@@ -78,7 +87,7 @@ def query_clients(
         stmt = stmt.where(Client.status == status_filter)
     if procedure_stage is not None:
         stmt = stmt.where(Client.procedure_stage == procedure_stage)
-    if engagement_stage is not None:
+    if engagement_stage is not None and collection_view is None:
         stmt = stmt.where(Client.engagement_stage == engagement_stage)
     if manager_id is not None:
         stmt = stmt.where(Client.assigned_manager_id == manager_id)
@@ -110,6 +119,24 @@ def query_clients(
             .distinct()
         )
         stmt = stmt.where(Client.id.in_(list(client_ids)))
+
+    if collection_view is not None:
+        stmt = stmt.join(
+            DocumentCollection,
+            DocumentCollection.client_id == Client.id,
+        )
+        if collection_view == CollectionViewFilter.ACTIVE:
+            stmt = stmt.where(Client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION)
+        elif collection_view == CollectionViewFilter.PAID:
+            stmt = stmt.where(
+                Client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION,
+                DocumentCollection.status == DocumentCollectionStatus.PAID,
+            )
+        elif collection_view == CollectionViewFilter.CONVERTED:
+            stmt = stmt.where(
+                Client.engagement_stage == EngagementStage.BANKRUPTCY,
+                DocumentCollection.status == DocumentCollectionStatus.PAID,
+            )
 
     clients = list(db.scalars(stmt))
 

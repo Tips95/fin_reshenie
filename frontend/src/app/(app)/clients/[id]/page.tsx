@@ -960,15 +960,19 @@ export default function ClientDetailPage() {
         </Card>
       )}
 
-      {canEditClient && isDetail(client) && !isBankruptcy && docCollection && (
+      {canEditClient && isDetail(client) && docCollection && (
         <Card variant="accent">
           <SectionTitle
             title="Сбор документов"
-            description="Единоразовая оплата 13 000 ₽: сбор 10 000 + нотариус 2 000 + менеджеру 1 000"
+            description={
+              isBankruptcy
+                ? "История сбора: 13 000 ₽ (10 000 в кассу + 2 000 нотариус + 1 000 менеджеру). Выписки/госпошлина учитываются отдельно"
+                : "Единоразовая оплата 13 000 ₽: сбор 10 000 + нотариус 2 000 + менеджеру 1 000"
+            }
           />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard label="К оплате" value={formatMoney(docCollection.total_amount)} tone="brand" />
-            <StatCard label="Сбор документов" value={formatMoney(docCollection.collection_fee)} tone="default" />
+            <StatCard label="В кассу" value={formatMoney(docCollection.collection_fee)} tone="default" />
             <StatCard label="Нотариус" value={formatMoney(docCollection.notary_fee)} tone="default" />
             <StatCard
               label="Комиссия менеджера"
@@ -985,15 +989,18 @@ export default function ClientDetailPage() {
                 Оплачено {formatDate(docCollection.paid_date)}
               </span>
             )}
+            {isBankruptcy && (
+              <Badge tone="success">Переведён на банкротство</Badge>
+            )}
           </div>
-          {canRecordPayment && docCollection.status !== "paid" && (
+          {!isBankruptcy && canRecordPayment && docCollection.status !== "paid" && (
             <div className="mt-4">
               <Button disabled={docCollectionSaving} onClick={handleRecordDocumentCollection}>
                 {docCollectionSaving ? "Сохранение..." : "Зафиксировать оплату 13 000 ₽"}
               </Button>
             </div>
           )}
-          {canRecordPayment && docCollection.status === "paid" && (
+          {!isBankruptcy && canRecordPayment && docCollection.status === "paid" && (
             <form onSubmit={handleConvertToBankruptcy} className="mt-6 space-y-4 border-t border-slate-200 pt-6">
               <SectionTitle
                 title="Перевести на банкротство"

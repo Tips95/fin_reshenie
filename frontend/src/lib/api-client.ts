@@ -252,6 +252,7 @@ export const clientsApi = {
     name?: string;
     contract_month?: string;
     due_month?: string;
+    collection_view?: "active" | "paid" | "converted" | "all";
     sort_by?: string;
     sort_dir?: "asc" | "desc";
   }) => {
@@ -265,6 +266,7 @@ export const clientsApi = {
     if (params?.name) search.set("name", params.name);
     if (params?.contract_month) search.set("contract_month", params.contract_month);
     if (params?.due_month) search.set("due_month", params.due_month);
+    if (params?.collection_view) search.set("collection_view", params.collection_view);
     if (params?.sort_by) search.set("sort_by", params.sort_by);
     if (params?.sort_dir) search.set("sort_dir", params.sort_dir);
     const query = search.toString();

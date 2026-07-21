@@ -32,7 +32,7 @@ from app.services.access import (
     pricing_tier_not_found_message,
 )
 from app.services.audit import log_audit
-from app.services.client_list import ClientSortField, SortDirection, query_clients
+from app.services.client_list import ClientSortField, CollectionViewFilter, SortDirection, query_clients
 from app.schemas.installment_plan import InstallmentPlanResponse
 from app.schemas.mandatory_payment import MandatoryPaymentResponse
 from app.schemas.payment import PaymentResponse
@@ -131,6 +131,10 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
 def _to_client_response(client: Client, db: Session) -> ClientResponse:
     data = ClientResponse.model_validate(client)
     data.has_overdue = client_has_overdue_payments(db, client.id)
+    document_collection = get_document_collection(db, client.id)
+    if document_collection is not None:
+        data.document_collection_status = document_collection.status
+        data.document_collection_paid_date = document_collection.paid_date
     return data
 
 
@@ -187,6 +191,7 @@ def list_clients(
     name: str | None = Query(default=None, min_length=2),
     contract_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     due_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    collection_view: CollectionViewFilter | None = Query(default=None),
     sort_by: ClientSortField = Query(default=ClientSortField.CREATED_AT),
     sort_dir: SortDirection = Query(default=SortDirection.DESC),
     current_user: User = Depends(get_current_active_user),
@@ -207,6 +212,7 @@ def list_clients(
         name=name,
         contract_month=contract_month,
         due_month=due_month,
+        collection_view=collection_view,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )

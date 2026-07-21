@@ -80,6 +80,8 @@ export interface Client {
   created_at: string;
   updated_at: string;
   has_overdue?: boolean;
+  document_collection_status?: DocumentCollectionStatus | null;
+  document_collection_paid_date?: string | null;
 }
 
 export interface ClientBrief {
@@ -196,6 +198,13 @@ export interface MandatoryPaymentBreakdown {
   total: string;
 }
 
+export interface DocumentCollectionBreakdown {
+  collection_cash: string;
+  notary_fee: string;
+  manager_commission: string;
+  paid_count: number;
+}
+
 export interface DashboardSummary {
   clients_total: number;
   clients_active: number;
@@ -209,6 +218,9 @@ export interface DashboardSummary {
   monthly_expenses: string;
   mandatory_paid_total: MandatoryPaymentBreakdown;
   mandatory_paid_this_month: MandatoryPaymentBreakdown;
+  document_collection_total: DocumentCollectionBreakdown;
+  document_collection_this_month: DocumentCollectionBreakdown;
+  contracts_signed_this_month: number;
   org_profit_total: string;
   net_profit_this_month: string;
 }
@@ -236,6 +248,9 @@ export interface MonthlyTrendPoint {
   mandatory_paid: string;
   net_profit: string;
   payments_count: number;
+  collections_paid_count: number;
+  contracts_signed_count: number;
+  collection_cash: string;
 }
 
 export interface AnalyticsSummary {
@@ -245,6 +260,7 @@ export interface AnalyticsSummary {
   schedule_remainder_total: string;
   monthly_expenses: string;
   mandatory_paid_total: MandatoryPaymentBreakdown;
+  document_collection_total: DocumentCollectionBreakdown;
 }
 
 export interface AnalyticsOverview {

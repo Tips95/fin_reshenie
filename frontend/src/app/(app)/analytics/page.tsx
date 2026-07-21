@@ -134,6 +134,22 @@ export default function AnalyticsPage() {
           value={formatMoney(data.summary.schedule_remainder_total)}
           tone="warning"
         />
+        <StatCard
+          label="Касса сбора (всего)"
+          value={formatMoney(data.summary.document_collection_total.collection_cash)}
+          tone="success"
+          hint={`${data.summary.document_collection_total.paid_count} оплат`}
+        />
+        <StatCard
+          label="Нотариус (сбор)"
+          value={formatMoney(data.summary.document_collection_total.notary_fee)}
+          tone="default"
+        />
+        <StatCard
+          label="Менеджерам (сбор)"
+          value={formatMoney(data.summary.document_collection_total.manager_commission)}
+          tone="default"
+        />
       </div>
 
       <Card>
@@ -158,7 +174,11 @@ export default function AnalyticsPage() {
               <div key={point.month} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold text-slate-800">{formatMonthLabel(point.month)}</p>
-                  <p className="text-xs text-slate-500">Платежей: {point.payments_count}</p>
+                  <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                    <span>Платежей: {point.payments_count}</span>
+                    <span>Сбор: {point.collections_paid_count}</span>
+                    <span>Договоров: {point.contracts_signed_count}</span>
+                  </div>
                 </div>
                 <div className="space-y-2 text-xs">
                   <div className="flex items-center gap-3">
@@ -183,6 +203,20 @@ export default function AnalyticsPage() {
                     </div>
                     <span className="w-28 text-right font-medium text-slate-700">
                       {formatMoney(point.expected)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="w-28 text-slate-500">Касса сбора</span>
+                    <div className="h-2 flex-1 rounded-full bg-slate-200">
+                      <div
+                        className="h-2 rounded-full bg-sky-500"
+                        style={{
+                          width: `${Math.round((Number(point.collection_cash) / trendMax) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="w-28 text-right font-medium text-slate-700">
+                      {formatMoney(point.collection_cash)}
                     </span>
                   </div>
                   {showOrgExpenses && (
@@ -227,7 +261,7 @@ export default function AnalyticsPage() {
         {showOrgExpenses && (
           <p className="mt-3 text-xs text-slate-500">
             Расходы организации в месяц: {formatMoney(data.summary.monthly_expenses)}. Чистая
-            прибыль: поступления − обязательные платежи − расходы.
+            прибыль: поступления + касса сбора − обязательные платежи − расходы.
           </p>
         )}
       </Card>

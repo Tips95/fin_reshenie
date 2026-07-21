@@ -87,6 +87,22 @@ class TestAnalyticsOverview:
                 court_fee=Decimal("0.00"),
             ),
         )
+        monkeypatch.setattr(
+            "app.services.analytics.get_document_collection_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.document_collection_stats",
+                fromlist=["DocumentCollectionTotals"],
+            ).DocumentCollectionTotals(
+                collection_cash=Decimal("0.00"),
+                notary_fee=Decimal("0.00"),
+                manager_commission=Decimal("0.00"),
+                paid_count=0,
+            ),
+        )
+        monkeypatch.setattr(
+            "app.services.analytics.count_contracts_signed_in_period",
+            lambda *_args, **_kwargs: 0,
+        )
 
         overview = get_analytics_overview(db, make_user(), months=3)
 
