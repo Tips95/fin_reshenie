@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { useEffect } from "react";
 
 import { cn } from "@/lib/cn";
 import { APP_NAME } from "@/lib/brand";
+import { PHONE_PREFIX, applyPhoneInput } from "@/lib/phone";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
@@ -57,6 +59,77 @@ export function Input({
       )}
       {...props}
     />
+  );
+}
+
+export function PhoneInput({
+  className,
+  value,
+  onValueChange,
+  onFocus,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
+  value: string;
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <Input
+      type="tel"
+      className={className}
+      value={value}
+      placeholder="+7 928 000-00-00"
+      onFocus={(event) => {
+        if (!value) {
+          onValueChange(PHONE_PREFIX);
+        }
+        onFocus?.(event);
+      }}
+      onChange={(event) => onValueChange(applyPhoneInput(value, event.target.value))}
+      {...props}
+    />
+  );
+}
+
+export function Toast({
+  message,
+  tone = "success",
+  onClose,
+}: {
+  message: string;
+  tone?: "success" | "error" | "info";
+  onClose?: () => void;
+}) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => onClose?.(), 4000);
+    return () => window.clearTimeout(timer);
+  }, [message, onClose]);
+
+  const tones = {
+    success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    error: "border-rose-200 bg-rose-50 text-rose-800",
+    info: "border-slate-200 bg-white text-slate-700",
+  };
+
+  return (
+    <div
+      className={cn(
+        "fixed bottom-6 right-6 z-50 flex max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg",
+        tones[tone],
+      )}
+      role="status"
+    >
+      <span className="flex-1">{message}</span>
+      {onClose && (
+        <button
+          type="button"
+          className="text-current/60 transition hover:text-current"
+          onClick={onClose}
+          aria-label="Закрыть"
+        >
+          ×
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Badge, Button, Card, Input, LoadingState, PageHeader, SectionTitle, Select } from "@/components/ui";
+import { Badge, Button, Card, Input, LoadingState, PageHeader, PhoneInput, SectionTitle, Select } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
+import { PHONE_PREFIX } from "@/lib/phone";
 import type { Client, ClientBrief, ClientStatus, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -116,7 +117,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [form, setForm] = useState({
     full_name: "",
-    phone: "",
+    phone: PHONE_PREFIX,
     contract_date: "",
     assigned_manager_id: "",
   });
@@ -172,7 +173,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       setShowForm(false);
       setForm({
         full_name: "",
-        phone: "",
+        phone: PHONE_PREFIX,
         contract_date: "",
         assigned_manager_id: "",
       });
@@ -412,10 +413,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               onChange={(e) => setForm({ ...form, full_name: e.target.value })}
               required
             />
-            <Input
-              placeholder="Телефон"
+            <PhoneInput
               value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onValueChange={(phone) => setForm({ ...form, phone })}
               required
             />
             <Input

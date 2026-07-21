@@ -13,15 +13,74 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  PhoneInput,
   ProgressBar,
   SectionTitle,
   Select,
   StatCard,
+  Toast,
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
+import { addOneMonth, ensurePhonePrefix } from "@/lib/phone";
 import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
+
+type PendingScheduleAdd = {
+  tempId: string;
+  planned_amount: string;
+  due_date: string;
+};
+
+type ScheduleDraft = {
+  edits: Record<string, { planned_amount: string; due_date: string }>;
+  pendingAdds: PendingScheduleAdd[];
+  pendingDeletes: string[];
+  pendingWaives: string[];
+};
+
+const EMPTY_SCHEDULE_DRAFT: ScheduleDraft = {
+  edits: {},
+  pendingAdds: [],
+  pendingDeletes: [],
+  pendingWaives: [],
+};
+
+type ToastState = {
+  message: string;
+  tone: "success" | "error" | "info";
+};
+
+function getScheduleEditValues(
+  item: PaymentScheduleItem,
+  edits: ScheduleDraft["edits"],
+): { planned_amount: string; due_date: string } {
+  return (
+    edits[item.id] ?? {
+      planned_amount: item.planned_amount,
+      due_date: item.due_date,
+    }
+  );
+}
+
+function isScheduleDraftDirty(draft: ScheduleDraft, schedule: PaymentScheduleItem[]): boolean {
+  const hasEdits = schedule.some((item) => {
+    if (draft.pendingDeletes.includes(item.id)) {
+      return false;
+    }
+    const values = getScheduleEditValues(item, draft.edits);
+    return (
+      values.planned_amount !== item.planned_amount || values.due_date !== item.due_date
+    );
+  });
+
+  return (
+    hasEdits ||
+    draft.pendingAdds.length > 0 ||
+    draft.pendingDeletes.length > 0 ||
+    draft.pendingWaives.length > 0
+  );
+}
 
 function scheduleTone(status: string): "default" | "success" | "warning" | "danger" {
   if (status === "paid") return "success";
@@ -92,13 +151,11 @@ export default function ClientDetailPage() {
   const [contractAmountSaving, setContractAmountSaving] = useState(false);
   const [deferringId, setDeferringId] = useState<string | null>(null);
   const [deferForm, setDeferForm] = useState({ deferred_until: "", comment: "" });
-  const [scheduleEdits, setScheduleEdits] = useState<
-    Record<string, { planned_amount: string; due_date: string }>
-  >({});
-  const [scheduleSavingId, setScheduleSavingId] = useState<string | null>(null);
-  const [waivingId, setWaivingId] = useState<string | null>(null);
-  const [addMonthForm, setAddMonthForm] = useState({ planned_amount: "", due_date: "" });
-  const [addMonthSaving, setAddMonthSaving] = useState(false);
+  const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>(EMPTY_SCHEDULE_DRAFT);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
   const [exporting, setExporting] = useState(false);
   const [managers, setManagers] = useState<User[]>([]);
@@ -109,20 +166,34 @@ export default function ClientDetailPage() {
   const [convertForm, setConvertForm] = useState({ debt_amount: "", contract_date: "" });
   const [deletingClient, setDeletingClient] = useState(false);
 
+  const showToast = useCallback((message: string, tone: ToastState["tone"] = "success") => {
+    setToast({ message, tone });
+  }, []);
+
+  const fetchClient = useCallback(async () => {
+    if (user?.role === "call_center") {
+      return clientsApi.get(params.id);
+    }
+    return clientsApi.getDetail(params.id);
+  }, [params.id, user?.role]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (user?.role === "call_center") {
-        const clientData = await clientsApi.get(params.id);
-        setClient(clientData);
-      } else {
-        const detail = await clientsApi.getDetail(params.id);
-        setClient(detail);
-      }
+      setClient(await fetchClient());
     } finally {
       setLoading(false);
     }
-  }, [params.id, user?.role]);
+  }, [fetchClient]);
+
+  const refreshClient = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      setClient(await fetchClient());
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchClient]);
 
   useEffect(() => {
     load();
@@ -195,7 +266,7 @@ export default function ClientDetailPage() {
       payment_date: new Date().toISOString().slice(0, 10),
       comment: "",
     });
-    load();
+    refreshClient();
   }
 
   async function handleDeletePayment(paymentId: string) {
@@ -210,12 +281,13 @@ export default function ClientDetailPage() {
     setDeletingId(paymentId);
     try {
       await paymentsApi.delete(paymentId);
-      load();
+      await refreshClient();
     } catch (error) {
-      alert(
+      showToast(
         error instanceof ApiRequestError
           ? error.message
           : "Не удалось отменить платёж",
+        "error",
       );
     } finally {
       setDeletingId(null);
@@ -240,10 +312,11 @@ export default function ClientDetailPage() {
       await clientsApi.delete(client.id);
       router.push("/clients");
     } catch (error) {
-      alert(
+      showToast(
         error instanceof ApiRequestError
           ? error.message
           : "Не удалось удалить клиента",
+        "error",
       );
     } finally {
       setDeletingClient(false);
@@ -268,7 +341,7 @@ export default function ClientDetailPage() {
       payment_date: new Date().toISOString().slice(0, 10),
       comment: "",
     });
-    load();
+    refreshClient();
   }
 
   async function handleQuickPay(item: PaymentScheduleItem) {
@@ -286,7 +359,7 @@ export default function ClientDetailPage() {
         payment_date: new Date().toISOString().slice(0, 10),
         comment: `Оплата за ${item.month_number} месяц`,
       });
-      load();
+      await refreshClient();
     } finally {
       setPayingId(null);
     }
@@ -304,7 +377,7 @@ export default function ClientDetailPage() {
         payment_date: new Date().toISOString().slice(0, 10),
         comment: statusLabel(item.payment_type),
       });
-      load();
+      await refreshClient();
     } finally {
       setMandatoryPayingId(null);
     }
@@ -317,7 +390,7 @@ export default function ClientDetailPage() {
       planned_amount: Number(value).toFixed(2),
       is_applicable: true,
     });
-    load();
+    await refreshClient();
   }
 
   async function handleToggleCourtFee(item: MandatoryPayment, enabled: boolean) {
@@ -326,7 +399,7 @@ export default function ClientDetailPage() {
       is_applicable: enabled,
       planned_amount: enabled ? item.planned_amount : "0.00",
     });
-    load();
+    await refreshClient();
   }
 
   async function handleSavePhone() {
@@ -335,9 +408,13 @@ export default function ClientDetailPage() {
     try {
       await clientsApi.update(client.id, { phone: phoneValue.trim() });
       setEditingPhone(false);
-      load();
+      await refreshClient();
+      showToast("Телефон сохранён");
     } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось сохранить телефон");
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить телефон",
+        "error",
+      );
     } finally {
       setPhoneSaving(false);
     }
@@ -349,26 +426,32 @@ export default function ClientDetailPage() {
     try {
       await clientsApi.update(client.id, { full_name: nameValue.trim() });
       setEditingName(false);
-      load();
+      await refreshClient();
+      showToast("ФИО сохранено");
     } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось сохранить ФИО");
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить ФИО",
+        "error",
+      );
     } finally {
       setNameSaving(false);
     }
   }
 
   async function handleSaveContractAmount() {
-    if (!client || !detail?.installment_plan) return;
+    if (!client || !isDetail(client) || !client.installment_plan) return;
     setContractAmountSaving(true);
     try {
-      await installmentApi.update(client.id, detail.installment_plan.id, {
+      await installmentApi.update(client.id, client.installment_plan.id, {
         total_amount: Number(contractAmountValue).toFixed(2),
       });
       setEditingContractAmount(false);
-      load();
+      await refreshClient();
+      showToast("Сумма договора сохранена");
     } catch (error) {
-      alert(
+      showToast(
         error instanceof ApiRequestError ? error.message : "Не удалось сохранить сумму договора",
+        "error",
       );
     } finally {
       setContractAmountSaving(false);
@@ -385,7 +468,7 @@ export default function ClientDetailPage() {
 
   async function handleDefer(item: PaymentScheduleItem) {
     if (!deferForm.comment.trim()) {
-      alert("Укажите причину отсрочки");
+      showToast("Укажите причину отсрочки", "error");
       return;
     }
     setDeferringId(item.id);
@@ -396,102 +479,171 @@ export default function ClientDetailPage() {
       });
       setDeferringId(null);
       setDeferForm({ deferred_until: "", comment: "" });
-      load();
+      await refreshClient();
+      showToast("Отсрочка сохранена");
     } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось оформить отсрочку");
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось оформить отсрочку",
+        "error",
+      );
     } finally {
       setDeferringId(null);
     }
   }
 
   function scheduleEditValues(item: PaymentScheduleItem) {
-    return (
-      scheduleEdits[item.id] ?? {
-        planned_amount: item.planned_amount,
-        due_date: item.due_date,
+    return getScheduleEditValues(item, scheduleDraft.edits);
+  }
+
+  function resetScheduleDraft() {
+    setScheduleDraft(EMPTY_SCHEDULE_DRAFT);
+    setScheduleError(null);
+  }
+
+  function handleAddPendingMonth() {
+    const detailData = isDetail(client) ? client : null;
+    const scheduleItems = detailData?.payment_schedule ?? [];
+    const visible = scheduleItems.filter((item) => !scheduleDraft.pendingDeletes.includes(item.id));
+    const lastExisting = visible[visible.length - 1];
+    const lastAdd = scheduleDraft.pendingAdds[scheduleDraft.pendingAdds.length - 1];
+
+    let due_date: string;
+    let planned_amount: string;
+
+    if (lastAdd) {
+      due_date = addOneMonth(lastAdd.due_date);
+      planned_amount = lastAdd.planned_amount;
+    } else if (lastExisting) {
+      const edited = getScheduleEditValues(lastExisting, scheduleDraft.edits);
+      due_date = addOneMonth(edited.due_date);
+      planned_amount = edited.planned_amount;
+    } else if (detailData?.installment_plan) {
+      due_date = detailData.installment_plan.start_date;
+      planned_amount = "15000.00";
+    } else {
+      due_date = new Date().toISOString().slice(0, 10);
+      planned_amount = "15000.00";
+    }
+
+    setScheduleDraft((current) => ({
+      ...current,
+      pendingAdds: [
+        ...current.pendingAdds,
+        {
+          tempId: crypto.randomUUID(),
+          planned_amount,
+          due_date,
+        },
+      ],
+    }));
+  }
+
+  function handleToggleScheduleDelete(id: string) {
+    setScheduleDraft((current) => {
+      const pendingDeletes = current.pendingDeletes.includes(id)
+        ? current.pendingDeletes.filter((itemId) => itemId !== id)
+        : [...current.pendingDeletes, id];
+      const edits = { ...current.edits };
+      delete edits[id];
+
+      return {
+        ...current,
+        pendingDeletes,
+        pendingWaives: current.pendingWaives.filter((itemId) => itemId !== id),
+        edits,
+      };
+    });
+  }
+
+  function handleToggleScheduleWaive(id: string) {
+    setScheduleDraft((current) => ({
+      ...current,
+      pendingWaives: current.pendingWaives.includes(id)
+        ? current.pendingWaives.filter((itemId) => itemId !== id)
+        : [...current.pendingWaives, id],
+    }));
+  }
+
+  function handleRemovePendingAdd(tempId: string) {
+    setScheduleDraft((current) => ({
+      ...current,
+      pendingAdds: current.pendingAdds.filter((item) => item.tempId !== tempId),
+    }));
+  }
+
+  function updatePendingAdd(
+    tempId: string,
+    field: "planned_amount" | "due_date",
+    value: string,
+  ) {
+    setScheduleDraft((current) => ({
+      ...current,
+      pendingAdds: current.pendingAdds.map((item) =>
+        item.tempId === tempId ? { ...item, [field]: value } : item,
+      ),
+    }));
+  }
+
+  async function handleSaveScheduleDraft() {
+    if (!client || !isDetail(client) || !client.installment_plan) return;
+
+    setScheduleSaving(true);
+    setScheduleError(null);
+
+    try {
+      for (const id of scheduleDraft.pendingDeletes) {
+        await scheduleApi.delete(id);
       }
-    );
-  }
 
-  async function handleSaveScheduleRow(item: PaymentScheduleItem) {
-    const values = scheduleEditValues(item);
-    const payload: { planned_amount?: string; due_date?: string } = {};
+      for (const item of client.payment_schedule) {
+        if (scheduleDraft.pendingDeletes.includes(item.id)) {
+          continue;
+        }
 
-    if (values.planned_amount !== item.planned_amount) {
-      payload.planned_amount = Number(values.planned_amount).toFixed(2);
-    }
-    if (values.due_date !== item.due_date) {
-      payload.due_date = values.due_date;
-    }
-    if (Object.keys(payload).length === 0) return;
+        const values = getScheduleEditValues(item, scheduleDraft.edits);
+        const payload: { planned_amount?: string; due_date?: string } = {};
 
-    setScheduleSavingId(item.id);
-    try {
-      await scheduleApi.update(item.id, payload);
-      setScheduleEdits((current) => {
-        const next = { ...current };
-        delete next[item.id];
-        return next;
-      });
-      load();
+        if (values.planned_amount !== item.planned_amount) {
+          payload.planned_amount = Number(values.planned_amount).toFixed(2);
+        }
+        if (values.due_date !== item.due_date) {
+          payload.due_date = values.due_date;
+        }
+
+        if (Object.keys(payload).length > 0) {
+          await scheduleApi.update(item.id, payload);
+        }
+      }
+
+      for (const add of scheduleDraft.pendingAdds) {
+        if (!add.planned_amount || Number(add.planned_amount) <= 0) {
+          throw new Error("Укажите сумму для каждого нового месяца");
+        }
+
+        await scheduleApi.addMonth(client.id, client.installment_plan.id, {
+          planned_amount: Number(add.planned_amount).toFixed(2),
+          due_date: add.due_date || undefined,
+        });
+      }
+
+      for (const id of scheduleDraft.pendingWaives) {
+        await scheduleApi.waiveOverdue(id);
+      }
+
+      resetScheduleDraft();
+      await refreshClient();
+      showToast("График платежей сохранён");
     } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось сохранить график");
+      const message =
+        error instanceof ApiRequestError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Не удалось сохранить график";
+      setScheduleError(message);
+      showToast(message, "error");
     } finally {
-      setScheduleSavingId(null);
-    }
-  }
-
-  async function handleWaiveOverdue(item: PaymentScheduleItem) {
-    if (
-      !confirm(
-        "Снять просрочку по этому месяцу? Клиент перестанет отображаться в списке просрочек.",
-      )
-    ) {
-      return;
-    }
-    setWaivingId(item.id);
-    try {
-      await scheduleApi.waiveOverdue(item.id);
-      load();
-    } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось снять просрочку");
-    } finally {
-      setWaivingId(null);
-    }
-  }
-
-  async function handleDeleteScheduleMonth(item: PaymentScheduleItem) {
-    if (!confirm(`Удалить ${item.month_number}-й месяц из графика?`)) return;
-    setScheduleSavingId(item.id);
-    try {
-      await scheduleApi.delete(item.id);
-      load();
-    } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось удалить месяц");
-    } finally {
-      setScheduleSavingId(null);
-    }
-  }
-
-  async function handleAddScheduleMonth(event: React.FormEvent) {
-    event.preventDefault();
-    if (!client || !detail?.installment_plan) return;
-    if (!addMonthForm.planned_amount || Number(addMonthForm.planned_amount) <= 0) {
-      alert("Укажите сумму нового месяца");
-      return;
-    }
-    setAddMonthSaving(true);
-    try {
-      await scheduleApi.addMonth(client.id, detail.installment_plan.id, {
-        planned_amount: Number(addMonthForm.planned_amount).toFixed(2),
-        due_date: addMonthForm.due_date || undefined,
-      });
-      setAddMonthForm({ planned_amount: "", due_date: "" });
-      load();
-    } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось добавить месяц");
-    } finally {
-      setAddMonthSaving(false);
+      setScheduleSaving(false);
     }
   }
 
@@ -522,7 +674,10 @@ export default function ClientDetailPage() {
       const updated = await clientsApi.update(client.id, data);
       setClient((current) => (current ? { ...current, ...updated } : current));
     } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось сохранить изменения");
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить изменения",
+        "error",
+      );
     } finally {
       setCardSaving(null);
     }
@@ -536,9 +691,13 @@ export default function ClientDetailPage() {
         client.id,
         new Date().toISOString().slice(0, 10),
       );
-      await load();
+      await refreshClient();
+      showToast("Оплата сбора документов зафиксирована");
     } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось зафиксировать оплату");
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось зафиксировать оплату",
+        "error",
+      );
     } finally {
       setDocCollectionSaving(false);
     }
@@ -564,7 +723,7 @@ export default function ClientDetailPage() {
     }
   }
 
-  if (loading) return <LoadingState text="Загрузка карточки..." />;
+  if (loading && !client) return <LoadingState text="Загрузка карточки..." />;
   if (!client) return <EmptyState>Клиент не найден</EmptyState>;
 
   const detail = isDetail(client) ? client : null;
@@ -587,9 +746,13 @@ export default function ClientDetailPage() {
     .filter((item) => item.is_applicable)
     .reduce((sum, item) => sum + Number(item.paid_amount), 0);
   const clientProfit = collectedTotal - mandatoryPaidTotal;
+  const scheduleDraftDirty = isOwner && isScheduleDraftDirty(scheduleDraft, schedule);
 
   return (
     <div className="space-y-8">
+      {toast && (
+        <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
+      )}
       <PageHeader
         title={formatShortName(client.full_name)}
         subtitle={client.phone}
@@ -614,10 +777,11 @@ export default function ClientDetailPage() {
                   try {
                     await exportsApi.clientDetail(params.id);
                   } catch (error) {
-                    alert(
+                    showToast(
                       error instanceof ApiRequestError
                         ? error.message
                         : "Не удалось выгрузить Excel",
+                      "error",
                     );
                   } finally {
                     setExporting(false);
@@ -698,10 +862,9 @@ export default function ClientDetailPage() {
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[220px] flex-1">
                 <FormField label="Телефон">
-                  <Input
+                  <PhoneInput
                     value={phoneValue}
-                    onChange={(e) => setPhoneValue(e.target.value)}
-                    placeholder="+7 928 000-00-00"
+                    onValueChange={setPhoneValue}
                   />
                 </FormField>
               </div>
@@ -726,7 +889,7 @@ export default function ClientDetailPage() {
                 type="button"
                 variant="secondary"
                 onClick={() => {
-                  setPhoneValue(client.phone);
+                  setPhoneValue(ensurePhonePrefix(client.phone));
                   setEditingPhone(true);
                 }}
               >
@@ -1136,12 +1299,29 @@ export default function ClientDetailPage() {
               title="График платежей"
               description={
                 isOwner
-                  ? "Руководитель может менять суммы и даты, добавлять или удалять месяцы, снимать просрочку"
+                  ? "Измените суммы, даты и месяцы, затем нажмите «Сохранить график»"
                   : undefined
               }
+              action={
+                isOwner && detail?.installment_plan ? (
+                  <Button type="button" variant="secondary" onClick={handleAddPendingMonth}>
+                    + Добавить месяц
+                  </Button>
+                ) : undefined
+              }
             />
-            {schedule.length === 0 ? (
-              <EmptyState>График не сформирован</EmptyState>
+            {refreshing && (
+              <p className="mb-4 text-sm text-slate-500">Обновление данных...</p>
+            )}
+            {scheduleError && (
+              <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {scheduleError}
+              </p>
+            )}
+            {schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
+              <EmptyState>
+                {isOwner ? "График не сформирован. Нажмите «+ Добавить месяц»." : "График не сформирован"}
+              </EmptyState>
             ) : (
               <>
                 <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -1183,25 +1363,39 @@ export default function ClientDetailPage() {
                     {schedule.map((item) => {
                       const rest = remainingAmount(item);
                       const editValues = scheduleEditValues(item);
-                      const scheduleDirty =
+                      const markedForDelete = scheduleDraft.pendingDeletes.includes(item.id);
+                      const markedForWaive = scheduleDraft.pendingWaives.includes(item.id);
+                      const rowChanged =
                         editValues.planned_amount !== item.planned_amount ||
                         editValues.due_date !== item.due_date;
+
                       return (
-                        <tr key={item.id}>
-                          <td>{item.month_number}</td>
+                        <tr
+                          key={item.id}
+                          className={markedForDelete ? "bg-slate-50 opacity-60" : undefined}
+                        >
                           <td>
-                            {isOwner ? (
+                            {item.month_number}
+                            {rowChanged && (
+                              <p className="text-xs text-brand-600">изменён</p>
+                            )}
+                          </td>
+                          <td>
+                            {isOwner && !markedForDelete ? (
                               <Input
                                 type="date"
                                 value={editValues.due_date}
                                 onChange={(e) =>
-                                  setScheduleEdits({
-                                    ...scheduleEdits,
-                                    [item.id]: {
-                                      ...editValues,
-                                      due_date: e.target.value,
+                                  setScheduleDraft((current) => ({
+                                    ...current,
+                                    edits: {
+                                      ...current.edits,
+                                      [item.id]: {
+                                        ...editValues,
+                                        due_date: e.target.value,
+                                      },
                                     },
-                                  })
+                                  }))
                                 }
                               />
                             ) : (
@@ -1216,7 +1410,7 @@ export default function ClientDetailPage() {
                             )}
                           </td>
                           <td>
-                            {isOwner ? (
+                            {isOwner && !markedForDelete ? (
                               <Input
                                 type="number"
                                 min={Number(item.paid_amount) || 0.01}
@@ -1224,13 +1418,16 @@ export default function ClientDetailPage() {
                                 className="max-w-[120px]"
                                 value={editValues.planned_amount}
                                 onChange={(e) =>
-                                  setScheduleEdits({
-                                    ...scheduleEdits,
-                                    [item.id]: {
-                                      ...editValues,
-                                      planned_amount: e.target.value,
+                                  setScheduleDraft((current) => ({
+                                    ...current,
+                                    edits: {
+                                      ...current.edits,
+                                      [item.id]: {
+                                        ...editValues,
+                                        planned_amount: e.target.value,
+                                      },
                                     },
-                                  })
+                                  }))
                                 }
                               />
                             ) : (
@@ -1243,14 +1440,18 @@ export default function ClientDetailPage() {
                             <Badge tone={scheduleTone(item.status)}>
                               {statusLabel(item.status)}
                             </Badge>
-                            {item.overdue_waived && (
-                              <p className="mt-1 text-xs text-slate-500">Просрочка снята</p>
+                            {(item.overdue_waived || markedForWaive) && (
+                              <p className="mt-1 text-xs text-slate-500">
+                                {markedForWaive ? "Будет снята просрочка" : "Просрочка снята"}
+                              </p>
                             )}
                           </td>
                           <td>
                             {item.deferral_comment ? (
                               <div className="max-w-[220px] text-xs text-slate-600">
-                                <p className="font-medium text-amber-700">до {formatDate(item.deferred_until!)}</p>
+                                <p className="font-medium text-amber-700">
+                                  до {formatDate(item.deferred_until!)}
+                                </p>
                                 <p className="mt-1">{item.deferral_comment}</p>
                               </div>
                             ) : (
@@ -1260,7 +1461,7 @@ export default function ClientDetailPage() {
                           {canRecordPayment && (
                             <td>
                               <div className="flex flex-col gap-2">
-                                {rest > 0 ? (
+                                {rest > 0 && !markedForDelete ? (
                                   <Button
                                     type="button"
                                     variant="secondary"
@@ -1270,15 +1471,20 @@ export default function ClientDetailPage() {
                                     {payingId === item.id ? "Сохранение..." : "Внести платёж"}
                                   </Button>
                                 ) : (
-                                  <span className="text-xs text-slate-400">Оплачено</span>
+                                  <span className="text-xs text-slate-400">
+                                    {markedForDelete ? "К удалению" : "Оплачено"}
+                                  </span>
                                 )}
-                                {rest > 0 && deferringId === item.id ? (
+                                {rest > 0 && !markedForDelete && deferringId === item.id ? (
                                   <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
                                     <Input
                                       type="date"
                                       value={deferForm.deferred_until}
                                       onChange={(e) =>
-                                        setDeferForm({ ...deferForm, deferred_until: e.target.value })
+                                        setDeferForm({
+                                          ...deferForm,
+                                          deferred_until: e.target.value,
+                                        })
                                       }
                                     />
                                     <Input
@@ -1301,8 +1507,12 @@ export default function ClientDetailPage() {
                                       </Button>
                                     </div>
                                   </div>
-                                ) : rest > 0 ? (
-                                  <Button type="button" variant="ghost" onClick={() => startDefer(item)}>
+                                ) : rest > 0 && !markedForDelete ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => startDefer(item)}
+                                  >
                                     Отсрочка
                                   </Button>
                                 ) : null}
@@ -1312,34 +1522,24 @@ export default function ClientDetailPage() {
                           {isOwner && (
                             <td>
                               <div className="flex flex-col gap-2">
-                                {scheduleDirty && (
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    disabled={scheduleSavingId === item.id}
-                                    onClick={() => handleSaveScheduleRow(item)}
-                                  >
-                                    {scheduleSavingId === item.id ? "Сохранение..." : "Сохранить"}
-                                  </Button>
-                                )}
-                                {item.status === "overdue" && !item.overdue_waived && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    disabled={waivingId === item.id}
-                                    onClick={() => handleWaiveOverdue(item)}
-                                  >
-                                    {waivingId === item.id ? "..." : "Снять просрочку"}
-                                  </Button>
-                                )}
+                                {item.status === "overdue" &&
+                                  !item.overdue_waived &&
+                                  !markedForDelete && (
+                                    <Button
+                                      type="button"
+                                      variant={markedForWaive ? "secondary" : "ghost"}
+                                      onClick={() => handleToggleScheduleWaive(item.id)}
+                                    >
+                                      {markedForWaive ? "Отменить снятие" : "Снять просрочку"}
+                                    </Button>
+                                  )}
                                 {Number(item.paid_amount) <= 0 && (
                                   <Button
                                     type="button"
-                                    variant="danger"
-                                    disabled={scheduleSavingId === item.id}
-                                    onClick={() => handleDeleteScheduleMonth(item)}
+                                    variant={markedForDelete ? "secondary" : "danger"}
+                                    onClick={() => handleToggleScheduleDelete(item.id)}
                                   >
-                                    Удалить месяц
+                                    {markedForDelete ? "Вернуть" : "Удалить"}
                                   </Button>
                                 )}
                               </div>
@@ -1348,43 +1548,90 @@ export default function ClientDetailPage() {
                         </tr>
                       );
                     })}
+                    {scheduleDraft.pendingAdds.map((item, index) => (
+                      <tr key={item.tempId} className="bg-brand-50/40">
+                        <td>
+                          <Badge tone="warning">Новый</Badge>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {schedule.filter((row) => !scheduleDraft.pendingDeletes.includes(row.id)).length +
+                              index +
+                              1}
+                          </p>
+                        </td>
+                        <td>
+                          <Input
+                            type="date"
+                            value={item.due_date}
+                            onChange={(e) =>
+                              updatePendingAdd(item.tempId, "due_date", e.target.value)
+                            }
+                          />
+                        </td>
+                        <td>
+                          <Input
+                            type="number"
+                            min={0.01}
+                            step={0.01}
+                            className="max-w-[120px]"
+                            value={item.planned_amount}
+                            onChange={(e) =>
+                              updatePendingAdd(item.tempId, "planned_amount", e.target.value)
+                            }
+                          />
+                        </td>
+                        <td>{formatMoney(0)}</td>
+                        <td>{formatMoney(item.planned_amount)}</td>
+                        <td>
+                          <Badge>Новый месяц</Badge>
+                        </td>
+                        <td>
+                          <span className="text-xs text-slate-400">—</span>
+                        </td>
+                        {canRecordPayment && (
+                          <td>
+                            <span className="text-xs text-slate-400">После сохранения</span>
+                          </td>
+                        )}
+                        {isOwner && (
+                          <td>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => handleRemovePendingAdd(item.tempId)}
+                            >
+                              Убрать
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
 
-              {isOwner && detail?.installment_plan && (
-                <form
-                  onSubmit={handleAddScheduleMonth}
-                  className="mt-6 grid gap-4 border-t border-slate-100 pt-6 md:grid-cols-3"
-                >
-                  <FormField label="Сумма нового месяца">
-                    <Input
-                      type="number"
-                      min={0.01}
-                      step={0.01}
-                      placeholder="15000"
-                      value={addMonthForm.planned_amount}
-                      onChange={(e) =>
-                        setAddMonthForm({ ...addMonthForm, planned_amount: e.target.value })
-                      }
-                      required
-                    />
-                  </FormField>
-                  <FormField label="Дата (необязательно)">
-                    <Input
-                      type="date"
-                      value={addMonthForm.due_date}
-                      onChange={(e) =>
-                        setAddMonthForm({ ...addMonthForm, due_date: e.target.value })
-                      }
-                    />
-                  </FormField>
-                  <div className="flex items-end">
-                    <Button type="submit" disabled={addMonthSaving}>
-                      {addMonthSaving ? "Добавление..." : "Добавить месяц"}
+              {isOwner && scheduleDraftDirty && (
+                <div className="sticky bottom-4 z-10 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white p-4 shadow-lg">
+                  <p className="text-sm font-medium text-slate-700">
+                    Есть несохранённые изменения в графике
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={scheduleSaving}
+                      onClick={resetScheduleDraft}
+                    >
+                      Отменить
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={scheduleSaving}
+                      onClick={handleSaveScheduleDraft}
+                    >
+                      {scheduleSaving ? "Сохранение..." : "Сохранить график"}
                     </Button>
                   </div>
-                </form>
+                </div>
               )}
               </>
             )}
