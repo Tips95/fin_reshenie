@@ -23,6 +23,7 @@ from app.schemas.analytics import (
 )
 from app.services.access import apply_client_visibility_filter, client_has_overdue_payments
 from app.services.dashboard import _monthly_expenses_total, _schedule_remainder
+from app.services.mandatory_payment_stats import breakdown_from_totals, get_mandatory_paid_totals
 
 
 def _payment_signed(amount: Decimal, is_refund: bool) -> Decimal:
@@ -111,6 +112,9 @@ def _build_client_metrics(
 
 def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> AnalyticsOverview:
     if user.role == UserRole.CALL_CENTER:
+        empty_breakdown = breakdown_from_totals(
+            get_mandatory_paid_totals(db, [])
+        )
         return AnalyticsOverview(
             summary=AnalyticsSummary(
                 clients_count=0,
@@ -118,6 +122,7 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
                 profit_total=Decimal("0.00"),
                 schedule_remainder_total=Decimal("0.00"),
                 monthly_expenses=Decimal("0.00"),
+                mandatory_paid_total=empty_breakdown,
             ),
             trends=[],
             client_profits=[],
@@ -210,17 +215,27 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
             month_key = f"{item.due_date.year:04d}-{item.due_date.month:02d}"
             expected_by_month[month_key] += item.planned_amount
 
-    trends = [
-        MonthlyTrendPoint(
-            month=month_key,
-            collected=collected_by_month[month_key],
-            expected=expected_by_month[month_key],
-            expenses=monthly_expenses,
-            net_profit=collected_by_month[month_key] - monthly_expenses,
-            payments_count=payments_count_by_month[month_key],
+    trends = []
+    for month_key, period_start, period_end in periods:
+        mandatory_totals = get_mandatory_paid_totals(
+            db,
+            client_ids,
+            date_from=period_start,
+            date_to=period_end,
         )
-        for month_key, _, _ in periods
-    ]
+        trends.append(
+            MonthlyTrendPoint(
+                month=month_key,
+                collected=collected_by_month[month_key],
+                expected=expected_by_month[month_key],
+                expenses=monthly_expenses,
+                mandatory_paid=mandatory_totals.total,
+                net_profit=collected_by_month[month_key]
+                - monthly_expenses
+                - mandatory_totals.total,
+                payments_count=payments_count_by_month[month_key],
+            )
+        )
 
     summary = AnalyticsSummary(
         clients_count=len(clients),
@@ -231,6 +246,7 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
             Decimal("0.00"),
         ),
         monthly_expenses=monthly_expenses,
+        mandatory_paid_total=breakdown_from_totals(get_mandatory_paid_totals(db, client_ids)),
     )
 
     return AnalyticsOverview(summary=summary, trends=trends, client_profits=client_profits)

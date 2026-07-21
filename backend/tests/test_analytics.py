@@ -76,15 +76,28 @@ class TestAnalyticsOverview:
             "app.services.analytics._monthly_expenses_total",
             lambda *_args, **_kwargs: Decimal("415000.00"),
         )
+        monkeypatch.setattr(
+            "app.services.analytics.get_mandatory_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.mandatory_payment_stats",
+                fromlist=["MandatoryPaymentTotals"],
+            ).MandatoryPaymentTotals(
+                deposit=Decimal("5000.00"),
+                financial_management=Decimal("0.00"),
+                court_fee=Decimal("0.00"),
+            ),
+        )
 
         overview = get_analytics_overview(db, make_user(), months=3)
 
         assert overview.summary.clients_count == 1
         assert overview.summary.collected_total == Decimal("10000.00")
         assert overview.summary.profit_total == Decimal("5000.00")
+        assert overview.summary.mandatory_paid_total.total == Decimal("5000.00")
         assert overview.client_profits[0].schedule_remainder == Decimal("7000.00")
         assert len(overview.trends) == 3
         assert overview.trends[-1].collected == Decimal("10000.00")
+        assert overview.trends[-1].mandatory_paid == Decimal("5000.00")
 
     def test_call_center_gets_empty_overview(self):
         db = MagicMock()

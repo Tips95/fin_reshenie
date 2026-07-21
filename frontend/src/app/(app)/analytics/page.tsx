@@ -97,8 +97,8 @@ export default function AnalyticsPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Клиентов в выборке" value={data.summary.clients_count} tone="brand" />
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Клиентов в выборке" value={data.summary.clients_count} tone="default" />
         <StatCard
           label="Получено всего"
           value={formatMoney(data.summary.collected_total)}
@@ -108,6 +108,26 @@ export default function AnalyticsPage() {
           label="Прибыль по клиентам"
           value={formatMoney(data.summary.profit_total)}
           tone={Number(data.summary.profit_total) >= 0 ? "success" : "danger"}
+        />
+        <StatCard
+          label="Обязательные (депозит)"
+          value={formatMoney(data.summary.mandatory_paid_total.deposit)}
+          tone="default"
+        />
+        <StatCard
+          label="Обязательные (фин. управ.)"
+          value={formatMoney(data.summary.mandatory_paid_total.financial_management)}
+          tone="default"
+        />
+        <StatCard
+          label="Обязательные (госпошлина)"
+          value={formatMoney(data.summary.mandatory_paid_total.court_fee)}
+          tone="default"
+        />
+        <StatCard
+          label="Обязательные всего"
+          value={formatMoney(data.summary.mandatory_paid_total.total)}
+          tone="warning"
         />
         <StatCard
           label="Остаток по графикам"
@@ -166,24 +186,38 @@ export default function AnalyticsPage() {
                     </span>
                   </div>
                   {showOrgExpenses && (
-                    <div className="flex items-center gap-3">
-                      <span className="w-28 text-slate-500">Чистая прибыль</span>
-                      <div className="h-2 flex-1 rounded-full bg-slate-200">
-                        <div
-                          className={`h-2 rounded-full ${
-                            profitPositive ? "bg-emerald-600" : "bg-rose-500"
-                          }`}
-                          style={{ width: `${profitWidth}%` }}
-                        />
+                    <>
+                      <div className="flex items-center gap-3">
+                        <span className="w-28 text-slate-500">Обязательные</span>
+                        <div className="h-2 flex-1 rounded-sm bg-slate-200">
+                          <div
+                            className="h-2 bg-amber-600"
+                            style={{
+                              width: `${Math.round((Number(point.mandatory_paid) / trendMax) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="w-28 text-right font-medium text-slate-700">
+                          {formatMoney(point.mandatory_paid)}
+                        </span>
                       </div>
-                      <span
-                        className={`w-28 text-right font-medium ${
-                          profitPositive ? "text-emerald-700" : "text-rose-700"
-                        }`}
-                      >
-                        {formatMoney(point.net_profit)}
-                      </span>
-                    </div>
+                      <div className="flex items-center gap-3">
+                        <span className="w-28 text-slate-500">Чистая прибыль</span>
+                        <div className="h-2 flex-1 rounded-sm bg-slate-200">
+                          <div
+                            className={profitPositive ? "h-2 bg-emerald-600" : "h-2 bg-rose-600"}
+                            style={{ width: `${profitWidth}%` }}
+                          />
+                        </div>
+                        <span
+                          className={`w-28 text-right font-medium ${
+                            profitPositive ? "text-emerald-700" : "text-rose-700"
+                          }`}
+                        >
+                          {formatMoney(point.net_profit)}
+                        </span>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -191,9 +225,9 @@ export default function AnalyticsPage() {
           })}
         </div>
         {showOrgExpenses && (
-          <p className="mt-4 text-sm text-slate-500">
-            Расходы организации в месяц: {formatMoney(data.summary.monthly_expenses)}. Формула
-            чистой прибыли: поступления − расходы.
+          <p className="mt-3 text-xs text-slate-500">
+            Расходы организации в месяц: {formatMoney(data.summary.monthly_expenses)}. Чистая
+            прибыль: поступления − обязательные платежи − расходы.
           </p>
         )}
       </Card>

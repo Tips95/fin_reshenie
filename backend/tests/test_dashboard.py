@@ -63,6 +63,17 @@ class TestDashboardSummary:
             "app.services.dashboard.client_has_overdue_payments",
             lambda *_args, **_kwargs: False,
         )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_mandatory_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.mandatory_payment_stats",
+                fromlist=["MandatoryPaymentTotals"],
+            ).MandatoryPaymentTotals(
+                deposit=Decimal("0.00"),
+                financial_management=Decimal("0.00"),
+                court_fee=Decimal("0.00"),
+            ),
+        )
 
         summary = get_dashboard_summary(db, make_user())
 
@@ -74,6 +85,8 @@ class TestDashboardSummary:
         assert summary.total_collected == Decimal("3000.00")
         assert summary.active_debt_total == Decimal("350000.00")
         assert summary.monthly_expenses == Decimal("0.00")
+        assert summary.mandatory_paid_total.total == Decimal("0.00")
+        assert summary.org_profit_total == Decimal("3000.00")
         assert summary.net_profit_this_month == Decimal("3000.00")
 
     def test_manager_gets_counts_without_financial_metrics(self, monkeypatch):

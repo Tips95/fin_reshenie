@@ -84,32 +84,69 @@ export default function DashboardPage() {
       </div>
 
       {showOrgFinance && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Ожидается в этом месяце"
             value={formatMoney(summary.expected_this_month)}
-            tone="brand"
+            tone="default"
           />
           <StatCard
             label="Получено в этом месяце"
             value={formatMoney(summary.collected_this_month)}
             tone="success"
           />
-          {isOwner && (
-            <>
-              <StatCard
-                label="Расходы в месяц"
-                value={formatMoney(summary.monthly_expenses)}
-                tone="warning"
-              />
-              <StatCard
-                label="Чистая прибыль"
-                value={formatMoney(summary.net_profit_this_month)}
-                tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
-                hint="Получено − обязательные расходы"
-              />
-            </>
-          )}
+          <StatCard
+            label="Расходы в месяц"
+            value={formatMoney(summary.monthly_expenses)}
+            tone="warning"
+          />
+          <StatCard
+            label="Чистая прибыль (месяц)"
+            value={formatMoney(summary.net_profit_this_month)}
+            tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
+            hint="Получено − обязательные − расходы"
+          />
+          <StatCard
+            label="Депозиты (месяц)"
+            value={formatMoney(summary.mandatory_paid_this_month.deposit)}
+            tone="default"
+          />
+          <StatCard
+            label="Фин. управление (месяц)"
+            value={formatMoney(summary.mandatory_paid_this_month.financial_management)}
+            tone="default"
+          />
+          <StatCard
+            label="Госпошлина (месяц)"
+            value={formatMoney(summary.mandatory_paid_this_month.court_fee)}
+            tone="default"
+          />
+          <StatCard
+            label="Обязательные всего (месяц)"
+            value={formatMoney(summary.mandatory_paid_this_month.total)}
+            tone="warning"
+          />
+          <StatCard
+            label="Депозиты (всего)"
+            value={formatMoney(summary.mandatory_paid_total.deposit)}
+            tone="default"
+          />
+          <StatCard
+            label="Фин. управление (всего)"
+            value={formatMoney(summary.mandatory_paid_total.financial_management)}
+            tone="default"
+          />
+          <StatCard
+            label="Госпошлина (всего)"
+            value={formatMoney(summary.mandatory_paid_total.court_fee)}
+            tone="default"
+          />
+          <StatCard
+            label="Прибыль по клиентам"
+            value={formatMoney(summary.org_profit_total)}
+            tone={Number(summary.org_profit_total) >= 0 ? "success" : "danger"}
+            hint="Всего получено − обязательные платежи"
+          />
           <StatCard
             label="Сумма просрочки"
             value={formatMoney(summary.overdue_amount)}
@@ -123,27 +160,28 @@ export default function DashboardPage() {
           <StatCard
             label="Всего получено"
             value={formatMoney(summary.total_collected)}
-            tone="accent"
+            tone="default"
           />
         </div>
       )}
 
       {isOwner && (
-        <Card variant="accent">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-sm font-semibold text-slate-700">Формула чистой прибыли</p>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="text-xs font-medium text-slate-700">Формула чистой прибыли за месяц</p>
+              <p className="mt-1 text-xs text-slate-600">
                 {formatMoney(summary.collected_this_month)} −{" "}
+                {formatMoney(summary.mandatory_paid_this_month.total)} −{" "}
                 {formatMoney(summary.monthly_expenses)} ={" "}
-                <span className="font-bold text-slate-900">
+                <span className="font-semibold text-slate-900">
                   {formatMoney(summary.net_profit_this_month)}
                 </span>
               </p>
             </div>
             <Link
               href="/expenses"
-              className="rounded-full bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
+              className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
               Управление расходами
             </Link>

@@ -1,7 +1,10 @@
 from datetime import date
 from decimal import Decimal
 
+from sqlalchemy.orm import Session
+
 from app.models.client_mandatory_payment import DEPOSIT_AMOUNT, ClientMandatoryPayment
+from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRecord
 from app.models.enums import MandatoryPaymentStatus, MandatoryPaymentType
 
 
@@ -32,11 +35,20 @@ def create_default_mandatory_payments(client_id) -> list[ClientMandatoryPayment]
 
 
 def apply_mandatory_payment(
+    db: Session,
     item: ClientMandatoryPayment,
     amount: Decimal,
     payment_date: date,
-) -> None:
+) -> ClientMandatoryPaymentRecord:
+    record = ClientMandatoryPaymentRecord(
+        mandatory_payment_id=item.id,
+        amount=amount,
+        payment_date=payment_date,
+    )
+    db.add(record)
+
     item.paid_amount += amount
+    item.paid_date = payment_date
     if item.planned_amount > Decimal("0.00") and item.paid_amount >= item.planned_amount:
         item.status = MandatoryPaymentStatus.PAID
         item.paid_date = payment_date
@@ -46,6 +58,8 @@ def apply_mandatory_payment(
     else:
         item.status = MandatoryPaymentStatus.PENDING
         item.paid_date = None
+
+    return record
 
 
 def refresh_mandatory_payment_status(item: ClientMandatoryPayment) -> None:

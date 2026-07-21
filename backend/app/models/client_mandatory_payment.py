@@ -48,3 +48,7 @@ class ClientMandatoryPayment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     client: Mapped["Client"] = relationship(back_populates="mandatory_payments")
+    payment_records: Mapped[list["ClientMandatoryPaymentRecord"]] = relationship(
+        back_populates="mandatory_payment",
+        cascade="all, delete-orphan",
+    )

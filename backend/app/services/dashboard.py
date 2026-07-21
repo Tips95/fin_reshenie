@@ -12,8 +12,9 @@ from app.models.operating_expense import OperatingExpense
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
-from app.schemas.dashboard import DashboardSummary
+from app.schemas.dashboard import DashboardSummary, MandatoryPaymentBreakdown
 from app.services.access import apply_client_visibility_filter, client_has_overdue_payments
+from app.services.mandatory_payment_stats import MandatoryPaymentTotals, breakdown_from_totals, get_mandatory_paid_totals
 from app.services.schedule_dates import effective_due_date, payment_window_end
 
 
@@ -46,12 +47,27 @@ def _monthly_expenses_total(db: Session, organization_id) -> Decimal:
     return sum((expense.amount for expense in expenses), Decimal("0.00"))
 
 
+def _to_breakdown(totals: MandatoryPaymentTotals) -> MandatoryPaymentBreakdown:
+    return breakdown_from_totals(totals)
+
+
+def _empty_breakdown() -> MandatoryPaymentBreakdown:
+    return _to_breakdown(
+        MandatoryPaymentTotals(
+            deposit=Decimal("0.00"),
+            financial_management=Decimal("0.00"),
+            court_fee=Decimal("0.00"),
+        )
+    )
+
+
 def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
     clients = list(db.scalars(_visible_clients_stmt(user)))
     active_clients = [client for client in clients if client.status == ClientStatus.ACTIVE]
     clients_overdue = sum(
         1 for client in clients if client_has_overdue_payments(db, client.id)
     )
+    empty = _empty_breakdown()
 
     if user.role != UserRole.OWNER:
         return DashboardSummary(
@@ -65,6 +81,9 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
             total_collected=Decimal("0.00"),
             active_debt_total=Decimal("0.00"),
             monthly_expenses=Decimal("0.00"),
+            mandatory_paid_total=empty,
+            mandatory_paid_this_month=empty,
+            org_profit_total=Decimal("0.00"),
             net_profit_this_month=Decimal("0.00"),
         )
 
@@ -73,7 +92,6 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
     month_start, month_end = _month_bounds(today)
 
     client_ids = [client.id for client in clients]
-    active_client_ids = [client.id for client in active_clients]
     active_debt_total = sum(
         (client.debt_amount for client in active_clients),
         Decimal("0.00"),
@@ -119,12 +137,25 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         )
 
         for payment in payments:
-            signed_amount = (
-                -payment.amount if payment.is_refund else payment.amount
-            )
+            signed_amount = -payment.amount if payment.is_refund else payment.amount
             total_collected += signed_amount
             if month_start <= payment.payment_date <= month_end:
                 collected_this_month += signed_amount
+
+    mandatory_paid_total = _to_breakdown(get_mandatory_paid_totals(db, client_ids))
+    mandatory_paid_this_month = _to_breakdown(
+        get_mandatory_paid_totals(
+            db,
+            client_ids,
+            date_from=month_start,
+            date_to=month_end,
+        )
+    )
+
+    org_profit_total = total_collected - mandatory_paid_total.total
+    net_profit_this_month = (
+        collected_this_month - mandatory_paid_this_month.total - monthly_expenses
+    )
 
     return DashboardSummary(
         clients_total=len(clients),
@@ -137,5 +168,8 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         total_collected=total_collected,
         active_debt_total=active_debt_total,
         monthly_expenses=monthly_expenses,
-        net_profit_this_month=collected_this_month - monthly_expenses,
+        mandatory_paid_total=mandatory_paid_total,
+        mandatory_paid_this_month=mandatory_paid_this_month,
+        org_profit_total=org_profit_total,
+        net_profit_this_month=net_profit_this_month,
     )

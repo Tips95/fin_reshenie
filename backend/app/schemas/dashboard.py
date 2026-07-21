@@ -5,6 +5,13 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class MandatoryPaymentBreakdown(BaseModel):
+    deposit: Decimal
+    financial_management: Decimal
+    court_fee: Decimal
+    total: Decimal
+
+
 class DashboardSummary(BaseModel):
     clients_total: int
     clients_active: int
@@ -16,4 +23,7 @@ class DashboardSummary(BaseModel):
     total_collected: Decimal
     active_debt_total: Decimal
     monthly_expenses: Decimal
+    mandatory_paid_total: MandatoryPaymentBreakdown
+    mandatory_paid_this_month: MandatoryPaymentBreakdown
+    org_profit_total: Decimal
     net_profit_this_month: Decimal

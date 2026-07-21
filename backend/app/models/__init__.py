@@ -2,6 +2,7 @@ from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.client import Client
 from app.models.client_mandatory_payment import ClientMandatoryPayment
+from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRecord
 from app.models.court_deposit_tracking import CourtDepositTracking
 from app.models.document_collection import DocumentCollection
 from app.models.manager_task import ManagerTask
@@ -24,6 +25,7 @@ __all__ = [
     "Base",
     "Client",
     "ClientMandatoryPayment",
+    "ClientMandatoryPaymentRecord",
     "CourtDepositTracking",
     "DocumentCollection",
     "InstallmentPlan",

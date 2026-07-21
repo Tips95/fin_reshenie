@@ -189,6 +189,13 @@ export interface ApiError {
   detail: string;
 }
 
+export interface MandatoryPaymentBreakdown {
+  deposit: string;
+  financial_management: string;
+  court_fee: string;
+  total: string;
+}
+
 export interface DashboardSummary {
   clients_total: number;
   clients_active: number;
@@ -200,6 +207,9 @@ export interface DashboardSummary {
   total_collected: string;
   active_debt_total: string;
   monthly_expenses: string;
+  mandatory_paid_total: MandatoryPaymentBreakdown;
+  mandatory_paid_this_month: MandatoryPaymentBreakdown;
+  org_profit_total: string;
   net_profit_this_month: string;
 }
 
@@ -223,6 +233,7 @@ export interface MonthlyTrendPoint {
   collected: string;
   expected: string;
   expenses: string;
+  mandatory_paid: string;
   net_profit: string;
   payments_count: number;
 }
@@ -233,6 +244,7 @@ export interface AnalyticsSummary {
   profit_total: string;
   schedule_remainder_total: string;
   monthly_expenses: string;
+  mandatory_paid_total: MandatoryPaymentBreakdown;
 }
 
 export interface AnalyticsOverview {

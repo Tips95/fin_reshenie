@@ -122,7 +122,7 @@ def record_mandatory_payment(
             detail="Сумма превышает остаток по обязательному платежу",
         )
 
-    apply_mandatory_payment(item, payload.amount, payload.payment_date)
+    apply_mandatory_payment(db, item, payload.amount, payload.payment_date)
     if payload.comment:
         item.comment = payload.comment
 
