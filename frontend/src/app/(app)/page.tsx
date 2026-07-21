@@ -44,23 +44,23 @@ export default function DashboardPage() {
   if (!summary) return <LoadingState text="Не удалось загрузить дашборд" />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Дашборд"
         subtitle={`Добро пожаловать, ${user?.full_name}`}
         action={
           canManageClients ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <Link
                 href="/tasks"
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50/50"
+                className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
                 Задачи{openTasksCount > 0 ? ` (${openTasksCount})` : ""}
               </Link>
               {isOwner && (
                 <Link
                   href="/analytics"
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50/50"
+                  className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Аналитика →
                 </Link>
@@ -70,7 +70,7 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Всего клиентов" value={summary.clients_total} tone="brand" />
         <StatCard label="Активных" value={summary.clients_active} tone="success" />
         <StatCard label="С просрочкой" value={summary.clients_overdue} tone="danger" />

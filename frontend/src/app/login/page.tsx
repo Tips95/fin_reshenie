@@ -37,24 +37,24 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10 mesh-bg">
-      <Card variant="glass" className="relative w-full max-w-md">
-        <div className="mb-6 flex items-center gap-3">
+    <div className="relative flex min-h-screen items-center justify-center px-4 py-6 mesh-bg">
+      <Card className="w-full max-w-sm">
+        <div className="mb-4 flex items-center gap-2">
           <LogoMark />
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{APP_NAME}</h1>
-            <p className="text-sm text-slate-500">Выберите контур и войдите в систему</p>
+            <h1 className="text-base font-semibold text-slate-900">{APP_NAME}</h1>
+            <p className="text-xs text-slate-500">Выберите контур и войдите</p>
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-2">
+        <div className="mb-4 grid grid-cols-2 gap-1.5">
           <button
             type="button"
             onClick={() => setWorkspace("legal")}
-            className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+            className={`rounded border px-2 py-1.5 text-xs font-medium ${
               workspace === "legal"
-                ? "bg-brand-700 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                ? "border-brand-700 bg-brand-700 text-white"
+                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
             Юрфирма
@@ -62,19 +62,19 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => setWorkspace("retail")}
-            className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+            className={`rounded border px-2 py-1.5 text-xs font-medium ${
               workspace === "retail"
-                ? "bg-emerald-700 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                ? "border-slate-700 bg-slate-700 text-white"
+                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
             Товарная рассрочка
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <label className="mb-0.5 block text-xs font-medium text-slate-600">
               Email или телефон
             </label>
             <Input
@@ -85,7 +85,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">Пароль</label>
+            <label className="mb-0.5 block text-xs font-medium text-slate-600">Пароль</label>
             <Input
               type="password"
               value={password}
@@ -94,7 +94,7 @@ export default function LoginPage() {
             />
           </div>
           {error && (
-            <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <p className="rounded border border-rose-300 bg-rose-50 px-2 py-1.5 text-xs text-rose-800">
               {error}
             </p>
           )}
@@ -103,14 +103,14 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-3 text-[11px] text-slate-500">
           {workspace === "legal"
             ? "Демо: admin@reshenie.local / admin123"
             : "Админ: admin@retail.local / admin123 · Инвестор: investor1@retail.local / investor123"}
         </p>
       </Card>
 
-      <div className="absolute bottom-6 left-0 right-0">
+      <div className="absolute bottom-3 left-0 right-0">
         <BrandFooter />
       </div>
     </div>

@@ -14,7 +14,6 @@ import {
   LoadingState,
   PageHeader,
   PhoneInput,
-  ProgressBar,
   SectionTitle,
   Select,
   StatCard,
@@ -94,12 +93,6 @@ function remainingAmount(item: PaymentScheduleItem): number {
   return diff > 0 ? diff : 0;
 }
 
-function paymentProgress(item: PaymentScheduleItem): number {
-  const planned = Number(item.planned_amount);
-  if (planned <= 0) return 0;
-  return Math.min(100, Math.round((Number(item.paid_amount) / planned) * 100));
-}
-
 function mandatoryRemaining(item: MandatoryPayment): number {
   const diff = Number(item.planned_amount) - Number(item.paid_amount);
   return diff > 0 ? diff : 0;
@@ -109,13 +102,6 @@ function mandatoryTypeHint(type: string): string {
   if (type === "deposit") return "Фиксировано: 25 000 ₽";
   if (type === "court_fee") return "Указывается при необходимости";
   return "Укажите сумму перед внесением";
-}
-
-function progressTone(status: string): "default" | "success" | "warning" | "danger" {
-  if (status === "paid") return "success";
-  if (status === "partial") return "warning";
-  if (status === "overdue") return "danger";
-  return "default";
 }
 
 export default function ClientDetailPage() {
@@ -749,7 +735,7 @@ export default function ClientDetailPage() {
   const scheduleDraftDirty = isOwner && isScheduleDraftDirty(scheduleDraft, schedule);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {toast && (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       )}
@@ -1324,26 +1310,6 @@ export default function ClientDetailPage() {
               </EmptyState>
             ) : (
               <>
-                <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {schedule.map((item) => (
-                    <div
-                      key={`chart-${item.id}`}
-                      className="payment-tile"
-                      title={`${formatDate(effectiveDueDate(item))} · ${formatMoney(item.planned_amount)}`}
-                    >
-                      <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
-                        <span>Мес. {item.month_number}</span>
-                        <span>{paymentProgress(item)}%</span>
-                      </div>
-                      <ProgressBar value={paymentProgress(item)} tone={progressTone(item.status)} />
-                      <p className="mt-2 text-xs text-slate-400">
-                        {formatDate(effectiveDueDate(item))}
-                        {item.deferred_until && " · отсрочка"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
                 <div className="overflow-x-auto">
                 <table className="data-table">
                   <thead>
@@ -1476,7 +1442,7 @@ export default function ClientDetailPage() {
                                   </span>
                                 )}
                                 {rest > 0 && !markedForDelete && deferringId === item.id ? (
-                                  <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                                  <div className="space-y-1.5 rounded border border-slate-300 bg-slate-50 p-2">
                                     <Input
                                       type="date"
                                       value={deferForm.deferred_until}
@@ -1610,8 +1576,8 @@ export default function ClientDetailPage() {
               </div>
 
               {isOwner && scheduleDraftDirty && (
-                <div className="sticky bottom-4 z-10 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white p-4 shadow-lg">
-                  <p className="text-sm font-medium text-slate-700">
+                <div className="sticky bottom-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 bg-white p-2">
+                  <p className="text-xs font-medium text-slate-700">
                     Есть несохранённые изменения в графике
                   </p>
                   <div className="flex flex-wrap gap-2">

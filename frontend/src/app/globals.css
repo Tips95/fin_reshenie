@@ -3,74 +3,63 @@
 @tailwind utilities;
 
 :root {
-  --background: #f4f7fb;
-  --foreground: #0c1829;
-  --brand-950: #071018;
-  --brand-900: #0c1a2e;
-  --brand-800: #12324a;
-  --brand-700: #174766;
-  --brand-600: #1d5f85;
-  --brand-500: #2b84b5;
-  --brand-400: #5aa8d4;
-  --accent: #c9a227;
-  --accent-soft: #f4e4b8;
+  --background: #eceef1;
+  --foreground: #1a2332;
+  --brand-950: #1a2332;
+  --brand-900: #243044;
+  --brand-800: #2f3d52;
+  --brand-700: #3a4d66;
+  --brand-600: #4a6280;
+  --brand-500: #5c7594;
+  --brand-400: #7a8fa8;
+  --accent: #8a7a4a;
+  --accent-soft: #ebe6d8;
   --surface: #ffffff;
-  --surface-muted: #eef3f8;
-  --border: rgba(12, 24, 41, 0.08);
-  --shadow-soft: 0 18px 50px rgba(12, 24, 41, 0.08);
-  --shadow-card: 0 10px 30px rgba(12, 24, 41, 0.06);
+  --surface-muted: #f5f6f8;
+  --border: #d5dae1;
+  --shadow-soft: none;
+  --shadow-card: none;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
 
 @layer utilities {
   .mesh-bg {
     background-color: var(--background);
-    background-image:
-      radial-gradient(circle at 0% 0%, rgba(43, 132, 181, 0.12), transparent 42%),
-      radial-gradient(circle at 100% 0%, rgba(201, 162, 39, 0.1), transparent 36%),
-      radial-gradient(circle at 50% 100%, rgba(23, 71, 102, 0.08), transparent 48%);
   }
 
   .glass-card {
-    background: rgba(255, 255, 255, 0.82);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.7);
-    box-shadow: var(--shadow-card);
-  }
-
-  .text-gradient {
-    background: linear-gradient(135deg, #2b84b5 0%, #174766 55%, #c9a227 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    background: var(--surface);
+    border: 1px solid var(--border);
   }
 }
 
 @layer components {
   .data-table {
-    @apply min-w-full text-sm;
+    @apply min-w-full text-[13px];
   }
 
   .data-table thead tr {
-    @apply border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-slate-500;
+    @apply border-b border-[var(--border)] bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500;
   }
 
   .data-table th {
-    @apply py-3 pr-4 font-semibold;
+    @apply px-2 py-1.5 font-semibold;
   }
 
   .data-table tbody tr {
-    @apply border-b border-slate-100/80 transition hover:bg-slate-50/70;
+    @apply border-b border-slate-100 hover:bg-slate-50/80;
   }
 
   .data-table td {
-    @apply py-3.5 pr-4;
+    @apply px-2 py-1.5 align-top;
   }
 
   .data-table tbody tr.is-editing {
@@ -78,30 +67,22 @@ body {
   }
 
   .section-title {
-    @apply text-lg font-bold tracking-tight text-slate-900;
+    @apply text-sm font-semibold text-slate-900;
   }
 
   .payment-tile {
-    @apply rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/80 px-3.5 py-3 shadow-sm transition hover:shadow-md;
-  }
-
-  .payment-tile:hover {
-    border-color: rgba(90, 168, 212, 0.4);
+    @apply rounded border border-slate-200 bg-white px-2 py-1.5;
   }
 
   .history-item {
-    @apply flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/70 bg-white px-4 py-3.5 shadow-sm transition hover:shadow-md;
-  }
-
-  .history-item:hover {
-    border-color: rgba(90, 168, 212, 0.35);
+    @apply flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2.5 py-2;
   }
 
   .back-link {
-    @apply inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 transition hover:text-brand-700;
+    @apply inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900;
   }
 
   .empty-state {
-    @apply rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-10 text-center text-sm text-slate-500;
+    @apply rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500;
   }
 }

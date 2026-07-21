@@ -113,7 +113,7 @@ export default function RetailClientsPage() {
   if (loading) return <LoadingState text="Загрузка клиентов..." />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title={isOwner ? "Клиенты" : "Мои клиенты"}
         subtitle={

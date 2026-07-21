@@ -28,7 +28,7 @@ export default function RetailDashboardPage() {
   const isEmpty = data.contracts_count === 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Товарная рассрочка"
         subtitle={user?.role === "owner" ? "Сводка по всем инвесторам" : "Мои договоры и касса"}

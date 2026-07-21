@@ -76,7 +76,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Тарифная сетка"
         subtitle="Управление прайсом организации и графиками рассрочки"

@@ -41,16 +41,16 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen mesh-bg">
       <div className="mx-auto flex min-h-screen max-w-[1440px]">
-        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-emerald-950 via-emerald-900 to-emerald-800 px-5 py-6 text-white lg:flex">
-          <div className="flex items-center gap-3">
+        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-slate-700 bg-slate-800 px-3 py-3 text-white lg:flex">
+          <div className="flex items-center gap-2 border-b border-slate-700 pb-3">
             <LogoMark />
             <div>
-              <p className="text-lg font-bold tracking-tight">Товарная рассрочка</p>
-              <p className="text-[11px] leading-tight text-emerald-300/90">Отдельный бизнес-контур</p>
+              <p className="text-sm font-semibold leading-tight">Товарная рассрочка</p>
+              <p className="text-[10px] leading-tight text-slate-400">Отдельный контур</p>
             </div>
           </div>
 
-          <nav className="mt-10 space-y-1.5">
+          <nav className="mt-3 space-y-0.5">
             {visibleNav.map((item) => {
               const active =
                 item.href === "/retail"
@@ -61,15 +61,13 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "group flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-medium transition-all duration-200",
+                    "flex items-center gap-2 rounded px-2 py-1.5 text-xs font-medium",
                     active
-                      ? "bg-white/12 text-white shadow-inner ring-1 ring-white/10"
-                      : "text-emerald-300 hover:bg-white/8 hover:text-white",
+                      ? "bg-slate-700 text-white"
+                      : "text-slate-300 hover:bg-slate-700/70 hover:text-white",
                   )}
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-base">
-                    {item.icon}
-                  </span>
+                  <span className="w-4 text-center text-[11px] opacity-70">{item.icon}</span>
                   {user?.role === "investor" && "investorLabel" in item && item.investorLabel
                     ? item.investorLabel
                     : item.label}
@@ -78,51 +76,49 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="mt-auto space-y-4">
+          <div className="mt-auto space-y-2 border-t border-slate-700 pt-3">
             <Link
               href="/login"
-              className="block rounded-2xl bg-white/8 p-4 text-sm font-medium text-emerald-100 ring-1 ring-white/10 hover:bg-white/12"
+              className="block rounded border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
             >
-              Перейти в юрфирму
+              Юрфирма
             </Link>
             {user && (
-              <div className="rounded-2xl bg-white/8 p-4 ring-1 ring-white/10">
-                <p className="text-sm font-semibold">{user.full_name}</p>
-                <p className="text-xs text-emerald-300">{statusLabel(user.role)}</p>
+              <div className="rounded border border-slate-700 px-2 py-2">
+                <p className="text-xs font-medium">{user.full_name}</p>
+                <p className="text-[10px] text-slate-400">{statusLabel(user.role)}</p>
                 <button
                   onClick={logout}
-                  className="mt-3 text-xs font-medium text-emerald-100 transition hover:text-white"
+                  className="mt-1.5 text-[10px] text-slate-400 hover:text-white"
                 >
                   Выйти
                 </button>
               </div>
             )}
-            <div className="text-[10px] leading-relaxed text-emerald-400/80">
+            <div className="text-[10px] leading-relaxed text-slate-500">
               <p>{APP_CREATOR.role}</p>
-              <p className="text-emerald-300/90">{APP_CREATOR.name}</p>
+              <p>{APP_CREATOR.name}</p>
             </div>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/75 px-4 py-4 backdrop-blur-xl lg:px-8">
-            <div className="flex items-center justify-between gap-4">
+          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white px-3 py-2 lg:px-4">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                  {pageTitle(pathname)}
-                </p>
-                <p className="text-sm text-slate-500">{APP_NAME}</p>
+                <p className="text-xs font-medium text-slate-600">{pageTitle(pathname)}</p>
+                <p className="text-[11px] text-slate-400">{APP_NAME}</p>
               </div>
               {user && (
                 <div className="text-right">
-                  <p className="text-sm font-medium text-slate-900">{user.full_name}</p>
-                  <button onClick={logout} className="text-xs text-emerald-700 hover:underline">
+                  <p className="text-xs font-medium text-slate-900">{user.full_name}</p>
+                  <button onClick={logout} className="text-[10px] text-slate-500 hover:underline">
                     Выйти
                   </button>
                 </div>
               )}
             </div>
-            <nav className="mt-3 flex gap-2 overflow-x-auto lg:hidden">
+            <nav className="mt-2 flex gap-1 overflow-x-auto lg:hidden">
               {visibleNav.map((item) => {
                 const active =
                   item.href === "/retail"
@@ -133,19 +129,19 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                      active ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600",
+                      "whitespace-nowrap rounded px-2 py-1 text-[11px] font-medium",
+                      active ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600",
                     )}
                   >
                     {user?.role === "investor" && "investorLabel" in item && item.investorLabel
-                    ? item.investorLabel
-                    : item.label}
+                      ? item.investorLabel
+                      : item.label}
                   </Link>
                 );
               })}
             </nav>
           </header>
-          <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+          <main className="flex-1 px-3 py-3 lg:px-4 lg:py-4">{children}</main>
         </div>
       </div>
     </div>

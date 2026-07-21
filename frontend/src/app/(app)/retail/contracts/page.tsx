@@ -39,7 +39,7 @@ export default function RetailContractsPage() {
   if (loading) return <LoadingState text="Загрузка договоров..." />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Договоры"
         subtitle="Каждый договор привязан к инвестору"

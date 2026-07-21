@@ -110,7 +110,7 @@ export default function RetailInvestorsPage() {
   if (loading) return <LoadingState text="Загрузка инвесторов..." />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Инвесторы"
         subtitle="Управление инвесторами и суммами их вкладов"

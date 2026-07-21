@@ -170,7 +170,7 @@ export default function RetailContractDetailPage() {
   if (!contract) return <EmptyState>Договор не найден</EmptyState>;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title={contract.product_name}
         subtitle={`${contract.client_name} · ${contract.investor_name}`}

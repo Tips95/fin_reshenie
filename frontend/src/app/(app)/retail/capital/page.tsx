@@ -47,7 +47,7 @@ export default function RetailCapitalPage() {
   if (loading) return <LoadingState text="Загрузка..." />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Мой вклад"
         subtitle="Укажите сумму, которую вы готовы инвестировать в договоры"

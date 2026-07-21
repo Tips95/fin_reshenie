@@ -50,7 +50,7 @@ export default function AuditPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Журнал изменений"
         subtitle="Кто и когда менял клиентов, платежи, тарифы и расходы"

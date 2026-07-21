@@ -80,7 +80,7 @@ export default function AnalyticsPage() {
   if (!data) return <LoadingState text="Не удалось загрузить аналитику" />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Аналитика"
         subtitle="Прибыль по клиентам и динамика поступлений"

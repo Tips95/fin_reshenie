@@ -393,7 +393,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Ежемесячные расходы"
         subtitle="Зарплатный проект, производственные расходы и учёт выплат"

@@ -9,7 +9,7 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 via-brand-700 to-brand-900 text-sm font-bold tracking-tight text-white shadow-lg shadow-brand-700/30",
+        "flex h-8 w-8 items-center justify-center rounded border border-slate-600 bg-slate-700 text-[11px] font-bold text-white",
         className,
       )}
     >
@@ -26,19 +26,16 @@ export function Button({
   variant?: "primary" | "secondary" | "danger" | "ghost";
 }) {
   const variants = {
-    primary:
-      "bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-md shadow-brand-700/25 hover:from-brand-500 hover:to-brand-600 hover:shadow-lg",
-    secondary:
-      "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-brand-400/40 hover:bg-brand-50/50",
-    danger:
-      "bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-md shadow-rose-600/20 hover:from-rose-500 hover:to-red-500",
-    ghost: "bg-transparent text-slate-600 hover:bg-slate-100/80",
+    primary: "border border-brand-700 bg-brand-700 text-white hover:bg-brand-800",
+    secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+    danger: "border border-rose-700 bg-rose-700 text-white hover:bg-rose-800",
+    ghost: "border border-transparent bg-transparent text-slate-600 hover:bg-slate-100",
   };
 
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 disabled:opacity-50",
+        "inline-flex items-center justify-center rounded px-2.5 py-1.5 text-xs font-medium disabled:opacity-50",
         variants[variant],
         className,
       )}
@@ -54,7 +51,7 @@ export function Input({
   return (
     <input
       className={cn(
-        "w-full rounded-xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10",
+        "w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[13px] outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30",
         className,
       )}
       {...props}
@@ -105,15 +102,15 @@ export function Toast({
   }, [message, onClose]);
 
   const tones = {
-    success: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    error: "border-rose-200 bg-rose-50 text-rose-800",
-    info: "border-slate-200 bg-white text-slate-700",
+    success: "border-emerald-300 bg-emerald-50 text-emerald-900",
+    error: "border-rose-300 bg-rose-50 text-rose-900",
+    info: "border-slate-300 bg-white text-slate-700",
   };
 
   return (
     <div
       className={cn(
-        "fixed bottom-6 right-6 z-50 flex max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg",
+        "fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-2 rounded border px-3 py-2 text-xs",
         tones[tone],
       )}
       role="status"
@@ -122,7 +119,7 @@ export function Toast({
       {onClose && (
         <button
           type="button"
-          className="text-current/60 transition hover:text-current"
+          className="text-current/60 hover:text-current"
           onClick={onClose}
           aria-label="Закрыть"
         >
@@ -140,7 +137,7 @@ export function Select({
   return (
     <select
       className={cn(
-        "w-full rounded-xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm shadow-sm outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10",
+        "w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30",
         className,
       )}
       {...props}
@@ -158,10 +155,9 @@ export function Card({
   variant?: "default" | "glass" | "accent";
 }) {
   const variants = {
-    default: "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card",
-    glass: "glass-card rounded-2xl p-5",
-    accent:
-      "rounded-2xl border border-accent/20 bg-gradient-to-br from-white via-white to-accent-soft/30 p-5 shadow-card",
+    default: "rounded border border-slate-200 bg-white p-3",
+    glass: "rounded border border-slate-200 bg-white p-3",
+    accent: "rounded border border-slate-300 bg-slate-50 p-3",
   };
 
   return <div className={cn(variants[variant], className)}>{children}</div>;
@@ -175,14 +171,14 @@ export function Badge({
   tone?: "default" | "success" | "warning" | "danger";
 }) {
   const tones = {
-    default: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
-    success: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-    warning: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
-    danger: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+    default: "bg-slate-100 text-slate-700 border border-slate-200",
+    success: "bg-emerald-50 text-emerald-800 border border-emerald-200",
+    warning: "bg-amber-50 text-amber-900 border border-amber-200",
+    danger: "bg-rose-50 text-rose-800 border border-rose-200",
   };
 
   return (
-    <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", tones[tone])}>
+    <span className={cn("inline-flex rounded px-1.5 py-0.5 text-[11px] font-medium", tones[tone])}>
       {children}
     </span>
   );
@@ -200,13 +196,12 @@ export function PageHeader({
   back?: React.ReactNode;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {back}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="relative pl-4">
-          <span className="absolute left-0 top-1 h-[calc(100%-4px)] w-1 rounded-full bg-gradient-to-b from-brand-400 via-brand-600 to-accent" />
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{title}</h1>
-          {subtitle && <p className="mt-1.5 text-sm text-slate-500">{subtitle}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
         </div>
         {action}
       </div>
@@ -239,10 +234,10 @@ export function SectionTitle({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <div className="mb-2 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-2">
       <div>
         <h2 className="section-title">{title}</h2>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
       </div>
       {action}
     </div>
@@ -261,16 +256,16 @@ export function ProgressBar({
   tone?: "default" | "success" | "warning" | "danger";
 }) {
   const fills = {
-    default: "bg-slate-300",
-    success: "bg-gradient-to-r from-emerald-400 to-emerald-600",
-    warning: "bg-gradient-to-r from-amber-300 to-amber-500",
-    danger: "bg-gradient-to-r from-rose-400 to-red-600",
+    default: "bg-slate-400",
+    success: "bg-emerald-600",
+    warning: "bg-amber-600",
+    danger: "bg-rose-600",
   };
 
   return (
-    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+    <div className="h-1 overflow-hidden rounded-sm bg-slate-200">
       <div
-        className={cn("h-full rounded-full transition-all duration-500", fills[tone])}
+        className={cn("h-full", fills[tone])}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
     </div>
@@ -286,7 +281,7 @@ export function FormField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
+      <label className="mb-0.5 block text-xs font-medium text-slate-600">{label}</label>
       {children}
     </div>
   );
@@ -303,53 +298,28 @@ export function StatCard({
   tone?: "default" | "success" | "warning" | "danger" | "brand" | "accent";
   hint?: string;
 }) {
-  const tones = {
-    default: "from-slate-500 to-slate-700",
-    success: "from-emerald-500 to-emerald-700",
-    warning: "from-amber-500 to-orange-600",
-    danger: "from-rose-500 to-red-600",
-    brand: "from-brand-400 to-brand-700",
-    accent: "from-amber-400 to-accent",
-  };
-
   const valueColors = {
     default: "text-slate-900",
-    success: "text-emerald-600",
-    warning: "text-amber-600",
-    danger: "text-rose-600",
-    brand: "text-brand-600",
-    accent: "text-amber-700",
+    success: "text-emerald-700",
+    warning: "text-amber-700",
+    danger: "text-rose-700",
+    brand: "text-slate-900",
+    accent: "text-slate-900",
   };
 
   return (
-    <Card className="relative overflow-hidden transition hover:shadow-soft">
-      <div
-        className={cn(
-          "absolute left-0 top-0 h-full w-1 rounded-r-full bg-gradient-to-b",
-          tones[tone],
-        )}
-      />
-      <div
-        className={cn(
-          "pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-20 blur-2xl",
-          tone === "accent" ? "bg-accent" : tone === "brand" ? "bg-brand-400" : "bg-slate-300",
-        )}
-      />
-      <p className="relative pl-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
-      <p className={cn("relative mt-3 pl-3 text-2xl font-bold tracking-tight", valueColors[tone])}>
-        {value}
-      </p>
-      {hint && <p className="relative mt-1 pl-3 text-xs text-slate-400">{hint}</p>}
+    <Card className="p-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={cn("mt-1 text-lg font-semibold leading-tight", valueColors[tone])}>{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-slate-400">{hint}</p>}
     </Card>
   );
 }
 
 export function LoadingState({ text = "Загрузка..." }: { text?: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-500 shadow-card">
-      <span className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+    <div className="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-4 text-xs text-slate-500">
+      <span className="inline-flex h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
       {text}
     </div>
   );
@@ -357,7 +327,7 @@ export function LoadingState({ text = "Загрузка..." }: { text?: string }
 
 export function BrandFooter() {
   return (
-    <p className="text-center text-xs text-slate-400">
+    <p className="text-center text-[11px] text-slate-400">
       {APP_NAME} · финансовая платформа для юридической компании
     </p>
   );

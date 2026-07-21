@@ -247,7 +247,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <Link
           href="/clients/collection"

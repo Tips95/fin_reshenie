@@ -184,7 +184,7 @@ export default function UsersPage() {
   const activeCount = users.filter((item) => item.is_active).length;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Пользователи"
         subtitle="Команда организации, роли и доступ к системе"

@@ -73,7 +73,7 @@ export default function TasksPage() {
   if (loading) return <LoadingState text="Загрузка задач..." />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <PageHeader
         title="Задачи и воронка"
         subtitle="Звонки по просрочкам: клиенты платят с 25 числа до конца месяца"
@@ -98,16 +98,16 @@ export default function TasksPage() {
                 key={item.stage}
                 type="button"
                 onClick={() => setStageFilter(active ? "" : item.stage)}
-                className={`rounded-2xl border px-4 py-4 text-left transition ${
+                className={`rounded border px-2 py-2 text-left ${
                   active
-                    ? "border-brand-400 bg-brand-50 shadow-sm"
-                    : "border-slate-200 bg-white hover:border-brand-300 hover:bg-slate-50"
+                    ? "border-brand-600 bg-slate-50"
+                    : "border-slate-200 bg-white hover:bg-slate-50"
                 }`}
               >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                   {procedureStageLabel(item.stage)}
                 </p>
-                <p className="mt-2 text-3xl font-bold text-slate-900">{item.count}</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{item.count}</p>
               </button>
             );
           })}
@@ -145,15 +145,15 @@ export default function TasksPage() {
           }
         />
         {tasks.length === 0 ? (
-          <p className="rounded-xl bg-emerald-50 px-4 py-8 text-center text-sm text-emerald-700">
+          <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-4 text-center text-xs text-emerald-800">
             Открытых задач нет — все просрочки обработаны или оплачены.
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {tasks.map((task) => (
               <div
                 key={task.id}
-                className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4"
+                className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
