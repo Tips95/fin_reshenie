@@ -449,6 +449,7 @@ export const exportsApi = {
     name?: string;
     contract_month?: string;
     due_month?: string;
+    collection_view?: "active" | "paid" | "converted" | "all";
     sort_by?: string;
     sort_dir?: "asc" | "desc";
   }) =>
