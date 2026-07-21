@@ -10,7 +10,7 @@ from app.models.enums import AuditAction, UserRole
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
-from app.schemas.payment import PaymentCreate, PaymentResponse
+from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentUpdate
 from app.services.access import ensure_client_read_access, ensure_client_write_access
 from app.services.audit import log_audit
 from app.services.payment_sync import sync_client_payment_schedules
@@ -96,6 +96,40 @@ def create_payment(
         entity_id=payment.id,
         action=AuditAction.CREATE,
         new_value=payload.amount,
+    )
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+@router.patch("/{payment_id}", response_model=PaymentResponse)
+def update_payment(
+    payment_id: UUID,
+    payload: PaymentUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> Payment:
+    payment = db.get(Payment, payment_id)
+    if payment is None or payment.is_deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Платёж не найден")
+
+    ensure_client_write_access(db, current_user, payment.client_id)
+
+    old_date = payment.payment_date
+    payment.payment_date = payload.payment_date
+    db.flush()
+
+    sync_client_payment_schedules(db, payment.client_id)
+
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="payment",
+        entity_id=payment.id,
+        action=AuditAction.UPDATE,
+        field_name="payment_date",
+        old_value=str(old_date),
+        new_value=str(payload.payment_date),
     )
     db.commit()
     db.refresh(payment)

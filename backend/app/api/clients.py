@@ -35,7 +35,7 @@ from app.services.audit import log_audit
 from app.services.client_list import ClientSortField, CollectionViewFilter, SortDirection, query_clients
 from app.schemas.installment_plan import InstallmentPlanResponse
 from app.schemas.mandatory_payment import MandatoryPaymentResponse
-from app.schemas.payment import PaymentResponse
+from app.schemas.payment import PaymentAlignResult, PaymentResponse
 from app.schemas.payment_schedule import PaymentScheduleResponse
 from app.services.installment_schedule import create_payment_schedule_models
 from app.services.client_deletion import hard_delete_client
@@ -47,6 +47,7 @@ from app.services.document_collection import (
 )
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.payment_status import refresh_overdue_statuses
+from app.services.payment_dates import align_client_payment_dates
 from app.services.payment_sync import sync_client_payment_schedules
 
 router = APIRouter()
@@ -294,6 +295,33 @@ def get_client_detail(
     detail = _build_client_detail(db, client)
     db.commit()
     return detail
+
+
+@router.post(
+    "/{client_id}/payments/align-schedule-dates",
+    response_model=PaymentAlignResult,
+)
+def align_client_payment_dates_route(
+    client_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> PaymentAlignResult:
+    client = ensure_client_write_access(db, current_user, client_id)
+    schedule_updated, mandatory_updated = align_client_payment_dates(db, client)
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="client",
+        entity_id=client.id,
+        action=AuditAction.UPDATE,
+        field_name="payment_dates_aligned",
+        new_value=f"schedule={schedule_updated}, mandatory={mandatory_updated}",
+    )
+    db.commit()
+    return PaymentAlignResult(
+        schedule_payments_updated=schedule_updated,
+        mandatory_records_updated=mandatory_updated,
+    )
 
 
 @router.get("/{client_id}")

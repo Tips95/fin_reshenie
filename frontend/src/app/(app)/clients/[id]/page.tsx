@@ -150,6 +150,10 @@ export default function ClientDetailPage() {
   const [convertSaving, setConvertSaving] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [convertForm, setConvertForm] = useState({ debt_amount: "", contract_date: "" });
+  const [docCollectionPaymentDate, setDocCollectionPaymentDate] = useState("");
+  const [aligningDates, setAligningDates] = useState(false);
+  const [paymentDateEdits, setPaymentDateEdits] = useState<Record<string, string>>({});
+  const [savingPaymentDateId, setSavingPaymentDateId] = useState<string | null>(null);
   const [deletingClient, setDeletingClient] = useState(false);
 
   const showToast = useCallback((message: string, tone: ToastState["tone"] = "success") => {
@@ -207,6 +211,20 @@ export default function ClientDetailPage() {
     }
   }, [user?.role]);
 
+  useEffect(() => {
+    if (!client) return;
+    setPaymentForm((prev) => ({ ...prev, payment_date: client.contract_date }));
+    setRefundForm((prev) => ({ ...prev, payment_date: client.contract_date }));
+    setDocCollectionPaymentDate(client.contract_date);
+  }, [client?.id, client?.contract_date]);
+
+  useEffect(() => {
+    if (!client || !isDetail(client)) return;
+    setPaymentDateEdits(
+      Object.fromEntries(client.payments.map((payment) => [payment.id, payment.payment_date])),
+    );
+  }, [client]);
+
   function isDetail(data: ClientDetail | ClientBrief | null): data is ClientDetail {
     return data !== null && "debt_amount" in data;
   }
@@ -219,6 +237,7 @@ export default function ClientDetailPage() {
       ...paymentForm,
       payment_schedule_id: scheduleId,
       amount: item ? String(remainingAmount(item)) : "",
+      payment_date: item ? effectiveDueDate(item) : paymentForm.payment_date,
     });
   }
 
@@ -230,6 +249,7 @@ export default function ClientDetailPage() {
       ...refundForm,
       payment_schedule_id: scheduleId,
       amount: item ? String(Number(item.paid_amount)) : "",
+      payment_date: item?.paid_date || (item ? effectiveDueDate(item) : refundForm.payment_date),
     });
   }
 
@@ -249,7 +269,7 @@ export default function ClientDetailPage() {
     setRefundForm({
       payment_schedule_id: "",
       amount: "",
-      payment_date: new Date().toISOString().slice(0, 10),
+      payment_date: client.contract_date,
       comment: "",
     });
     refreshClient();
@@ -277,6 +297,52 @@ export default function ClientDetailPage() {
       );
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleUpdatePaymentDate(paymentId: string) {
+    const paymentDate = paymentDateEdits[paymentId];
+    if (!paymentDate) return;
+
+    setSavingPaymentDateId(paymentId);
+    try {
+      await paymentsApi.update(paymentId, { payment_date: paymentDate });
+      await refreshClient();
+      showToast("Дата платежа обновлена");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось обновить дату",
+        "error",
+      );
+    } finally {
+      setSavingPaymentDateId(null);
+    }
+  }
+
+  async function handleAlignPaymentDates() {
+    if (!client) return;
+    if (
+      !window.confirm(
+        "Исправить даты платежей по графику и обязательным платежам по дате договора? Это нужно для уже внесённых старых клиентов.",
+      )
+    ) {
+      return;
+    }
+
+    setAligningDates(true);
+    try {
+      const result = await clientsApi.alignPaymentDates(client.id);
+      await refreshClient();
+      showToast(
+        `Обновлено: ${result.schedule_payments_updated} по графику, ${result.mandatory_records_updated} обязательных`,
+      );
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось исправить даты",
+        "error",
+      );
+    } finally {
+      setAligningDates(false);
     }
   }
 
@@ -324,7 +390,7 @@ export default function ClientDetailPage() {
     setPaymentForm({
       payment_schedule_id: "",
       amount: "",
-      payment_date: new Date().toISOString().slice(0, 10),
+      payment_date: client.contract_date,
       comment: "",
     });
     refreshClient();
@@ -342,7 +408,7 @@ export default function ClientDetailPage() {
         client_id: client.id,
         payment_schedule_id: item.id,
         amount: amount.toFixed(2),
-        payment_date: new Date().toISOString().slice(0, 10),
+        payment_date: effectiveDueDate(item),
         comment: `Оплата за ${item.month_number} месяц`,
       });
       await refreshClient();
@@ -360,7 +426,7 @@ export default function ClientDetailPage() {
     try {
       await mandatoryPaymentsApi.record(client.id, item.id, {
         amount: amount.toFixed(2),
-        payment_date: new Date().toISOString().slice(0, 10),
+        payment_date: client.contract_date,
         comment: statusLabel(item.payment_type),
       });
       await refreshClient();
@@ -675,7 +741,7 @@ export default function ClientDetailPage() {
     try {
       await documentCollectionApi.recordPayment(
         client.id,
-        new Date().toISOString().slice(0, 10),
+        docCollectionPaymentDate || client.contract_date,
       );
       await refreshClient();
       showToast("Оплата сбора документов зафиксирована");
@@ -994,7 +1060,15 @@ export default function ClientDetailPage() {
             )}
           </div>
           {!isBankruptcy && canRecordPayment && docCollection.status !== "paid" && (
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <FormField label="Дата оплаты сбора">
+                <Input
+                  type="date"
+                  value={docCollectionPaymentDate}
+                  onChange={(e) => setDocCollectionPaymentDate(e.target.value)}
+                  required
+                />
+              </FormField>
               <Button disabled={docCollectionSaving} onClick={handleRecordDocumentCollection}>
                 {docCollectionSaving ? "Сохранение..." : "Зафиксировать оплату 13 000 ₽"}
               </Button>
@@ -1623,7 +1697,10 @@ export default function ClientDetailPage() {
           {canRecordPayment && (
             <>
               <Card>
-                <SectionTitle title="Зафиксировать платёж вручную" />
+                <SectionTitle
+                  title="Зафиксировать платёж вручную"
+                  description="Дата по умолчанию — дата договора или выбранного месяца графика"
+                />
                 <form onSubmit={handlePayment} className="grid gap-4 md:grid-cols-2">
                   <FormField label="Месяц графика">
                     <Select
@@ -1640,14 +1717,16 @@ export default function ClientDetailPage() {
                       ))}
                     </Select>
                   </FormField>
-                  <Input
-                    type="date"
-                    value={paymentForm.payment_date}
-                    onChange={(e) =>
-                      setPaymentForm({ ...paymentForm, payment_date: e.target.value })
-                    }
-                    required
-                  />
+                  <FormField label="Дата платежа">
+                    <Input
+                      type="date"
+                      value={paymentForm.payment_date}
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, payment_date: e.target.value })
+                      }
+                      required
+                    />
+                  </FormField>
                   <Input
                     placeholder="Сумма"
                     value={paymentForm.amount}
@@ -1688,14 +1767,16 @@ export default function ClientDetailPage() {
                         ))}
                     </Select>
                   </FormField>
-                  <Input
-                    type="date"
-                    value={refundForm.payment_date}
-                    onChange={(e) =>
-                      setRefundForm({ ...refundForm, payment_date: e.target.value })
-                    }
-                    required
-                  />
+                  <FormField label="Дата возврата">
+                    <Input
+                      type="date"
+                      value={refundForm.payment_date}
+                      onChange={(e) =>
+                        setRefundForm({ ...refundForm, payment_date: e.target.value })
+                      }
+                      required
+                    />
+                  </FormField>
                   <Input
                     placeholder="Сумма возврата"
                     value={refundForm.amount}
@@ -1720,8 +1801,20 @@ export default function ClientDetailPage() {
               title="История платежей"
               description={
                 isOwner
-                  ? "Руководитель может удалить ошибочный платёж — график пересчитается автоматически"
+                  ? "Даты влияют на доход в дашборде по месяцам. Можно исправить уже внесённые платежи."
                   : undefined
+              }
+              action={
+                isOwner && detail.payments.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={aligningDates}
+                    onClick={handleAlignPaymentDates}
+                  >
+                    {aligningDates ? "Исправление..." : "Исправить даты по графику"}
+                  </Button>
+                ) : undefined
               }
             />
             {detail.payments.length === 0 ? (
@@ -1743,19 +1836,43 @@ export default function ClientDetailPage() {
                         {payment.is_refund && <Badge tone="danger">Возврат</Badge>}
                       </div>
                       <p className="text-sm text-slate-500">
-                        {formatDate(payment.payment_date)}
-                        {payment.comment ? ` · ${payment.comment}` : ""}
+                        {payment.comment ? payment.comment : "Без комментария"}
                       </p>
                     </div>
                     {isOwner && (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        disabled={deletingId === payment.id}
-                        onClick={() => handleDeletePayment(payment.id)}
-                      >
-                        {deletingId === payment.id ? "Удаление..." : "Удалить"}
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="date"
+                          className="w-[150px]"
+                          value={paymentDateEdits[payment.id] ?? payment.payment_date}
+                          onChange={(e) =>
+                            setPaymentDateEdits((current) => ({
+                              ...current,
+                              [payment.id]: e.target.value,
+                            }))
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={
+                            savingPaymentDateId === payment.id ||
+                            (paymentDateEdits[payment.id] ?? payment.payment_date) ===
+                              payment.payment_date
+                          }
+                          onClick={() => handleUpdatePaymentDate(payment.id)}
+                        >
+                          {savingPaymentDateId === payment.id ? "..." : "Дата"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          disabled={deletingId === payment.id}
+                          onClick={() => handleDeletePayment(payment.id)}
+                        >
+                          {deletingId === payment.id ? "Удаление..." : "Удалить"}
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))}

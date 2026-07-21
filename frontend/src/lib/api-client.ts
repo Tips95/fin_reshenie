@@ -279,6 +279,11 @@ export const clientsApi = {
   update: (id: string, data: Record<string, unknown>) =>
     apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: string) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+  alignPaymentDates: (id: string) =>
+    apiFetch<{ schedule_payments_updated: number; mandatory_records_updated: number }>(
+      `/clients/${id}/payments/align-schedule-dates`,
+      { method: "POST" },
+    ),
 };
 
 export const documentCollectionApi = {
@@ -424,6 +429,8 @@ export const paymentsApi = {
   create: (data: Record<string, unknown>) =>
     apiFetch<Payment>("/payments", { method: "POST", body: JSON.stringify(data) }),
   delete: (id: string) => apiFetch<void>(`/payments/${id}`, { method: "DELETE" }),
+  update: (id: string, data: { payment_date: string }) =>
+    apiFetch<Payment>(`/payments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 };
 
 function buildExportQuery(params?: Record<string, string | boolean | undefined>): string {

@@ -14,6 +14,15 @@ class PaymentCreate(BaseModel):
     is_refund: bool = False
 
 
+class PaymentUpdate(BaseModel):
+    payment_date: date
+
+
+class PaymentAlignResult(BaseModel):
+    schedule_payments_updated: int
+    mandatory_records_updated: int
+
+
 class PaymentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
