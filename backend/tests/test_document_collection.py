@@ -9,6 +9,7 @@ from app.services.document_collection import (
     convert_client_to_bankruptcy,
     create_document_collection,
     record_document_collection_payment,
+    update_document_collection_amounts,
 )
 
 
@@ -59,6 +60,32 @@ class TestDocumentCollection:
 
         assert item.status == DocumentCollectionStatus.PAID
         assert item.paid_date == date(2026, 7, 10)
+
+    def test_updates_pending_collection_amounts(self):
+        client = make_client()
+        db = MagicMock()
+        item = SimpleNamespace(
+            client_id=CLIENT_ID,
+            status=DocumentCollectionStatus.PENDING,
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("2000.00"),
+            manager_commission=Decimal("1000.00"),
+            total_amount=Decimal("13000.00"),
+        )
+        db.scalar.return_value = item
+
+        updated = update_document_collection_amounts(
+            db,
+            client,
+            collection_fee=Decimal("12000.00"),
+            notary_fee=Decimal("2500.00"),
+            manager_commission=Decimal("1500.00"),
+        )
+
+        assert updated.collection_fee == Decimal("12000.00")
+        assert updated.notary_fee == Decimal("2500.00")
+        assert updated.manager_commission == Decimal("1500.00")
+        assert updated.total_amount == Decimal("16000.00")
 
     def test_convert_requires_paid_collection(self):
         client = make_client()

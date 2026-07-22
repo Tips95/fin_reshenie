@@ -21,6 +21,12 @@ class DocumentCollectionResponse(BaseModel):
     paid_date: date | None
 
 
+class DocumentCollectionUpdate(BaseModel):
+    collection_fee: Decimal = Field(ge=Decimal("0.00"), decimal_places=2)
+    notary_fee: Decimal = Field(ge=Decimal("0.00"), decimal_places=2)
+    manager_commission: Decimal = Field(ge=Decimal("0.00"), decimal_places=2)
+
+
 class RecordDocumentCollectionPayment(BaseModel):
     payment_date: date
 

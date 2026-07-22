@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
+from app.api.deps import get_current_active_user, require_owner_or_manager
 from app.core.database import get_db
 from app.models.enums import AuditAction, UserRole
 from app.models.installment_plan import InstallmentPlan
@@ -129,10 +129,10 @@ def update_installment_plan(
     client_id: UUID,
     plan_id: UUID,
     payload: InstallmentPlanUpdate,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_owner_or_manager),
     db: Session = Depends(get_db),
 ) -> InstallmentPlan:
-    ensure_client_write_access(db, current_user, client_id)
+    client = ensure_client_write_access(db, current_user, client_id)
     plan = get_installment_plan_for_client(db, plan_id=plan_id, client_id=client_id)
 
     old_total = plan.total_amount

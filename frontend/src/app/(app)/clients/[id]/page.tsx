@@ -147,6 +147,13 @@ export default function ClientDetailPage() {
   const [managers, setManagers] = useState<User[]>([]);
   const [cardSaving, setCardSaving] = useState<string | null>(null);
   const [docCollectionSaving, setDocCollectionSaving] = useState(false);
+  const [editingDocCollectionAmounts, setEditingDocCollectionAmounts] = useState(false);
+  const [docCollectionAmountForm, setDocCollectionAmountForm] = useState({
+    collection_fee: "",
+    notary_fee: "",
+    manager_commission: "",
+  });
+  const [docCollectionAmountsSaving, setDocCollectionAmountsSaving] = useState(false);
   const [convertSaving, setConvertSaving] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [convertForm, setConvertForm] = useState({ debt_amount: "", contract_date: "" });
@@ -748,6 +755,28 @@ export default function ClientDetailPage() {
     }
   }
 
+  async function handleSaveDocCollectionAmounts() {
+    if (!client || !isDetail(client) || !client.document_collection) return;
+    setDocCollectionAmountsSaving(true);
+    try {
+      await documentCollectionApi.update(client.id, {
+        collection_fee: Number(docCollectionAmountForm.collection_fee).toFixed(2),
+        notary_fee: Number(docCollectionAmountForm.notary_fee).toFixed(2),
+        manager_commission: Number(docCollectionAmountForm.manager_commission).toFixed(2),
+      });
+      setEditingDocCollectionAmounts(false);
+      await refreshClient();
+      showToast("Суммы сбора сохранены");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить суммы сбора",
+        "error",
+      );
+    } finally {
+      setDocCollectionAmountsSaving(false);
+    }
+  }
+
   async function handleRecordDocumentCollection() {
     if (!client) return;
     setDocCollectionSaving(true);
@@ -796,9 +825,12 @@ export default function ClientDetailPage() {
   const docCollection = detail?.document_collection ?? null;
   const schedule = detail?.payment_schedule ?? [];
   const mandatory = detail?.mandatory_payments ?? [];
-  const contractTotal = detail?.installment_plan
-    ? Number(detail.installment_plan.total_amount)
-    : schedule.reduce((sum, item) => sum + Number(item.planned_amount), 0);
+  const schedulePlannedTotal = schedule.reduce(
+    (sum, item) => sum + Number(item.planned_amount),
+    0,
+  );
+  const planTotal = detail?.installment_plan ? Number(detail.installment_plan.total_amount) : 0;
+  const contractTotal = schedule.length > 0 ? schedulePlannedTotal : planTotal;
   const paidTotal = (detail?.payments ?? []).reduce((sum, payment) => {
     return sum + (payment.is_refund ? -Number(payment.amount) : Number(payment.amount));
   }, 0);
@@ -1045,20 +1077,121 @@ export default function ClientDetailPage() {
             title="Сбор документов"
             description={
               isBankruptcy
-                ? "История сбора: 13 000 ₽ (10 000 в кассу + 2 000 нотариус + 1 000 менеджеру). Выписки/госпошлина учитываются отдельно"
-                : "Единоразовая оплата 13 000 ₽: сбор 10 000 + нотариус 2 000 + менеджеру 1 000"
+                ? `История сбора: ${formatMoney(docCollection.total_amount)} (${formatMoney(docCollection.collection_fee)} в кассу + ${formatMoney(docCollection.notary_fee)} нотариус + ${formatMoney(docCollection.manager_commission)} менеджеру). Выписки/госпошлина учитываются отдельно`
+                : `Единоразовая оплата ${formatMoney(docCollection.total_amount)}: сбор ${formatMoney(docCollection.collection_fee)} + нотариус ${formatMoney(docCollection.notary_fee)} + менеджеру ${formatMoney(docCollection.manager_commission)}`
             }
           />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="К оплате" value={formatMoney(docCollection.total_amount)} tone="brand" />
-            <StatCard label="В кассу" value={formatMoney(docCollection.collection_fee)} tone="default" />
-            <StatCard label="Нотариус" value={formatMoney(docCollection.notary_fee)} tone="default" />
-            <StatCard
-              label="Комиссия менеджера"
-              value={formatMoney(docCollection.manager_commission)}
-              tone="success"
-            />
-          </div>
+          {!isBankruptcy && docCollection.status === "pending" && editingDocCollectionAmounts ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <FormField label="В кассу, ₽">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={docCollectionAmountForm.collection_fee}
+                    onChange={(e) =>
+                      setDocCollectionAmountForm({
+                        ...docCollectionAmountForm,
+                        collection_fee: e.target.value,
+                      })
+                    }
+                  />
+                </FormField>
+                <FormField label="Нотариус, ₽">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={docCollectionAmountForm.notary_fee}
+                    onChange={(e) =>
+                      setDocCollectionAmountForm({
+                        ...docCollectionAmountForm,
+                        notary_fee: e.target.value,
+                      })
+                    }
+                  />
+                </FormField>
+                <FormField label="Комиссия менеджера, ₽">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={docCollectionAmountForm.manager_commission}
+                    onChange={(e) =>
+                      setDocCollectionAmountForm({
+                        ...docCollectionAmountForm,
+                        manager_commission: e.target.value,
+                      })
+                    }
+                  />
+                </FormField>
+                <FormField label="Итого к оплате">
+                  <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-lg font-semibold text-slate-900">
+                    {formatMoney(
+                      Number(docCollectionAmountForm.collection_fee || 0) +
+                        Number(docCollectionAmountForm.notary_fee || 0) +
+                        Number(docCollectionAmountForm.manager_commission || 0),
+                    )}
+                  </p>
+                </FormField>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  disabled={docCollectionAmountsSaving}
+                  onClick={handleSaveDocCollectionAmounts}
+                >
+                  {docCollectionAmountsSaving ? "Сохранение..." : "Сохранить суммы"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingDocCollectionAmounts(false);
+                    setDocCollectionAmountForm({
+                      collection_fee: docCollection.collection_fee,
+                      notary_fee: docCollection.notary_fee,
+                      manager_commission: docCollection.manager_commission,
+                    });
+                  }}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <StatCard label="К оплате" value={formatMoney(docCollection.total_amount)} tone="brand" />
+                <StatCard label="В кассу" value={formatMoney(docCollection.collection_fee)} tone="default" />
+                <StatCard label="Нотариус" value={formatMoney(docCollection.notary_fee)} tone="default" />
+                <StatCard
+                  label="Комиссия менеджера"
+                  value={formatMoney(docCollection.manager_commission)}
+                  tone="success"
+                />
+              </div>
+              {!isBankruptcy && docCollection.status === "pending" && (
+                <div className="mt-4">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setDocCollectionAmountForm({
+                        collection_fee: docCollection.collection_fee,
+                        notary_fee: docCollection.notary_fee,
+                        manager_commission: docCollection.manager_commission,
+                      });
+                      setEditingDocCollectionAmounts(true);
+                    }}
+                  >
+                    Изменить суммы сбора
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Badge tone={docCollection.status === "paid" ? "success" : "warning"}>
               {documentCollectionStatusLabel(docCollection.status)}
@@ -1083,7 +1216,9 @@ export default function ClientDetailPage() {
                 />
               </FormField>
               <Button disabled={docCollectionSaving} onClick={handleRecordDocumentCollection}>
-                {docCollectionSaving ? "Сохранение..." : "Зафиксировать оплату 13 000 ₽"}
+                {docCollectionSaving
+                  ? "Сохранение..."
+                  : `Зафиксировать оплату ${formatMoney(docCollection.total_amount)}`}
               </Button>
             </div>
           )}
@@ -1177,11 +1312,11 @@ export default function ClientDetailPage() {
         </Card>
       )}
 
-      {detail && isBankruptcy && isOwner && detail.installment_plan && (
+      {detail && isBankruptcy && canEditClient && detail.installment_plan && (
         <Card>
           <SectionTitle
             title="Сумма договора"
-            description="Для руководителя: можно задать вручную, независимо от тарифа по сумме долга"
+            description="Можно задать вручную — сумма синхронизируется с графиком платежей"
           />
           {editingContractAmount ? (
             <div className="flex flex-wrap items-end gap-3">
@@ -1208,7 +1343,7 @@ export default function ClientDetailPage() {
                 variant="secondary"
                 onClick={() => {
                   setEditingContractAmount(false);
-                  setContractAmountValue(detail.installment_plan!.total_amount);
+                  setContractAmountValue(String(contractTotal));
                 }}
               >
                 Отмена
@@ -1221,7 +1356,7 @@ export default function ClientDetailPage() {
                 type="button"
                 variant="secondary"
                 onClick={() => {
-                  setContractAmountValue(detail.installment_plan!.total_amount);
+                  setContractAmountValue(String(contractTotal));
                   setEditingContractAmount(true);
                 }}
               >
@@ -1237,7 +1372,7 @@ export default function ClientDetailPage() {
           {detail.matched_tier && (
             <Card variant="accent">
               <SectionTitle title="Подобранный тариф" />
-              <div className="grid gap-4 text-sm md:grid-cols-3">
+              <div className="grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <p className="text-slate-500">Диапазон долга</p>
                   <p className="mt-1 font-medium text-slate-900">
@@ -1246,10 +1381,14 @@ export default function ClientDetailPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-slate-500">Стоимость рассрочки</p>
+                  <p className="text-slate-500">Стоимость по тарифу (справочно)</p>
                   <p className="mt-1 font-medium text-slate-900">
                     {formatMoney(detail.matched_tier.total_cost)}
                   </p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Фактическая сумма договора</p>
+                  <p className="mt-1 font-medium text-slate-900">{formatMoney(contractTotal)}</p>
                 </div>
                 <div>
                   <p className="text-slate-500">Срок</p>

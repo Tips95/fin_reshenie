@@ -55,6 +55,41 @@ def ensure_document_collection(db: Session, client: Client) -> DocumentCollectio
     return item
 
 
+def update_document_collection_amounts(
+    db: Session,
+    client: Client,
+    *,
+    collection_fee: Decimal,
+    notary_fee: Decimal,
+    manager_commission: Decimal,
+) -> DocumentCollection:
+    if client.engagement_stage != EngagementStage.DOCUMENT_COLLECTION:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Суммы сбора можно менять только на этапе сбора документов",
+        )
+
+    item = ensure_document_collection(db, client)
+    if item.status != DocumentCollectionStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Суммы сбора можно менять только до фиксации оплаты",
+        )
+
+    total = collection_fee + notary_fee + manager_commission
+    if total <= Decimal("0.00"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Сумма сбора должна быть больше нуля",
+        )
+
+    item.collection_fee = collection_fee
+    item.notary_fee = notary_fee
+    item.manager_commission = manager_commission
+    item.total_amount = total
+    return item
+
+
 def record_document_collection_payment(
     db: Session,
     client: Client,
@@ -96,7 +131,7 @@ def convert_client_to_bankruptcy(
     if item.status != DocumentCollectionStatus.PAID:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Сначала зафиксируйте оплату сбора документов (13 000 ₽)",
+            detail="Сначала зафиксируйте оплату сбора документов",
         )
 
     existing_plan = db.scalar(

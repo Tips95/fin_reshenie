@@ -10,6 +10,7 @@ from app.schemas.client import ClientDetailResponse
 from app.schemas.document_collection import (
     ConvertToBankruptcyRequest,
     DocumentCollectionResponse,
+    DocumentCollectionUpdate,
     RecordDocumentCollectionPayment,
 )
 from app.models.enums import AuditAction
@@ -17,12 +18,45 @@ from app.services.access import ensure_client_write_access
 from app.services.audit import log_audit
 from app.services.document_collection import (
     convert_client_to_bankruptcy,
-    get_document_collection,
     record_document_collection_payment,
     to_document_collection_response,
+    update_document_collection_amounts,
 )
 
 router = APIRouter()
+
+
+@router.patch(
+    "/{client_id}/document-collection",
+    response_model=DocumentCollectionResponse,
+)
+def patch_document_collection(
+    client_id: UUID,
+    payload: DocumentCollectionUpdate,
+    current_user: User = Depends(require_owner_or_manager),
+    db: Session = Depends(get_db),
+) -> DocumentCollectionResponse:
+    client = ensure_client_write_access(db, current_user, client_id)
+    item = update_document_collection_amounts(
+        db,
+        client,
+        collection_fee=payload.collection_fee,
+        notary_fee=payload.notary_fee,
+        manager_commission=payload.manager_commission,
+    )
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="document_collection",
+        entity_id=item.id,
+        action=AuditAction.UPDATE,
+        field_name="amounts",
+        old_value=None,
+        new_value=str(item.total_amount),
+    )
+    db.commit()
+    db.refresh(item)
+    return to_document_collection_response(item)
 
 
 @router.post(

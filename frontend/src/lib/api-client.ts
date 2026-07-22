@@ -288,6 +288,14 @@ export const clientsApi = {
 };
 
 export const documentCollectionApi = {
+  update: (
+    clientId: string,
+    data: { collection_fee: string; notary_fee: string; manager_commission: string },
+  ) =>
+    apiFetch<import("./types").DocumentCollection>(
+      `/clients/${clientId}/document-collection`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    ),
   recordPayment: (clientId: string, paymentDate: string) =>
     apiFetch<import("./types").DocumentCollection>(
       `/clients/${clientId}/document-collection/record`,
