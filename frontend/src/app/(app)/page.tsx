@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { Badge, Button, Card, LoadingState, PageHeader, SectionTitle } from "@/components/ui";
-import { clientsApi, dashboardApi, exportsApi, tasksApi } from "@/lib/api-client";
-import { formatDate, formatMoney, formatShortName, isFullClient, statusLabel } from "@/lib/format";
+import { dashboardApi, exportsApi } from "@/lib/api-client";
+import { formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
 import type {
-  Client,
+  DashboardOverdueClientItem,
   DashboardSummary,
   DocumentCollectionBreakdown,
   MandatoryPaymentBreakdown,
@@ -89,6 +89,8 @@ function normalizeSummary(data: DashboardSummary): DashboardSummary {
     document_collection_total: data.document_collection_total ?? emptyCollection(),
     document_collection_this_month: data.document_collection_this_month ?? emptyCollection(),
     contracts_signed_this_month: data.contracts_signed_this_month ?? 0,
+    open_tasks_count: data.open_tasks_count ?? 0,
+    overdue_clients_preview: data.overdue_clients_preview ?? [],
   };
 }
 
@@ -205,10 +207,8 @@ function MandatoryPaymentsTable({
 export default function DashboardPage() {
   const { user } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [overdueClients, setOverdueClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [exportingOverdue, setExportingOverdue] = useState(false);
-  const [openTasksCount, setOpenTasksCount] = useState(0);
   const isOwner = user?.role === "owner";
   const canManageClients = isOwner || user?.role === "manager";
   const showOrgFinance = isOwner;
@@ -216,22 +216,17 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [summaryData, overdue, tasks] = await Promise.all([
-          dashboardApi.summary(),
-          canManageClients ? clientsApi.list({ overdue: true }) : Promise.resolve([]),
-          canManageClients ? tasksApi.list("open") : Promise.resolve([]),
-        ]);
+        const summaryData = await dashboardApi.summary();
         setSummary(normalizeSummary(summaryData));
-        setOpenTasksCount(tasks.length);
-        setOverdueClients(
-          overdue.filter((client): client is Client => isFullClient(client)),
-        );
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [canManageClients]);
+  }, []);
+
+  const overdueClients = summary?.overdue_clients_preview ?? [];
+  const openTasksCount = summary?.open_tasks_count ?? 0;
 
   if (loading) return <LoadingState text="Загрузка дашборда..." />;
   if (!summary) return <LoadingState text="Не удалось загрузить дашборд" />;
@@ -538,7 +533,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {overdueClients.slice(0, 10).map((client) => (
+                  {overdueClients.map((client: DashboardOverdueClientItem) => (
                     <tr key={client.id}>
                       <td>
                         <Link

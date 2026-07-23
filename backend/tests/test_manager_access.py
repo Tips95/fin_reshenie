@@ -1,7 +1,10 @@
+import inspect
 import uuid
 from decimal import Decimal
 from types import SimpleNamespace
 
+from app.api import payments as payments_api
+from app.api.deps import require_owner
 from app.models.enums import EngagementStage, UserRole
 from app.services.access import manager_can_access_client
 
@@ -46,3 +49,10 @@ class TestManagerClientAccess:
     def test_other_manager_client_not_accessible(self):
         client = make_client(assigned_manager_id=OTHER_MANAGER_ID)
         assert manager_can_access_client(client, make_manager()) is False
+
+
+class TestManagerPaymentPermissions:
+    def test_create_payment_requires_owner_dependency(self):
+        signature = inspect.signature(payments_api.create_payment)
+        dependency = signature.parameters["current_user"].default.dependency
+        assert dependency is require_owner

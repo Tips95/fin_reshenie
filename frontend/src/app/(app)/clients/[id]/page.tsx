@@ -725,7 +725,8 @@ export default function ClientDetailPage() {
   const canEditSchedule = canEditClient;
   const canManageMandatory = isOwner;
   const canAssignManager = user?.role === "owner";
-  const canRecordPayment = canEditClient;
+  const canRecordSchedulePayment = isOwner;
+  const canRecordDocCollectionPayment = canEditClient;
   const canClaimClient =
     isManager &&
     !client?.assigned_manager_id &&
@@ -1245,7 +1246,7 @@ export default function ClientDetailPage() {
               <Badge tone="success">Переведён на банкротство</Badge>
             )}
           </div>
-          {!isBankruptcy && canRecordPayment && docCollection.status !== "paid" && (
+          {!isBankruptcy && canRecordDocCollectionPayment && docCollection.status !== "paid" && (
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <FormField label="Дата оплаты сбора">
                 <Input
@@ -1262,7 +1263,7 @@ export default function ClientDetailPage() {
               </Button>
             </div>
           )}
-          {!isBankruptcy && canRecordPayment && docCollection.status === "paid" && (
+          {!isBankruptcy && canRecordDocCollectionPayment && docCollection.status === "paid" && (
             <form onSubmit={handleConvertToBankruptcy} className="mt-6 space-y-4 border-t border-slate-200 pt-6">
               <SectionTitle
                 title="Перевести на банкротство"
@@ -1605,7 +1606,7 @@ export default function ClientDetailPage() {
                       <th>Остаток</th>
                       <th>Статус</th>
                       <th>Отсрочка</th>
-                      {canRecordPayment && <th>Действие</th>}
+                      {canRecordSchedulePayment && <th>Действие</th>}
                       {canEditSchedule && <th>Управление</th>}
                     </tr>
                   </thead>
@@ -1708,7 +1709,7 @@ export default function ClientDetailPage() {
                               <span className="text-xs text-slate-400">—</span>
                             )}
                           </td>
-                          {canRecordPayment && (
+                          {canRecordSchedulePayment && (
                             <td>
                               <div className="flex flex-col gap-2">
                                 {rest > 0 && !markedForDelete ? (
@@ -1838,7 +1839,7 @@ export default function ClientDetailPage() {
                         <td>
                           <span className="text-xs text-slate-400">—</span>
                         </td>
-                        {canRecordPayment && (
+                        {canRecordSchedulePayment && (
                           <td>
                             <span className="text-xs text-slate-400">После сохранения</span>
                           </td>
@@ -1888,7 +1889,7 @@ export default function ClientDetailPage() {
             )}
           </Card>
 
-          {canRecordPayment && (
+          {canRecordSchedulePayment && (
             <>
               <Card>
                 <SectionTitle

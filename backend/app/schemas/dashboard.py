@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.models.enums import ClientStatus
+
 
 class MandatoryPaymentBreakdown(BaseModel):
     deposit: Decimal
@@ -17,6 +19,15 @@ class DocumentCollectionBreakdown(BaseModel):
     notary_fee: Decimal
     manager_commission: Decimal
     paid_count: int
+
+
+class DashboardOverdueClientItem(BaseModel):
+    id: UUID
+    full_name: str
+    phone: str
+    contract_date: date
+    status: ClientStatus
+    contract_total: Decimal | None = None
 
 
 class DashboardSummary(BaseModel):
@@ -37,3 +48,5 @@ class DashboardSummary(BaseModel):
     contracts_signed_this_month: int
     org_profit_total: Decimal
     net_profit_this_month: Decimal
+    open_tasks_count: int = 0
+    overdue_clients_preview: list[DashboardOverdueClientItem] = []

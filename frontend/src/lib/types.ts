@@ -206,6 +206,15 @@ export interface DocumentCollectionBreakdown {
   paid_count: number;
 }
 
+export interface DashboardOverdueClientItem {
+  id: string;
+  full_name: string;
+  phone: string;
+  contract_date: string;
+  status: ClientStatus;
+  contract_total: string | null;
+}
+
 export interface DashboardSummary {
   clients_total: number;
   clients_active: number;
@@ -224,6 +233,8 @@ export interface DashboardSummary {
   contracts_signed_this_month: number;
   org_profit_total: string;
   net_profit_this_month: string;
+  open_tasks_count: number;
+  overdue_clients_preview: DashboardOverdueClientItem[];
 }
 
 export interface ClientProfitItem {

@@ -60,8 +60,16 @@ class TestDashboardSummary:
             [payment],
         ]
         monkeypatch.setattr(
-            "app.services.dashboard.client_has_overdue_payments",
-            lambda *_args, **_kwargs: False,
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
         )
         monkeypatch.setattr(
             "app.services.dashboard.sum_active_contract_totals",
@@ -114,14 +122,23 @@ class TestDashboardSummary:
         db = MagicMock()
         db.scalars.return_value = [client]
         monkeypatch.setattr(
-            "app.services.dashboard.client_has_overdue_payments",
-            lambda *_args, **_kwargs: True,
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {CLIENT_ID: True},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 2,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
         )
 
         summary = get_dashboard_summary(db, make_user(UserRole.MANAGER))
 
         assert summary.clients_total == 1
         assert summary.clients_overdue == 1
+        assert summary.open_tasks_count == 2
         assert summary.expected_this_month == Decimal("0.00")
         assert summary.total_collected == Decimal("0.00")
         assert summary.active_contract_total == Decimal("0.00")
@@ -131,8 +148,16 @@ class TestDashboardSummary:
         db = MagicMock()
         db.scalars.return_value = [client]
         monkeypatch.setattr(
-            "app.services.dashboard.client_has_overdue_payments",
-            lambda *_args, **_kwargs: False,
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
         )
 
         summary = get_dashboard_summary(db, make_user(UserRole.CALL_CENTER))

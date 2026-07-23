@@ -10,7 +10,7 @@ from app.models.enums import ClientStatus, DocumentCollectionStatus, EngagementS
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
-from app.services.access import apply_client_visibility_filter, client_has_overdue_payments
+from app.services.access import apply_client_visibility_filter, clients_overdue_map
 from app.services.phone import month_bounds, normalize_phone
 
 
@@ -53,8 +53,9 @@ def sort_clients(
     elif sort_by == ClientSortField.STATUS:
         clients.sort(key=lambda client: client.status.value, reverse=reverse)
     elif sort_by == ClientSortField.OVERDUE:
+        overdue_map = clients_overdue_map(db, [client.id for client in clients])
         clients.sort(
-            key=lambda client: client_has_overdue_payments(db, client.id),
+            key=lambda client: overdue_map.get(client.id, False),
             reverse=reverse,
         )
     else:
@@ -141,6 +142,11 @@ def query_clients(
     clients = list(db.scalars(stmt))
 
     if overdue is not None:
-        clients = [client for client in clients if client_has_overdue_payments(db, client.id) == overdue]
+        overdue_map = clients_overdue_map(db, [client.id for client in clients])
+        clients = [
+            client
+            for client in clients
+            if overdue_map.get(client.id, False) == overdue
+        ]
 
     return sort_clients(db, clients, sort_by=sort_by, sort_dir=sort_dir)

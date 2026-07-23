@@ -1,3 +1,5 @@
+from calendar import monthrange
+from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -15,6 +17,7 @@ from app.models.pricing_tier import PricingTier
 from app.models.user import User
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.organization_defaults import sync_pricing_tiers
+from app.services.schedule_dates import is_schedule_overdue
 
 
 def get_organization_client(
@@ -219,16 +222,31 @@ def get_installment_plan_for_client(
     return plan
 
 
-from app.services.schedule_dates import is_schedule_overdue
+def clients_overdue_map(
+    db: Session,
+    client_ids: list[UUID],
+    *,
+    today: date | None = None,
+) -> dict[UUID, bool]:
+    if not client_ids:
+        return {}
+
+    check_date = today or date.today()
+    schedules_by_client: dict[UUID, list[PaymentSchedule]] = defaultdict(list)
+
+    rows = db.execute(
+        select(InstallmentPlan.client_id, PaymentSchedule)
+        .join(PaymentSchedule, PaymentSchedule.installment_plan_id == InstallmentPlan.id)
+        .where(InstallmentPlan.client_id.in_(client_ids))
+    )
+    for client_id, schedule in rows:
+        schedules_by_client[client_id].append(schedule)
+
+    return {
+        client_id: any(is_schedule_overdue(schedule, check_date) for schedule in schedules_by_client[client_id])
+        for client_id in client_ids
+    }
 
 
 def client_has_overdue_payments(db: Session, client_id: UUID) -> bool:
-    today = date.today()
-    schedules = list(
-        db.scalars(
-            select(PaymentSchedule)
-            .join(InstallmentPlan, InstallmentPlan.id == PaymentSchedule.installment_plan_id)
-            .where(InstallmentPlan.client_id == client_id)
-        )
-    )
-    return any(is_schedule_overdue(item, today) for item in schedules)
+    return clients_overdue_map(db, [client_id]).get(client_id, False)

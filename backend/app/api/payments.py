@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
+from app.api.deps import get_current_active_user, require_owner
 from app.core.database import get_db
 from app.models.enums import AuditAction, UserRole
 from app.models.payment import Payment
@@ -54,7 +54,7 @@ def list_payments(
 @router.post("", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
 def create_payment(
     payload: PaymentCreate,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> Payment:
     ensure_client_write_access(db, current_user, payload.client_id)

@@ -2,28 +2,30 @@ from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
-from app.models.enums import ClientStatus, UserRole
+from app.models.enums import ClientStatus, TaskStatus, UserRole
 from app.models.installment_plan import InstallmentPlan
+from app.models.manager_task import ManagerTask
 from app.models.operating_expense import OperatingExpense
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
 from app.schemas.dashboard import (
+    DashboardOverdueClientItem,
     DashboardSummary,
     DocumentCollectionBreakdown,
     MandatoryPaymentBreakdown,
 )
-from app.services.access import apply_client_visibility_filter, client_has_overdue_payments
+from app.services.access import apply_client_visibility_filter, clients_overdue_map
 from app.services.document_collection_stats import (
     count_contracts_signed_in_period,
     get_document_collection_paid_totals,
 )
 from app.services.mandatory_payment_stats import MandatoryPaymentTotals, breakdown_from_totals, get_mandatory_paid_totals
-from app.services.client_finances import sum_active_contract_totals
+from app.services.client_finances import contract_totals_by_client, sum_active_contract_totals
 from app.services.schedule_dates import effective_due_date, payment_window_end
 
 
@@ -88,11 +90,77 @@ def _to_document_collection_breakdown(totals) -> DocumentCollectionBreakdown:
     )
 
 
+def _count_open_tasks(db: Session, user: User, client_ids: list) -> int:
+    if not client_ids:
+        return 0
+
+    stmt = (
+        select(func.count())
+        .select_from(ManagerTask)
+        .where(
+            ManagerTask.organization_id == user.organization_id,
+            ManagerTask.status == TaskStatus.OPEN,
+            ManagerTask.client_id.in_(client_ids),
+        )
+    )
+    if user.role == UserRole.MANAGER:
+        stmt = stmt.where(ManagerTask.assigned_manager_id == user.id)
+
+    return db.scalar(stmt) or 0
+
+
+def _build_overdue_clients_preview(
+    db: Session,
+    clients: list[Client],
+    overdue_map: dict,
+    *,
+    limit: int = 10,
+) -> list[DashboardOverdueClientItem]:
+    overdue_clients = [client for client in clients if overdue_map.get(client.id, False)]
+    overdue_clients.sort(key=lambda client: client.created_at, reverse=True)
+    preview_clients = overdue_clients[:limit]
+    contract_totals = contract_totals_by_client(db, [client.id for client in preview_clients])
+
+    return [
+        DashboardOverdueClientItem(
+            id=client.id,
+            full_name=client.full_name,
+            phone=client.phone,
+            contract_date=client.contract_date,
+            status=client.status,
+            contract_total=contract_totals.get(client.id),
+        )
+        for client in preview_clients
+    ]
+
+
+def _dashboard_activity_fields(
+    db: Session,
+    user: User,
+    clients: list[Client],
+    overdue_map: dict,
+) -> tuple[int, list[DashboardOverdueClientItem]]:
+    if user.role not in (UserRole.OWNER, UserRole.MANAGER):
+        return 0, []
+
+    client_ids = [client.id for client in clients]
+    return (
+        _count_open_tasks(db, user, client_ids),
+        _build_overdue_clients_preview(db, clients, overdue_map),
+    )
+
+
 def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
     clients = list(db.scalars(_visible_clients_stmt(user)))
     active_clients = [client for client in clients if client.status == ClientStatus.ACTIVE]
-    clients_overdue = sum(
-        1 for client in clients if client_has_overdue_payments(db, client.id)
+    client_ids = [client.id for client in clients]
+    overdue_map = clients_overdue_map(db, client_ids)
+    clients_overdue = sum(1 for client_id in client_ids if overdue_map.get(client_id, False))
+    open_tasks_count, overdue_clients_preview = _dashboard_activity_fields(
+        db,
+        user,
+        clients,
+        overdue_map,
     )
     empty = _empty_breakdown()
     empty_collection = _empty_document_collection()
@@ -116,13 +184,14 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
             contracts_signed_this_month=0,
             org_profit_total=Decimal("0.00"),
             net_profit_this_month=Decimal("0.00"),
+            open_tasks_count=open_tasks_count,
+            overdue_clients_preview=overdue_clients_preview,
         )
 
     monthly_expenses = _monthly_expenses_total(db, user.organization_id)
     today = date.today()
     month_start, month_end = _month_bounds(today)
 
-    client_ids = [client.id for client in clients]
     active_contract_total = sum_active_contract_totals(db, clients)
 
     expected_this_month = Decimal("0.00")
@@ -228,4 +297,6 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         contracts_signed_this_month=contracts_signed_this_month,
         org_profit_total=org_profit_total,
         net_profit_this_month=net_profit_this_month,
+        open_tasks_count=open_tasks_count,
+        overdue_clients_preview=overdue_clients_preview,
     )
