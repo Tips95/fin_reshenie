@@ -23,6 +23,7 @@ from app.services.document_collection_stats import (
     get_document_collection_paid_totals,
 )
 from app.services.mandatory_payment_stats import MandatoryPaymentTotals, breakdown_from_totals, get_mandatory_paid_totals
+from app.services.client_finances import sum_active_contract_totals
 from app.services.schedule_dates import effective_due_date, payment_window_end
 
 
@@ -106,7 +107,7 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
             overdue_amount=Decimal("0.00"),
             total_remainder=Decimal("0.00"),
             total_collected=Decimal("0.00"),
-            active_debt_total=Decimal("0.00"),
+            active_contract_total=Decimal("0.00"),
             monthly_expenses=Decimal("0.00"),
             mandatory_paid_total=empty,
             mandatory_paid_this_month=empty,
@@ -122,10 +123,7 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
     month_start, month_end = _month_bounds(today)
 
     client_ids = [client.id for client in clients]
-    active_debt_total = sum(
-        (client.debt_amount for client in active_clients),
-        Decimal("0.00"),
-    )
+    active_contract_total = sum_active_contract_totals(db, clients)
 
     expected_this_month = Decimal("0.00")
     overdue_amount = Decimal("0.00")
@@ -221,7 +219,7 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         overdue_amount=overdue_amount,
         total_remainder=total_remainder,
         total_collected=total_collected,
-        active_debt_total=active_debt_total,
+        active_contract_total=active_contract_total,
         monthly_expenses=monthly_expenses,
         mandatory_paid_total=mandatory_paid_total,
         mandatory_paid_this_month=mandatory_paid_this_month,

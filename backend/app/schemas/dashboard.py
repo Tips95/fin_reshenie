@@ -28,7 +28,7 @@ class DashboardSummary(BaseModel):
     overdue_amount: Decimal
     total_remainder: Decimal
     total_collected: Decimal
-    active_debt_total: Decimal
+    active_contract_total: Decimal
     monthly_expenses: Decimal
     mandatory_paid_total: MandatoryPaymentBreakdown
     mandatory_paid_this_month: MandatoryPaymentBreakdown

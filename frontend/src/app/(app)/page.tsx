@@ -294,8 +294,9 @@ export default function DashboardPage() {
           <MetricTile label="С просрочкой" value={summary.clients_overdue} tone="danger" />
           {showOrgFinance && (
             <MetricTile
-              label="Объём активных договоров"
-              value={formatMoney(summary.active_debt_total)}
+              label="Сумма активных договоров"
+              value={formatMoney(summary.active_contract_total)}
+              hint="По графику рассрочки, без долга перед кредиторами"
             />
           )}
         </div>
@@ -550,7 +551,7 @@ export default function DashboardPage() {
                       <td className="text-slate-600">{client.phone}</td>
                       <td className="text-slate-600">{formatDate(client.contract_date)}</td>
                       <td className="font-medium text-slate-800">
-                        {formatMoney(client.debt_amount)}
+                        {formatMoney(client.contract_total ?? "0")}
                       </td>
                       <td>
                         <Badge tone="danger">{statusLabel(client.status)}</Badge>

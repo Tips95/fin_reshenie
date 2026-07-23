@@ -64,6 +64,10 @@ class TestDashboardSummary:
             lambda *_args, **_kwargs: False,
         )
         monkeypatch.setattr(
+            "app.services.dashboard.sum_active_contract_totals",
+            lambda *_args, **_kwargs: Decimal("145000.00"),
+        )
+        monkeypatch.setattr(
             "app.services.dashboard.get_mandatory_paid_totals",
             lambda *_args, **_kwargs: __import__(
                 "app.services.mandatory_payment_stats",
@@ -99,7 +103,7 @@ class TestDashboardSummary:
         assert summary.collected_this_month == Decimal("3000.00")
         assert summary.total_remainder == Decimal("7000.00")
         assert summary.total_collected == Decimal("3000.00")
-        assert summary.active_debt_total == Decimal("350000.00")
+        assert summary.active_contract_total == Decimal("145000.00")
         assert summary.monthly_expenses == Decimal("0.00")
         assert summary.mandatory_paid_total.total == Decimal("0.00")
         assert summary.org_profit_total == Decimal("3000.00")
@@ -120,7 +124,7 @@ class TestDashboardSummary:
         assert summary.clients_overdue == 1
         assert summary.expected_this_month == Decimal("0.00")
         assert summary.total_collected == Decimal("0.00")
-        assert summary.active_debt_total == Decimal("0.00")
+        assert summary.active_contract_total == Decimal("0.00")
 
     def test_call_center_gets_limited_summary(self, monkeypatch):
         client = make_client()

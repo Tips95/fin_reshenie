@@ -82,6 +82,7 @@ export interface Client {
   has_overdue?: boolean;
   document_collection_status?: DocumentCollectionStatus | null;
   document_collection_paid_date?: string | null;
+  contract_total?: string | null;
 }
 
 export interface ClientBrief {
@@ -214,7 +215,7 @@ export interface DashboardSummary {
   overdue_amount: string;
   total_remainder: string;
   total_collected: string;
-  active_debt_total: string;
+  active_contract_total: string;
   monthly_expenses: string;
   mandatory_paid_total: MandatoryPaymentBreakdown;
   mandatory_paid_this_month: MandatoryPaymentBreakdown;

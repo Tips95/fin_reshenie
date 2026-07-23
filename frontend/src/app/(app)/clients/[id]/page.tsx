@@ -1229,7 +1229,7 @@ export default function ClientDetailPage() {
                 description="После успешного сбора документов укажите сумму долга — создастся график рассрочки"
               />
               <div className="grid gap-4 md:grid-cols-2">
-                <FormField label="Сумма долга (от 300 000 ₽)">
+                <FormField label="Сумма для подбора тарифа (от 300 000 ₽)">
                   <Input
                     type="number"
                     min={300000}
@@ -1264,7 +1264,6 @@ export default function ClientDetailPage() {
         <StatCard label="Дата договора" value={formatDate(client.contract_date)} tone="brand" />
         {detail && isBankruptcy ? (
           <>
-            <StatCard label="Сумма долга" value={formatMoney(detail.debt_amount)} tone="default" />
             <StatCard label="Сумма договора" value={formatMoney(contractTotal)} tone="brand" />
             <StatCard label="Оплачено по графику" value={formatMoney(paidTotal)} tone="success" />
             <StatCard

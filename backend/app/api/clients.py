@@ -48,6 +48,7 @@ from app.services.document_collection import (
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.payment_status import refresh_overdue_statuses
 from app.services.payment_dates import realign_client_legacy_finances
+from app.services.client_finances import get_client_contract_total
 from app.services.payment_sync import sync_client_payment_schedules
 
 router = APIRouter()
@@ -136,6 +137,7 @@ def _to_client_response(client: Client, db: Session) -> ClientResponse:
     if document_collection is not None:
         data.document_collection_status = document_collection.status
         data.document_collection_paid_date = document_collection.paid_date
+    data.contract_total = get_client_contract_total(db, client.id)
     return data
 
 

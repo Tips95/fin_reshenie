@@ -50,6 +50,7 @@ class ClientResponse(BaseModel):
     has_overdue: bool | None = None
     document_collection_status: DocumentCollectionStatus | None = None
     document_collection_paid_date: date | None = None
+    contract_total: Decimal | None = None
 
 
 class ClientBriefResponse(BaseModel):

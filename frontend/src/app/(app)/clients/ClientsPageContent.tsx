@@ -505,13 +505,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     onSort={handleSort}
                   />
                   {canSeeClientAmounts && !isCollectionView && (
-                    <SortableTh
-                      label="Сумма долга"
-                      field="debt_amount"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSort={handleSort}
-                    />
+                    <th className="font-semibold text-slate-700">Сумма договора</th>
                   )}
                   {canAssignManager && <th>Менеджер</th>}
                   <th>Этап</th>
@@ -576,7 +570,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     </td>
                     {canSeeClientAmounts && !isCollectionView && isFullClient(client) && (
                       <td className="font-medium text-slate-800">
-                        {formatMoney(client.debt_amount)}
+                        {client.contract_total
+                          ? formatMoney(client.contract_total)
+                          : "—"}
                       </td>
                     )}
                     {canAssignManager && (
