@@ -354,22 +354,32 @@ def update_client(
     client = ensure_client_write_access(db, current_user, client_id)
     updates = payload.model_dump(exclude_unset=True)
 
-    owner_only_fields = {"full_name", "debt_amount"}
+    owner_only_fields = {"full_name", "debt_amount", "procedure_stage"}
     if current_user.role != UserRole.OWNER:
         forbidden = owner_only_fields.intersection(updates.keys())
         if forbidden:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Изменение ФИО и суммы долга доступно только руководителю",
+                detail="Изменение ФИО, суммы долга и этапа процедуры доступно только руководителю",
             )
 
     if "assigned_manager_id" in updates:
-        if current_user.role != UserRole.OWNER:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Назначение менеджера доступно только руководителю",
-            )
-        if updates["assigned_manager_id"] is not None:
+        if current_user.role == UserRole.MANAGER:
+            new_manager_id = updates["assigned_manager_id"]
+            if new_manager_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Менеджер может только закрепить клиента за собой",
+                )
+            if (
+                client.assigned_manager_id is not None
+                and client.assigned_manager_id != current_user.id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Клиент уже закреплён за другим менеджером",
+                )
+        elif updates["assigned_manager_id"] is not None:
             get_organization_user(
                 db,
                 user_id=updates["assigned_manager_id"],

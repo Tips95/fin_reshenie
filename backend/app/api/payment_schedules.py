@@ -126,7 +126,7 @@ def waive_payment_schedule_overdue(
 def update_payment_schedule(
     schedule_id: UUID,
     payload: PaymentScheduleUpdate,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_owner_or_manager),
     db: Session = Depends(get_db),
 ) -> PaymentSchedule:
     schedule = _get_schedule_or_404(db, schedule_id)
@@ -178,7 +178,7 @@ def update_payment_schedule(
 @router.delete("/{schedule_id}", status_code=204)
 def delete_payment_schedule(
     schedule_id: UUID,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_owner_or_manager),
     db: Session = Depends(get_db),
 ) -> None:
     schedule = _get_schedule_or_404(db, schedule_id)
@@ -211,7 +211,7 @@ def create_payment_schedule_item(
     client_id: UUID,
     plan_id: UUID,
     payload: PaymentScheduleCreate,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_owner_or_manager),
     db: Session = Depends(get_db),
 ) -> PaymentSchedule:
     ensure_client_write_access(db, current_user, client_id)

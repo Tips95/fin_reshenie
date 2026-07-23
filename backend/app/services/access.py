@@ -3,11 +3,11 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
-from app.models.enums import ClientStatus, OrganizationType, PaymentScheduleStatus, UserRole
+from app.models.enums import ClientStatus, EngagementStage, OrganizationType, PaymentScheduleStatus, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.organization import Organization
 from app.models.payment_schedule import PaymentSchedule
@@ -34,9 +34,18 @@ def get_organization_client(
     return client
 
 
+def manager_can_access_client(client: Client, user: User) -> bool:
+    if client.assigned_manager_id == user.id:
+        return True
+    return (
+        client.assigned_manager_id is None
+        and client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION
+    )
+
+
 def ensure_client_read_access(db: Session, user: User, client_id: UUID) -> Client:
     client = get_organization_client(db, client_id=client_id, organization_id=user.organization_id)
-    if user.role == UserRole.MANAGER and client.assigned_manager_id != user.id:
+    if user.role == UserRole.MANAGER and not manager_can_access_client(client, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к клиенту")
     return client
 
@@ -50,7 +59,15 @@ def ensure_client_write_access(db: Session, user: User, client_id: UUID) -> Clie
 def apply_client_visibility_filter(stmt: Select, user: User) -> Select:
     stmt = stmt.where(Client.organization_id == user.organization_id, Client.is_deleted.is_(False))
     if user.role == UserRole.MANAGER:
-        stmt = stmt.where(Client.assigned_manager_id == user.id)
+        stmt = stmt.where(
+            or_(
+                Client.assigned_manager_id == user.id,
+                and_(
+                    Client.assigned_manager_id.is_(None),
+                    Client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION,
+                ),
+            )
+        )
     return stmt
 
 

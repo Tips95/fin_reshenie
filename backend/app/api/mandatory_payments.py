@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner_or_manager
+from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
 from app.core.database import get_db
 from app.models.client_mandatory_payment import ClientMandatoryPayment
 from app.models.enums import AuditAction, MandatoryPaymentStatus, UserRole
@@ -58,7 +58,7 @@ def update_mandatory_payment(
     client_id: UUID,
     payment_id: UUID,
     payload: MandatoryPaymentUpdate,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> ClientMandatoryPayment:
     ensure_client_write_access(db, current_user, client_id)
@@ -98,7 +98,7 @@ def record_mandatory_payment(
     client_id: UUID,
     payment_id: UUID,
     payload: MandatoryPaymentRecord,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> ClientMandatoryPayment:
     ensure_client_write_access(db, current_user, client_id)

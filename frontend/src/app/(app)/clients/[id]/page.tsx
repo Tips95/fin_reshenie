@@ -720,9 +720,16 @@ export default function ClientDetailPage() {
   }
 
   const isOwner = user?.role === "owner";
-  const canEditClient = isOwner || user?.role === "manager";
+  const isManager = user?.role === "manager";
+  const canEditClient = isOwner || isManager;
+  const canEditSchedule = canEditClient;
+  const canManageMandatory = isOwner;
   const canAssignManager = user?.role === "owner";
   const canRecordPayment = canEditClient;
+  const canClaimClient =
+    isManager &&
+    !client?.assigned_manager_id &&
+    client?.engagement_stage === "document_collection";
 
   const STATUS_OPTIONS: Array<{ value: ClientStatus; label: string }> = [
     { value: "active", label: "Активен" },
@@ -738,6 +745,23 @@ export default function ClientDetailPage() {
     { value: "court", label: "Суд" },
     { value: "completed", label: "Завершение" },
   ];
+
+  async function handleClaimClient() {
+    if (!client || !user) return;
+    setCardSaving("claim");
+    try {
+      const updated = await clientsApi.update(client.id, { assigned_manager_id: user.id });
+      setClient((current) => (current ? { ...current, ...updated } : current));
+      showToast("Клиент закреплён за вами");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось закрепить клиента",
+        "error",
+      );
+    } finally {
+      setCardSaving(null);
+    }
+  }
 
   async function handleCardUpdate(data: Record<string, unknown>, field: string) {
     if (!client) return;
@@ -843,7 +867,7 @@ export default function ClientDetailPage() {
     .filter((item) => item.is_applicable)
     .reduce((sum, item) => sum + Number(item.paid_amount), 0);
   const clientProfit = collectedTotal - mandatoryPaidTotal;
-  const scheduleDraftDirty = isOwner && isScheduleDraftDirty(scheduleDraft, schedule);
+  const scheduleDraftDirty = canEditSchedule && isScheduleDraftDirty(scheduleDraft, schedule);
 
   return (
     <div className="space-y-4">
@@ -997,6 +1021,22 @@ export default function ClientDetailPage() {
         </Card>
       )}
 
+      {canClaimClient && (
+        <Card variant="accent">
+          <SectionTitle
+            title="Клиент не закреплён"
+            description="Нераспределённые клиенты с этапа сбора можно принять в работу"
+          />
+          <Button
+            type="button"
+            disabled={cardSaving === "claim"}
+            onClick={handleClaimClient}
+          >
+            {cardSaving === "claim" ? "Закрепление..." : "Принять в работу"}
+          </Button>
+        </Card>
+      )}
+
       {canEditClient && isDetail(client) && (
         <Card>
           <SectionTitle title="Статус, этап и менеджер" />
@@ -1029,7 +1069,7 @@ export default function ClientDetailPage() {
                 ))}
               </Select>
             </FormField>
-            {isBankruptcy && (
+            {isBankruptcy && isOwner && (
               <FormField label="Этап процедуры">
                 <Select
                   value={client.procedure_stage}
@@ -1408,7 +1448,7 @@ export default function ClientDetailPage() {
           <Card>
             <SectionTitle
               title="Обязательные платежи по процедуре"
-              description="Депозит, финансовое управление и судебная пошлина — отдельно от графика рассрочки"
+              description="Депозит, финансовое управление и судебная пошлина — только для руководителя"
             />
             {mandatory.length === 0 ? (
               <EmptyState>Данные не сформированы</EmptyState>
@@ -1422,7 +1462,7 @@ export default function ClientDetailPage() {
                       <th>Оплачено</th>
                       <th>Остаток</th>
                       <th>Статус</th>
-                      {canRecordPayment && <th>Действие</th>}
+                      {canManageMandatory && <th>Действие</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1447,7 +1487,7 @@ export default function ClientDetailPage() {
                           <td>
                             {item.payment_type === "court_fee" && !item.is_applicable ? (
                               <span className="text-slate-400">Не требуется</span>
-                            ) : needsAmount && canRecordPayment ? (
+                            ) : needsAmount && canManageMandatory ? (
                               <div className="flex items-center gap-2">
                                 <Input
                                   type="number"
@@ -1483,7 +1523,7 @@ export default function ClientDetailPage() {
                               {statusLabel(item.status)}
                             </Badge>
                           </td>
-                          {canRecordPayment && (
+                          {canManageMandatory && (
                             <td>
                               {item.payment_type === "court_fee" && (
                                 <label className="mb-2 flex items-center gap-2 text-xs text-slate-600">
@@ -1526,12 +1566,12 @@ export default function ClientDetailPage() {
             <SectionTitle
               title="График платежей"
               description={
-                isOwner
+                canEditSchedule
                   ? "1-й месяц = дата договора, дальше по месяцам. Для legacy-клиентов меняйте суммы (20k, 30k…) и сохраняйте график"
                   : undefined
               }
               action={
-                isOwner && detail?.installment_plan ? (
+                canEditSchedule && detail?.installment_plan ? (
                   <Button type="button" variant="secondary" onClick={handleAddPendingMonth}>
                     + Добавить месяц
                   </Button>
@@ -1548,7 +1588,9 @@ export default function ClientDetailPage() {
             )}
             {schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
               <EmptyState>
-                {isOwner ? "График не сформирован. Нажмите «+ Добавить месяц»." : "График не сформирован"}
+                {canEditSchedule
+                  ? "График не сформирован. Нажмите «+ Добавить месяц»."
+                  : "График не сформирован"}
               </EmptyState>
             ) : (
               <>
@@ -1564,7 +1606,7 @@ export default function ClientDetailPage() {
                       <th>Статус</th>
                       <th>Отсрочка</th>
                       {canRecordPayment && <th>Действие</th>}
-                      {isOwner && <th>Управление</th>}
+                      {canEditSchedule && <th>Управление</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1589,7 +1631,7 @@ export default function ClientDetailPage() {
                             )}
                           </td>
                           <td>
-                            {isOwner && !markedForDelete ? (
+                            {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="date"
                                 value={editValues.due_date}
@@ -1618,7 +1660,7 @@ export default function ClientDetailPage() {
                             )}
                           </td>
                           <td>
-                            {isOwner && !markedForDelete ? (
+                            {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="number"
                                 min={Number(item.paid_amount) || 0.01}
@@ -1727,10 +1769,11 @@ export default function ClientDetailPage() {
                               </div>
                             </td>
                           )}
-                          {isOwner && (
+                          {canEditSchedule && (
                             <td>
                               <div className="flex flex-col gap-2">
-                                {item.status === "overdue" &&
+                                {isOwner &&
+                                  item.status === "overdue" &&
                                   !item.overdue_waived &&
                                   !markedForDelete && (
                                     <Button
@@ -1800,7 +1843,7 @@ export default function ClientDetailPage() {
                             <span className="text-xs text-slate-400">После сохранения</span>
                           </td>
                         )}
-                        {isOwner && (
+                        {canEditSchedule && (
                           <td>
                             <Button
                               type="button"
@@ -1817,7 +1860,7 @@ export default function ClientDetailPage() {
                 </table>
               </div>
 
-              {isOwner && scheduleDraftDirty && (
+              {canEditSchedule && scheduleDraftDirty && (
                 <div className="sticky bottom-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 bg-white p-2">
                   <p className="text-xs font-medium text-slate-700">
                     Есть несохранённые изменения в графике

@@ -197,7 +197,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
 
   const canCreate = user?.role === "owner" || user?.role === "manager";
   const canEdit = canCreate;
+  const isManager = user?.role === "manager";
   const canAssignManager = user?.role === "owner";
+  const canManageProcedure = user?.role === "owner";
   const canSeeClientAmounts = user?.role === "owner" || user?.role === "manager";
 
   function handleSort(field: SortField) {
@@ -207,6 +209,24 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     }
     setSortBy(field);
     setSortDir("asc");
+  }
+
+  async function handleClaimClient(clientId: string) {
+    if (!user) return;
+    setSavingField(`${clientId}:claim`);
+    setUpdateError(null);
+    try {
+      const updated = await clientsApi.update(clientId, { assigned_manager_id: user.id });
+      setClients((items) =>
+        items.map((item) => (item.id === clientId ? { ...item, ...updated } : item)),
+      );
+    } catch (error) {
+      setUpdateError(
+        error instanceof ApiRequestError ? error.message : "Не удалось закрепить клиента",
+      );
+    } finally {
+      setSavingField(null);
+    }
   }
 
   async function handleClientUpdate(
@@ -508,6 +528,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     <th className="font-semibold text-slate-700">Сумма договора</th>
                   )}
                   {canAssignManager && <th>Менеджер</th>}
+                  {isManager && isCollectionView && <th>Закрепление</th>}
                   <th>Этап</th>
                   <SortableTh
                     label="Статус"
@@ -598,6 +619,26 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         </Select>
                       </td>
                     )}
+                    {isManager && isCollectionView && (
+                      <td>
+                        {isFullClient(client) && !client.assigned_manager_id ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={savingField === `${client.id}:claim`}
+                            onClick={() => handleClaimClient(client.id)}
+                          >
+                            {savingField === `${client.id}:claim`
+                              ? "Закрепление..."
+                              : "Принять в работу"}
+                          </Button>
+                        ) : isFullClient(client) && client.assigned_manager_id === user?.id ? (
+                          <Badge tone="success">За вами</Badge>
+                        ) : (
+                          <span className="text-xs text-slate-500">Назначен</span>
+                        )}
+                      </td>
+                    )}
                     <td>
                       {isCollectionView ? (
                         isFullClient(client) ? (
@@ -620,7 +661,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         )
                       ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
                         <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
-                      ) : canEdit ? (
+                      ) : canManageProcedure ? (
                         <Select
                           className="min-w-[150px]"
                           value={client.procedure_stage}
