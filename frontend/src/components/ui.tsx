@@ -9,7 +9,7 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex h-8 w-8 items-center justify-center rounded border border-slate-600 bg-slate-700 text-[11px] font-bold text-white",
+        "flex h-8 w-8 items-center justify-center rounded-md border border-brand-600 bg-brand-700 text-[11px] font-bold text-white shadow-soft",
         className,
       )}
     >
@@ -26,16 +26,20 @@ export function Button({
   variant?: "primary" | "secondary" | "danger" | "ghost";
 }) {
   const variants = {
-    primary: "border border-brand-700 bg-brand-700 text-white hover:bg-brand-800",
-    secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-    danger: "border border-rose-700 bg-rose-700 text-white hover:bg-rose-800",
-    ghost: "border border-transparent bg-transparent text-slate-600 hover:bg-slate-100",
+    primary:
+      "border border-brand-700 bg-brand-700 text-white shadow-soft hover:border-brand-800 hover:bg-brand-800 hover:shadow-card",
+    secondary:
+      "border border-border bg-surface text-foreground shadow-soft hover:border-border-strong hover:bg-surface-muted hover:shadow-card",
+    danger:
+      "border border-status-danger-solid bg-status-danger-solid text-white shadow-soft hover:opacity-90 hover:shadow-card",
+    ghost:
+      "border border-transparent bg-transparent text-muted hover:bg-surface-muted hover:text-foreground",
   };
 
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center rounded px-2.5 py-1.5 text-xs font-medium disabled:opacity-50",
+        "interactive inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         className,
       )}
@@ -51,7 +55,7 @@ export function Input({
   return (
     <input
       className={cn(
-        "w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[13px] outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30",
+        "interactive w-full rounded-md border border-border bg-surface px-2 py-1.5 text-[13px] shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20",
         className,
       )}
       {...props}
@@ -102,15 +106,15 @@ export function Toast({
   }, [message, onClose]);
 
   const tones = {
-    success: "border-emerald-300 bg-emerald-50 text-emerald-900",
-    error: "border-rose-300 bg-rose-50 text-rose-900",
-    info: "border-slate-300 bg-white text-slate-700",
+    success: "border-status-success-border bg-status-success-bg text-status-success-text",
+    error: "border-status-danger-border bg-status-danger-bg text-status-danger-text",
+    info: "border-status-neutral-border bg-surface text-status-neutral-text shadow-card",
   };
 
   return (
     <div
       className={cn(
-        "fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-2 rounded border px-3 py-2 text-xs",
+        "interactive fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-2 rounded-lg border px-3 py-2 text-xs shadow-hover",
         tones[tone],
       )}
       role="status"
@@ -119,7 +123,7 @@ export function Toast({
       {onClose && (
         <button
           type="button"
-          className="text-current/60 hover:text-current"
+          className="interactive text-current/60 hover:text-current"
           onClick={onClose}
           aria-label="Закрыть"
         >
@@ -137,7 +141,7 @@ export function Select({
   return (
     <select
       className={cn(
-        "w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30",
+        "interactive w-full rounded-md border border-border bg-surface px-2 py-1.5 text-[13px] shadow-soft outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20",
         className,
       )}
       {...props}
@@ -155,9 +159,9 @@ export function Card({
   variant?: "default" | "glass" | "accent";
 }) {
   const variants = {
-    default: "rounded border border-slate-200 bg-white p-3",
-    glass: "rounded border border-slate-200 bg-white p-3",
-    accent: "rounded border border-slate-300 bg-slate-50 p-3",
+    default: "surface-card-hover p-card",
+    glass: "surface-card-hover p-card",
+    accent: "interactive rounded-lg border border-brand-200 bg-brand-50 p-card shadow-soft hover:shadow-card",
   };
 
   return <div className={cn(variants[variant], className)}>{children}</div>;
@@ -171,14 +175,14 @@ export function Badge({
   tone?: "default" | "success" | "warning" | "danger";
 }) {
   const tones = {
-    default: "bg-slate-100 text-slate-700 border border-slate-200",
-    success: "bg-emerald-50 text-emerald-800 border border-emerald-200",
-    warning: "bg-amber-50 text-amber-900 border border-amber-200",
-    danger: "bg-rose-50 text-rose-800 border border-rose-200",
+    default: "border border-status-neutral-border bg-status-neutral-bg text-status-neutral-text",
+    success: "border border-status-success-border bg-status-success-bg text-status-success-text",
+    warning: "border border-status-warning-border bg-status-warning-bg text-status-warning-text",
+    danger: "border border-status-danger-border bg-status-danger-bg text-status-danger-text",
   };
 
   return (
-    <span className={cn("inline-flex rounded px-1.5 py-0.5 text-[11px] font-medium", tones[tone])}>
+    <span className={cn("inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-medium", tones[tone])}>
       {children}
     </span>
   );
@@ -198,10 +202,10 @@ export function PageHeader({
   return (
     <div className="space-y-2">
       {back}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+          <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
         {action}
       </div>
@@ -234,10 +238,10 @@ export function SectionTitle({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-2 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-2">
+    <div className="mb-2 flex flex-wrap items-start justify-between gap-2 border-b border-border pb-2">
       <div>
         <h2 className="section-title">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+        {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
       </div>
       {action}
     </div>
@@ -256,16 +260,16 @@ export function ProgressBar({
   tone?: "default" | "success" | "warning" | "danger";
 }) {
   const fills = {
-    default: "bg-slate-400",
-    success: "bg-emerald-600",
-    warning: "bg-amber-600",
-    danger: "bg-rose-600",
+    default: "bg-status-neutral-solid",
+    success: "bg-status-success-solid",
+    warning: "bg-status-warning-solid",
+    danger: "bg-status-danger-solid",
   };
 
   return (
-    <div className="h-1 overflow-hidden rounded-sm bg-slate-200">
+    <div className="h-1 overflow-hidden rounded-sm bg-surface-muted">
       <div
-        className={cn("h-full", fills[tone])}
+        className={cn("interactive h-full", fills[tone])}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
     </div>
@@ -281,7 +285,7 @@ export function FormField({
 }) {
   return (
     <div>
-      <label className="mb-0.5 block text-xs font-medium text-slate-600">{label}</label>
+      <label className="mb-0.5 block text-xs font-medium text-muted">{label}</label>
       {children}
     </div>
   );
@@ -299,27 +303,27 @@ export function StatCard({
   hint?: string;
 }) {
   const valueColors = {
-    default: "text-slate-900",
-    success: "text-emerald-700",
-    warning: "text-amber-700",
-    danger: "text-rose-700",
-    brand: "text-slate-900",
-    accent: "text-slate-900",
+    default: "text-foreground",
+    success: "text-status-success-text",
+    warning: "text-status-warning-text",
+    danger: "text-status-danger-text",
+    brand: "text-brand-700",
+    accent: "text-brand-700",
   };
 
   return (
     <Card className="p-2.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</p>
       <p className={cn("mt-1 text-lg font-semibold leading-tight", valueColors[tone])}>{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-slate-400">{hint}</p>}
+      {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
     </Card>
   );
 }
 
 export function LoadingState({ text = "Загрузка..." }: { text?: string }) {
   return (
-    <div className="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-4 text-xs text-slate-500">
-      <span className="inline-flex h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
+    <div className="interactive flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-4 text-xs text-muted shadow-soft">
+      <span className="inline-flex h-3.5 w-3.5 animate-spin rounded-full border-2 border-border border-t-brand-700" />
       {text}
     </div>
   );
@@ -327,7 +331,7 @@ export function LoadingState({ text = "Загрузка..." }: { text?: string }
 
 export function BrandFooter() {
   return (
-    <p className="text-center text-[11px] text-slate-400">
+    <p className="text-center text-[11px] text-muted">
       {APP_NAME} · финансовая платформа для юридической компании
     </p>
   );

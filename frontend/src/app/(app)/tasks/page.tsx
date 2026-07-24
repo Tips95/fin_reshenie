@@ -80,7 +80,7 @@ export default function TasksPage() {
       />
 
       {error && (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <p className="alert-danger">
           {error}
         </p>
       )}
@@ -119,7 +119,7 @@ export default function TasksPage() {
             </p>
             <Link
               href={`/clients?procedure_stage=${stageFilter}`}
-              className="text-sm font-semibold text-brand-700 hover:text-brand-600"
+              className="link-brand text-sm"
             >
               Открыть клиентов →
             </Link>
@@ -168,7 +168,7 @@ export default function TasksPage() {
                       {task.client_name && (
                         <Link
                           href={`/clients/${task.client_id}`}
-                          className="font-medium text-brand-700 hover:text-brand-600"
+                          className="link-brand font-medium"
                         >
                           {task.client_name}
                         </Link>

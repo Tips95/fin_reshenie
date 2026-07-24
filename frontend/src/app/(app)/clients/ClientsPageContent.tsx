@@ -51,7 +51,7 @@ function SortableTh({
         type="button"
         onClick={() => onSort(field)}
         className={`inline-flex items-center gap-1 font-semibold transition-colors ${
-          active ? "text-brand-700" : "text-slate-700 hover:text-brand-600"
+          active ? "text-brand-700" : "text-muted hover:text-brand-600"
         }`}
       >
         {label}
@@ -291,21 +291,15 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       <div className="flex flex-wrap gap-2">
         <Link
           href="/clients/collection"
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            isCollectionView
-              ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
+          className={
+            isCollectionView ? "tab-pill-active bg-status-warning-bg text-status-warning-text ring-status-warning-border" : "tab-pill-inactive"
+          }
         >
           Сбор документов
         </Link>
         <Link
           href="/clients/contracts"
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            !isCollectionView
-              ? "bg-brand-100 text-brand-900 ring-1 ring-brand-200"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
+          className={!isCollectionView ? "tab-pill-active" : "tab-pill-inactive"}
         >
           Договоры
         </Link>
@@ -318,10 +312,10 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               key={option.value}
               type="button"
               onClick={() => setCollectionView(option.value)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
                 collectionView === option.value
-                  ? "bg-amber-600 text-white"
-                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                  ? "bg-status-warning-solid text-white shadow-soft"
+                  : "bg-surface text-muted ring-1 ring-border hover:bg-surface-muted"
               }`}
             >
               {option.label}
@@ -351,22 +345,14 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         }
       />
 
-      {exportError && (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {exportError}
-        </p>
-      )}
+      {exportError && <p className="alert-danger">{exportError}</p>}
 
-      {updateError && (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {updateError}
-        </p>
-      )}
+      {updateError && <p className="alert-danger">{updateError}</p>}
 
       <Card>
         <div className="flex flex-wrap gap-4">
           <div className="min-w-[220px] flex-1">
-            <label className="mb-1 block text-sm text-slate-600">Поиск по ФИО</label>
+            <label className="mb-1 block text-sm text-muted">Поиск по ФИО</label>
             <Input
               placeholder="Иванов Иван"
               value={nameSearch}
@@ -374,7 +360,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             />
           </div>
           <div className="min-w-[220px] flex-1">
-            <label className="mb-1 block text-sm text-slate-600">Поиск по телефону</label>
+            <label className="mb-1 block text-sm text-muted">Поиск по телефону</label>
             <Input
               placeholder="+7 928 000-00-00"
               value={phoneSearch}
@@ -382,7 +368,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             />
           </div>
           <div className="min-w-[180px]">
-            <label className="mb-1 block text-sm text-slate-600">Статус</label>
+            <label className="mb-1 block text-sm text-muted">Статус</label>
             <Select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -396,7 +382,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           </div>
           {!isCollectionView && (
             <div className="min-w-[180px]">
-              <label className="mb-1 block text-sm text-slate-600">Этап процедуры</label>
+              <label className="mb-1 block text-sm text-muted">Этап процедуры</label>
               <Select
                 value={procedureFilter}
                 onChange={(e) => setProcedureFilter(e.target.value)}
@@ -411,7 +397,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             </div>
           )}
           <div className="min-w-[180px]">
-            <label className="mb-1 block text-sm text-slate-600">Месяц договора</label>
+            <label className="mb-1 block text-sm text-muted">Месяц договора</label>
             <Input
               type="month"
               value={contractMonth}
@@ -420,7 +406,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           </div>
           {!isCollectionView && (
             <div className="min-w-[180px]">
-              <label className="mb-1 block text-sm text-slate-600">Платёж в месяце</label>
+              <label className="mb-1 block text-sm text-muted">Платёж в месяце</label>
               <Input
                 type="month"
                 value={dueMonth}
@@ -430,7 +416,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           )}
           {!isCollectionView && (
             <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-foreground">
                 <input
                   type="checkbox"
                   checked={overdueFilter}
@@ -442,7 +428,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           )}
           {user?.role === "owner" && managers.length > 0 && (
             <div className="min-w-[180px]">
-              <label className="mb-1 block text-sm text-slate-600">Менеджер</label>
+              <label className="mb-1 block text-sm text-muted">Менеджер</label>
               <Select
                 value={managerFilter}
                 onChange={(e) => setManagerFilter(e.target.value)}
@@ -499,9 +485,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             <Button type="submit" className="md:col-span-2">
               Создать (сбор документов)
             </Button>
-            {createError && (
-              <p className="text-sm text-red-600 md:col-span-2">{createError}</p>
-            )}
+            {createError && <p className="text-sm text-status-danger-text md:col-span-2">{createError}</p>}
           </form>
         </Card>
       )}
@@ -510,7 +494,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         {loading ? (
           <LoadingState text="Загрузка клиентов..." />
         ) : clients.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+          <p className="rounded-lg bg-surface-muted px-4 py-8 text-center text-sm text-muted">
             {workspaceConfig.emptyText}
           </p>
         ) : (
@@ -566,20 +550,20 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   return (
                   <tr
                     key={client.id}
-                    className={isOverdue ? "bg-rose-50/80 hover:bg-rose-100/70" : undefined}
+                    className={isOverdue ? "is-overdue" : undefined}
                   >
                     <td>
                       <Link
                         href={`/clients/${client.id}`}
-                        className={`font-semibold hover:text-brand-600 ${
-                          isOverdue ? "text-rose-700" : "text-brand-700"
+                        className={`link-brand ${
+                          isOverdue ? "text-status-danger-text hover:text-status-danger-solid" : ""
                         }`}
                       >
                         {formatShortName(client.full_name)}
                       </Link>
                     </td>
-                    <td className="text-slate-600">{client.phone}</td>
-                    <td className="text-slate-600">
+                    <td className="text-muted">{client.phone}</td>
+                    <td className="text-muted">
                       {canEdit ? (
                         <Input
                           type="date"
@@ -599,7 +583,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       )}
                     </td>
                     {canSeeClientAmounts && !isCollectionView && isFullClient(client) && (
-                      <td className="font-medium text-slate-800">
+                      <td className="font-medium text-foreground">
                         {client.contract_total
                           ? formatMoney(client.contract_total)
                           : "—"}
@@ -644,7 +628,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         ) : isFullClient(client) && client.assigned_manager_id === user?.id ? (
                           <Badge tone="success">За вами</Badge>
                         ) : (
-                          <span className="text-xs text-slate-500">Назначен</span>
+                          <span className="text-xs text-muted">Назначен</span>
                         )}
                       </td>
                     )}
@@ -660,7 +644,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                               <Badge tone="warning">Ожидает оплату</Badge>
                             )}
                             {client.document_collection_paid_date && (
-                              <span className="text-xs text-slate-500">
+                              <span className="text-xs text-muted">
                                 {formatDate(client.document_collection_paid_date)}
                               </span>
                             )}
@@ -732,7 +716,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         {isFullClient(client) && client.has_overdue ? (
                           <Badge tone="danger">Есть</Badge>
                         ) : (
-                          <span className="text-sm text-slate-400">—</span>
+                          <span className="text-sm text-muted">—</span>
                         )}
                       </td>
                     )}

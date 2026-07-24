@@ -88,7 +88,7 @@ export default function AnalyticsPage() {
           <select
             value={months}
             onChange={(e) => setMonths(Number(e.target.value))}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-brand-400"
+            className="interactive rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-soft outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
           >
             <option value={3}>3 месяца</option>
             <option value={6}>6 месяцев</option>
@@ -306,7 +306,7 @@ export default function AnalyticsPage() {
                       <td>
                         <Link
                           href={`/clients/${item.client_id}`}
-                          className="font-semibold text-brand-700 hover:text-brand-600"
+                          className="link-brand"
                         >
                           {formatShortName(item.client_name)}
                         </Link>
@@ -332,7 +332,7 @@ export default function AnalyticsPage() {
             <select
               value={sortField}
               onChange={(e) => setSortField(e.target.value as ProfitSortField)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-brand-400"
+              className="interactive rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-soft outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
             >
               <option value="profit">По прибыли</option>
               <option value="collected_total">По поступлениям</option>
@@ -375,11 +375,11 @@ export default function AnalyticsPage() {
 function ProfitRow({ item }: { item: ClientProfitItem }) {
   const profit = Number(item.profit);
   return (
-    <tr className={item.has_overdue ? "bg-rose-50/70" : undefined}>
+    <tr className={item.has_overdue ? "is-overdue" : undefined}>
       <td>
         <Link
           href={`/clients/${item.client_id}`}
-          className="font-semibold text-brand-700 hover:text-brand-600"
+          className="link-brand"
         >
           {formatShortName(item.full_name)}
         </Link>
@@ -387,7 +387,7 @@ function ProfitRow({ item }: { item: ClientProfitItem }) {
       <td className="text-slate-600">{formatDate(item.contract_date)}</td>
       <td className="font-medium text-slate-800">{formatMoney(item.collected_total)}</td>
       <td className="text-slate-600">{formatMoney(item.mandatory_paid_total)}</td>
-      <td className={`font-semibold ${profit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+      <td className={`font-semibold ${profit >= 0 ? "text-status-success-text" : "text-status-danger-text"}`}>
         {formatMoney(item.profit)}
       </td>
       <td className="text-slate-600">{formatMoney(item.schedule_remainder)}</td>

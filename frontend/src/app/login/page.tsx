@@ -42,8 +42,8 @@ export default function LoginPage() {
         <div className="mb-4 flex items-center gap-2">
           <LogoMark />
           <div>
-            <h1 className="text-base font-semibold text-slate-900">{APP_NAME}</h1>
-            <p className="text-xs text-slate-500">Выберите контур и войдите</p>
+            <h1 className="text-base font-semibold text-foreground">{APP_NAME}</h1>
+            <p className="text-xs text-muted">Выберите контур и войдите</p>
           </div>
         </div>
 
@@ -51,22 +51,22 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => setWorkspace("legal")}
-            className={`rounded border px-2 py-1.5 text-xs font-medium ${
+            className={
               workspace === "legal"
-                ? "border-brand-700 bg-brand-700 text-white"
-                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
+                ? "interactive rounded-md border border-brand-700 bg-brand-700 px-2 py-1.5 text-xs font-medium text-white shadow-soft hover:bg-brand-800"
+                : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
+            }
           >
             Юрфирма
           </button>
           <button
             type="button"
             onClick={() => setWorkspace("retail")}
-            className={`rounded border px-2 py-1.5 text-xs font-medium ${
+            className={
               workspace === "retail"
-                ? "border-slate-700 bg-slate-700 text-white"
-                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
+                ? "interactive rounded-md border border-brand-700 bg-brand-700 px-2 py-1.5 text-xs font-medium text-white shadow-soft hover:bg-brand-800"
+                : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
+            }
           >
             Товарная рассрочка
           </button>
@@ -74,7 +74,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="mb-0.5 block text-xs font-medium text-slate-600">
+            <label className="mb-0.5 block text-xs font-medium text-muted">
               Email или телефон
             </label>
             <Input
@@ -85,7 +85,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-0.5 block text-xs font-medium text-slate-600">Пароль</label>
+            <label className="mb-0.5 block text-xs font-medium text-muted">Пароль</label>
             <Input
               type="password"
               value={password}
@@ -93,17 +93,13 @@ export default function LoginPage() {
               required
             />
           </div>
-          {error && (
-            <p className="rounded border border-rose-300 bg-rose-50 px-2 py-1.5 text-xs text-rose-800">
-              {error}
-            </p>
-          )}
+          {error && <p className="alert-danger px-2 py-1.5 text-xs">{error}</p>}
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? "Вход..." : "Войти"}
           </Button>
         </form>
 
-        <p className="mt-3 text-[11px] text-slate-500">
+        <p className="mt-3 text-[11px] text-muted">
           {workspace === "legal"
             ? "Демо: admin@reshenie.local / admin123"
             : "Админ: admin@retail.local / admin123 · Инвестор: investor1@retail.local / investor123"}
