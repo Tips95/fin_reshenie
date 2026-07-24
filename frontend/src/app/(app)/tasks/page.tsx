@@ -73,7 +73,7 @@ export default function TasksPage() {
   if (loading) return <LoadingState text="Загрузка задач..." />;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Задачи и воронка"
         subtitle="Звонки по просрочкам: клиенты платят с 25 числа до конца месяца"
@@ -107,7 +107,7 @@ export default function TasksPage() {
                 <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                   {procedureStageLabel(item.stage)}
                 </p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{item.count}</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-900">{item.count}</p>
               </button>
             );
           })}

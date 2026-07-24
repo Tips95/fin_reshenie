@@ -81,6 +81,8 @@ const config: Config = {
         "page-x": "var(--space-page-x)",
         "page-y": "var(--space-page-y)",
         card: "var(--space-card)",
+        stack: "var(--space-stack)",
+        section: "var(--space-section)",
       },
       transitionDuration: {
         DEFAULT: "150ms",

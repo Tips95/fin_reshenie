@@ -184,7 +184,7 @@ export default function UsersPage() {
   const activeCount = users.filter((item) => item.is_active).length;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Пользователи"
         subtitle="Команда организации, роли и доступ к системе"
@@ -195,18 +195,18 @@ export default function UsersPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
         <Card>
           <p className="text-sm text-slate-500">Всего в системе</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{users.length}</p>
+          <p className="mt-1 text-lg font-bold text-slate-900">{users.length}</p>
         </Card>
         <Card>
           <p className="text-sm text-slate-500">Активных</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-700">{activeCount}</p>
+          <p className="mt-1 text-lg font-bold text-emerald-700">{activeCount}</p>
         </Card>
         <Card>
           <p className="text-sm text-slate-500">Деактивированных</p>
-          <p className="mt-1 text-2xl font-bold text-slate-700">{users.length - activeCount}</p>
+          <p className="mt-1 text-lg font-bold text-slate-700">{users.length - activeCount}</p>
         </Card>
       </div>
 
@@ -222,7 +222,7 @@ export default function UsersPage() {
             title="Новый пользователь"
             description="Для входа используется email или телефон и пароль"
           />
-          <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-2">
+          <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2">
             <Input
               placeholder="ФИО"
               value={form.full_name}
@@ -276,7 +276,7 @@ export default function UsersPage() {
         {loading ? (
           <LoadingState text="Загрузка пользователей..." />
         ) : users.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+          <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
             Пользователи не найдены
           </p>
         ) : (
@@ -301,7 +301,7 @@ export default function UsersPage() {
                     return (
                       <tr key={item.id} className="is-editing">
                         <td colSpan={6}>
-                          <div className="grid gap-4 py-2 md:grid-cols-2 xl:grid-cols-3">
+                          <div className="grid gap-2 py-2 md:grid-cols-2 xl:grid-cols-3">
                             <FormField label="ФИО">
                               <Input
                                 value={editForm.full_name}

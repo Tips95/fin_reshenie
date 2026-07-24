@@ -65,8 +65,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen mesh-bg">
       <div className="mx-auto flex min-h-screen max-w-[1440px]">
-        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-brand-900 bg-brand-950 px-3 py-3 text-white shadow-card lg:flex">
-          <div className="flex items-center gap-2 border-b border-brand-800 pb-3">
+        <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col border-r border-brand-900 bg-brand-950 px-2 py-2 text-white shadow-card lg:flex">
+          <div className="flex items-center gap-2 border-b border-brand-800 pb-2">
             <LogoMark />
             <div>
               <p className="text-sm font-semibold leading-tight">{APP_NAME}</p>
@@ -74,7 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <nav className="mt-3 space-y-0.5">
+          <nav className="mt-2 space-y-0.5">
             {visibleNav.map((item) => {
               const active = isNavActive(pathname, item.href);
               return (
@@ -117,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border bg-surface px-page-x py-2 shadow-soft lg:px-4">
+          <header className="sticky top-0 z-20 border-b border-border bg-surface px-page-x py-1.5 shadow-soft lg:px-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 lg:hidden">
                 <LogoMark className="h-7 w-7 text-[10px]" />
@@ -161,7 +161,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           </header>
 
-          <main className="flex-1 px-page-x py-page-y lg:px-4 lg:py-4">{children}</main>
+          <main className="flex-1 px-page-x py-page-y lg:px-3 lg:py-2">{children}</main>
         </div>
       </div>
     </div>

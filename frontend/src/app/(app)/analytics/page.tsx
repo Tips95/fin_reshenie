@@ -80,7 +80,7 @@ export default function AnalyticsPage() {
   if (!data) return <LoadingState text="Не удалось загрузить аналитику" />;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Аналитика"
         subtitle="Прибыль по клиентам и динамика поступлений"
@@ -272,7 +272,7 @@ export default function AnalyticsPage() {
             title="Комиссии менеджеров за сбор документов"
             description="1 000 ₽ за каждого клиента с оплаченным сбором документов"
           />
-          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <div className="mb-6 grid gap-2 sm:grid-cols-2">
             <StatCard
               label="Всего комиссий"
               value={formatMoney(commissions.total_commission)}
@@ -285,7 +285,7 @@ export default function AnalyticsPage() {
             />
           </div>
           {commissions.items.length === 0 ? (
-            <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+            <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
               Пока нет оплаченных сборов документов
             </p>
           ) : (
@@ -342,7 +342,7 @@ export default function AnalyticsPage() {
           }
         />
         {sortedProfits.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+          <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
             Нет данных для аналитики
           </p>
         ) : (

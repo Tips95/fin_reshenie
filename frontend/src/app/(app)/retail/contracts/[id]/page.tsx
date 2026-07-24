@@ -170,7 +170,7 @@ export default function RetailContractDetailPage() {
   if (!contract) return <EmptyState>Договор не найден</EmptyState>;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title={contract.product_name}
         subtitle={`${contract.client_name} · ${contract.investor_name}`}
@@ -187,7 +187,7 @@ export default function RetailContractDetailPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Цена товара" value={formatMoney(contract.product_price)} tone="default" />
         <StatCard label="Наценка" value={`${contract.markup_percent}%`} tone="brand" />
         <StatCard label="Итого" value={formatMoney(contract.total_amount)} tone="default" />
@@ -228,7 +228,7 @@ export default function RetailContractDetailPage() {
 
       <Card>
         <SectionTitle title="Внести платёж" description="Первоначальный взнос идёт в кассу инвестора" />
-        <form onSubmit={handlePayment} className="grid gap-4 md:grid-cols-2">
+        <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
           <FormField label="Тип платежа">
             <Select
               value={paymentForm.payment_type}
@@ -284,7 +284,7 @@ export default function RetailContractDetailPage() {
       {contract.status === "overdue" && (
         <Card>
           <SectionTitle title="Работа с просрочкой" />
-          <form onSubmit={handleOverdueLog} className="grid gap-4 md:grid-cols-2">
+          <form onSubmit={handleOverdueLog} className="grid gap-2 md:grid-cols-2">
             <Input
               type="date"
               value={overdueForm.action_date}
@@ -318,7 +318,7 @@ export default function RetailContractDetailPage() {
           </form>
           <div className="mt-6 space-y-3">
             {contract.overdue_logs.map((entry) => (
-              <div key={entry.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm">
+              <div key={entry.id} className="rounded-md border border-slate-100 bg-slate-50 p-2.5 text-xs">
                 <p className="font-medium text-slate-900">{formatDate(entry.action_date)} · {entry.status}</p>
                 <p className="mt-1 text-slate-600">{entry.comment}</p>
               </div>

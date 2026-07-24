@@ -76,7 +76,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Тарифная сетка"
         subtitle="Управление прайсом организации и графиками рассрочки"
@@ -84,7 +84,7 @@ export default function PricingPage() {
 
       <Card variant="accent">
         <SectionTitle title="Добавить тариф" />
-        <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           <Input
             placeholder="Мин. сумма"
             value={form.min_amount}

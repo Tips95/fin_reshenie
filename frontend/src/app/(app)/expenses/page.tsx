@@ -393,13 +393,13 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Ежемесячные расходы"
         subtitle="Зарплатный проект, производственные расходы и учёт выплат"
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3">
         <StatCard label="Зарплатный проект" value={formatMoney(salaryTotal)} tone="warning" />
         <StatCard
           label="Производственные расходы"
@@ -433,7 +433,7 @@ export default function ExpensesPage() {
 
       <Card variant="accent">
         <SectionTitle title="Добавить расход" />
-        <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           <Input
             placeholder="Название (ФИО или статья)"
             value={form.name}
@@ -499,7 +499,7 @@ export default function ExpensesPage() {
       </Card>
 
       {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="alert-danger">
           {error}
         </p>
       )}

@@ -47,7 +47,7 @@ export default function RetailCapitalPage() {
   if (loading) return <LoadingState text="Загрузка..." />;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Мой вклад"
         subtitle="Укажите сумму, которую вы готовы инвестировать в договоры"
@@ -58,9 +58,9 @@ export default function RetailCapitalPage() {
           title="Сумма вклада"
           description="Эта сумма видна руководителю при назначении договоров"
         />
-        <form onSubmit={handleSave} className="max-w-md space-y-4">
+        <form onSubmit={handleSave} className="max-w-md space-y-2">
           <FormField label="Текущий вклад">
-            <p className="text-lg font-semibold text-slate-900">
+            <p className="field-value">
               {formatMoney(user?.investment_amount ?? amount ?? "0")}
             </p>
           </FormField>

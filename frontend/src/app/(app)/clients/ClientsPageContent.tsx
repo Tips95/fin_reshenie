@@ -284,7 +284,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   }
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       {toast && (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       )}
@@ -350,7 +350,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       {updateError && <p className="alert-danger">{updateError}</p>}
 
       <Card>
-        <div className="flex flex-wrap gap-4">
+        <div className="filter-grid">
           <div className="min-w-[220px] flex-1">
             <label className="mb-1 block text-sm text-muted">Поиск по ФИО</label>
             <Input
@@ -451,7 +451,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             title="Новый клиент"
             description="Сначала оформляется сбор документов (13 000 ₽). Банкротство — после завершения сбора."
           />
-          <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-2">
+          <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2">
             <Input
               placeholder="ФИО"
               value={form.full_name}
@@ -494,7 +494,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         {loading ? (
           <LoadingState text="Загрузка клиентов..." />
         ) : clients.length === 0 ? (
-          <p className="rounded-lg bg-surface-muted px-4 py-8 text-center text-sm text-muted">
+          <p className="rounded-lg bg-surface-muted px-3 py-4 text-center text-sm text-muted">
             {workspaceConfig.emptyText}
           </p>
         ) : (

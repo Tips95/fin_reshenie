@@ -113,7 +113,7 @@ export default function RetailClientsPage() {
   if (loading) return <LoadingState text="Загрузка клиентов..." />;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title={isOwner ? "Клиенты" : "Мои клиенты"}
         subtitle={
@@ -147,7 +147,7 @@ export default function RetailClientsPage() {
       {isOwner && showClientForm && (
         <Card>
           <SectionTitle title="Создать клиента" />
-          <form onSubmit={handleCreateClient} className="grid gap-4 md:grid-cols-2">
+          <form onSubmit={handleCreateClient} className="grid gap-2 md:grid-cols-2">
             <Input placeholder="ФИО" value={clientForm.full_name} onChange={(e) => setClientForm({ ...clientForm, full_name: e.target.value })} required />
             <Input placeholder="Телефон" value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} required />
             <Input placeholder="Паспорт" value={clientForm.passport} onChange={(e) => setClientForm({ ...clientForm, passport: e.target.value })} required />
@@ -163,12 +163,12 @@ export default function RetailClientsPage() {
       {isOwner && showContractForm && (
         <Card>
           <SectionTitle title="Создать договор" description="Назначьте инвестора — взнос пойдёт в его кассу" />
-          <form onSubmit={handleCreateContract} className="grid gap-4 md:grid-cols-2">
+          <form onSubmit={handleCreateContract} className="grid gap-2 md:grid-cols-2">
             <FormField label="Клиент">
               <select
                 value={contractForm.retail_client_id}
                 onChange={(e) => setContractForm({ ...contractForm, retail_client_id: e.target.value })}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                className="w-full rounded-md border border-slate-200 px-3 py-2"
                 required
               >
                 <option value="">Выберите клиента</option>
@@ -181,7 +181,7 @@ export default function RetailClientsPage() {
               <select
                 value={contractForm.investor_id}
                 onChange={(e) => setContractForm({ ...contractForm, investor_id: e.target.value })}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                className="w-full rounded-md border border-slate-200 px-3 py-2"
                 required
               >
                 <option value="">Выберите инвестора</option>
@@ -198,7 +198,7 @@ export default function RetailClientsPage() {
               <select
                 value={contractForm.term_months}
                 onChange={(e) => setContractForm({ ...contractForm, term_months: e.target.value })}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                className="w-full rounded-md border border-slate-200 px-3 py-2"
               >
                 {rates.map((rate) => (
                   <option key={rate.id} value={rate.term_months}>

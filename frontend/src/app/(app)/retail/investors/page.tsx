@@ -110,7 +110,7 @@ export default function RetailInvestorsPage() {
   if (loading) return <LoadingState text="Загрузка инвесторов..." />;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Инвесторы"
         subtitle="Управление инвесторами и суммами их вкладов"
@@ -124,7 +124,7 @@ export default function RetailInvestorsPage() {
       {showForm && (
         <Card>
           <SectionTitle title="Новый инвестор" />
-          <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-2">
+          <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2">
             <Input
               placeholder="ФИО"
               value={form.full_name}

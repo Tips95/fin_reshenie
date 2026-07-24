@@ -39,7 +39,7 @@ export default function RetailContractsPage() {
   if (loading) return <LoadingState text="Загрузка договоров..." />;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Договоры"
         subtitle="Каждый договор привязан к инвестору"
@@ -47,7 +47,7 @@ export default function RetailContractsPage() {
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
           >
             <option value="">Все статусы</option>
             <option value="active">Активные</option>
@@ -59,7 +59,7 @@ export default function RetailContractsPage() {
 
       <Card>
         {contracts.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">Договоров пока нет</p>
+          <p className="py-4 text-center text-xs text-muted">Договоров пока нет</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">

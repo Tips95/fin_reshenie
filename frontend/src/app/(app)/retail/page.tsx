@@ -28,7 +28,7 @@ export default function RetailDashboardPage() {
   const isEmpty = data.contracts_count === 0;
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       <PageHeader
         title="Товарная рассрочка"
         subtitle={user?.role === "owner" ? "Сводка по всем инвесторам" : "Мои договоры и касса"}
@@ -44,14 +44,14 @@ export default function RetailDashboardPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Договоров" value={data.contracts_count} tone="brand" />
         <StatCard label="Активных" value={data.active_count} tone="success" />
         <StatCard label="Просрочка" value={data.overdue_count} tone="danger" />
         <StatCard label="К оплате" value={formatMoney(data.remainder_total)} tone="warning" />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Сумма договоров" value={formatMoney(data.total_amount)} tone="default" />
         <StatCard label="Получено" value={formatMoney(data.collected_total)} tone="success" />
         <StatCard label="Первоначальные взносы" value={formatMoney(data.down_payment_total)} tone="default" />
@@ -60,7 +60,7 @@ export default function RetailDashboardPage() {
       {user?.role === "investor" && (
         <Card>
           <SectionTitle title="Мой вклад" description="Сумма, которую вы инвестируете в договоры" />
-          <p className="text-2xl font-bold text-slate-900">
+          <p className="text-lg font-bold text-slate-900">
             {formatMoney(user.investment_amount ?? "0")}
           </p>
           <Link

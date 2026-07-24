@@ -871,7 +871,7 @@ export default function ClientDetailPage() {
   const scheduleDraftDirty = canEditSchedule && isScheduleDraftDirty(scheduleDraft, schedule);
 
   return (
-    <div className="space-y-4">
+    <div className="page-stack">
       {toast && (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       )}
@@ -961,7 +961,7 @@ export default function ClientDetailPage() {
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-lg font-semibold text-slate-900">{client.full_name}</p>
+              <p className="field-value">{client.full_name}</p>
               <Button
                 type="button"
                 variant="secondary"
@@ -1006,7 +1006,7 @@ export default function ClientDetailPage() {
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-lg font-semibold text-slate-900">{client.phone}</p>
+              <p className="field-value">{client.phone}</p>
               <Button
                 type="button"
                 variant="secondary"
@@ -1046,7 +1046,7 @@ export default function ClientDetailPage() {
               {engagementStageLabel(client.engagement_stage)}
             </Badge>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             <FormField label="Дата договора (1-й месяц графика)">
               <Input
                 type="date"
@@ -1123,8 +1123,8 @@ export default function ClientDetailPage() {
             }
           />
           {!isBankruptcy && docCollection.status === "pending" && editingDocCollectionAmounts ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="page-stack">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <FormField label="В кассу, ₽">
                   <Input
                     type="number"
@@ -1168,7 +1168,7 @@ export default function ClientDetailPage() {
                   />
                 </FormField>
                 <FormField label="Итого к оплате">
-                  <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-lg font-semibold text-slate-900">
+                  <p className="rounded-md border border-slate-200 bg-white px-3 py-2 field-value">
                     {formatMoney(
                       Number(docCollectionAmountForm.collection_fee || 0) +
                         Number(docCollectionAmountForm.notary_fee || 0) +
@@ -1203,7 +1203,7 @@ export default function ClientDetailPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="К оплате" value={formatMoney(docCollection.total_amount)} tone="brand" />
                 <StatCard label="В кассу" value={formatMoney(docCollection.collection_fee)} tone="default" />
                 <StatCard label="Нотариус" value={formatMoney(docCollection.notary_fee)} tone="default" />
@@ -1264,12 +1264,12 @@ export default function ClientDetailPage() {
             </div>
           )}
           {!isBankruptcy && canRecordDocCollectionPayment && docCollection.status === "paid" && (
-            <form onSubmit={handleConvertToBankruptcy} className="mt-6 space-y-4 border-t border-slate-200 pt-6">
+            <form onSubmit={handleConvertToBankruptcy} className="mt-3 space-y-2 border-t border-border pt-3">
               <SectionTitle
                 title="Перевести на банкротство"
                 description="После успешного сбора документов укажите сумму долга — создастся график рассрочки"
               />
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2 md:grid-cols-2">
                 <FormField label="Сумма для подбора тарифа (от 300 000 ₽)">
                   <Input
                     type="number"
@@ -1301,7 +1301,7 @@ export default function ClientDetailPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Дата договора" value={formatDate(client.contract_date)} tone="brand" />
         {detail && isBankruptcy ? (
           <>
@@ -1331,7 +1331,7 @@ export default function ClientDetailPage() {
             title="Прибыль по клиенту"
             description="Получено по платежам минус обязательные расходы"
           />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             <StatCard label="Получено" value={formatMoney(collectedTotal)} tone="success" />
             <StatCard
               label="Обязательные расходы"
@@ -1391,7 +1391,7 @@ export default function ClientDetailPage() {
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-2xl font-bold text-slate-900">{formatMoney(contractTotal)}</p>
+              <p className="text-lg font-bold text-slate-900">{formatMoney(contractTotal)}</p>
               <Button
                 type="button"
                 variant="secondary"
@@ -1412,7 +1412,7 @@ export default function ClientDetailPage() {
           {detail.matched_tier && (
             <Card variant="accent">
               <SectionTitle title="Подобранный тариф" />
-              <div className="grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <p className="text-slate-500">Диапазон долга</p>
                   <p className="mt-1 font-medium text-slate-900">
@@ -1896,7 +1896,7 @@ export default function ClientDetailPage() {
                   title="Зафиксировать платёж вручную"
                   description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
                 />
-                <form onSubmit={handlePayment} className="grid gap-4 md:grid-cols-2">
+                <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
                   <FormField label="Месяц графика">
                     <Select
                       value={paymentForm.payment_schedule_id}
@@ -1944,7 +1944,7 @@ export default function ClientDetailPage() {
                   title="Оформить возврат"
                   description="Возврат уменьшает оплаченную сумму по выбранному месяцу графика."
                 />
-                <form onSubmit={handleRefund} className="grid gap-4 md:grid-cols-2">
+                <form onSubmit={handleRefund} className="grid gap-2 md:grid-cols-2">
                   <FormField label="Месяц графика">
                     <Select
                       value={refundForm.payment_schedule_id}
