@@ -56,6 +56,7 @@ async function parseError(response: Response): Promise<string> {
     return "Ошибка запроса";
   } catch {
     if (response.status === 404) return "Сервис не найден. Перезапустите backend.";
+    if (response.status >= 500) return "Ошибка сервера. Попробуйте позже.";
     return "Ошибка запроса";
   }
 }
@@ -156,30 +157,27 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
 }
 
 export async function uploadFile<T = unknown>(path: string, file: File, fieldName = "file"): Promise<T> {
-  const formData = new FormData();
-  formData.append(fieldName, file);
+  const send = async (): Promise<Response> => {
+    const formData = new FormData();
+    formData.append(fieldName, file);
+    const headers = new Headers();
+    const accessToken = getAccessToken();
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+    return fetch(getApiUrl(path), {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+  };
 
-  const headers = new Headers();
-  const accessToken = getAccessToken();
-  if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
-  }
-
-  let response = await fetch(getApiUrl(path), {
-    method: "POST",
-    headers,
-    body: formData,
-  });
+  let response = await send();
 
   if (response.status === 401 && getRefreshToken()) {
     const refreshed = await refreshTokens();
     if (refreshed) {
-      headers.set("Authorization", `Bearer ${getAccessToken()}`);
-      response = await fetch(getApiUrl(path), {
-        method: "POST",
-        headers,
-        body: formData,
-      });
+      response = await send();
     }
   }
 
@@ -214,9 +212,12 @@ export const retailApi = {
   updateClient: (id: string, data: Record<string, unknown>) =>
     apiFetch<RetailClient>(`/retail/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteClient: (id: string) => apiFetch<void>(`/retail/clients/${id}`, { method: "DELETE" }),
-  listContracts: (status?: string) => {
-    const query = status ? `?status_filter=${status}` : "";
-    return apiFetch<RetailContractBrief[]>(`/retail/contracts${query}`);
+  listContracts: (status?: string, retailClientId?: string) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status_filter", status);
+    if (retailClientId) params.set("retail_client_id", retailClientId);
+    const query = params.toString();
+    return apiFetch<RetailContractBrief[]>(`/retail/contracts${query ? `?${query}` : ""}`);
   },
   getContract: (id: string) => apiFetch<RetailContractDetail>(`/retail/contracts/${id}`),
   createContract: (data: Record<string, unknown>) =>

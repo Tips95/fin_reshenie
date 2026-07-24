@@ -189,3 +189,15 @@ export function collectErrors(fields: Record<string, string | null>): Record<str
 export function hasErrors(errors: Record<string, string>): boolean {
   return Object.keys(errors).length > 0;
 }
+
+const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
+
+export function validatePdfFile(file: File): string | null {
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    return "Допустим только файл PDF";
+  }
+  if (file.size > MAX_PDF_SIZE_BYTES) {
+    return "Файл слишком большой (максимум 10 МБ)";
+  }
+  return null;
+}

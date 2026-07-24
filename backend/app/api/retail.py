@@ -88,6 +88,10 @@ def _ensure_investor_client_access(db: Session, user: User, client_id: UUID) -> 
 
 
 def _serialize_client(db: Session, user: User, client: RetailClient) -> RetailClientResponse:
+    passport_pdf_path = getattr(client, "passport_pdf_path", None)
+    passport_pdf_filename = getattr(client, "passport_pdf_filename", None)
+    guarantor_passport_pdf_path = getattr(client, "guarantor_passport_pdf_path", None)
+    guarantor_passport_pdf_filename = getattr(client, "guarantor_passport_pdf_filename", None)
     return RetailClientResponse(
         id=client.id,
         organization_id=client.organization_id,
@@ -99,10 +103,10 @@ def _serialize_client(db: Session, user: User, client: RetailClient) -> RetailCl
         guarantor_phone=client.guarantor_phone,
         guarantor_passport=format_passport_display(client.guarantor_passport),
         contracts_count=_client_contracts_count(db, user, client.id),
-        has_passport_pdf=bool(client.passport_pdf_path),
-        passport_pdf_filename=client.passport_pdf_filename,
-        has_guarantor_passport_pdf=bool(client.guarantor_passport_pdf_path),
-        guarantor_passport_pdf_filename=client.guarantor_passport_pdf_filename,
+        has_passport_pdf=bool(passport_pdf_path),
+        passport_pdf_filename=passport_pdf_filename,
+        has_guarantor_passport_pdf=bool(guarantor_passport_pdf_path),
+        guarantor_passport_pdf_filename=guarantor_passport_pdf_filename,
     )
 
 
@@ -406,6 +410,7 @@ def delete_guarantor_passport_pdf(
 @router.get("/contracts", response_model=list[RetailContractBrief])
 def list_contracts(
     status_filter: RetailContractStatus | None = None,
+    retail_client_id: UUID | None = None,
     current_user: User = Depends(require_retail_user),
     db: Session = Depends(get_db),
 ) -> list[RetailContractBrief]:
@@ -427,6 +432,8 @@ def list_contracts(
     stmt = apply_investor_contract_filter(stmt, current_user)
     if status_filter is not None:
         stmt = stmt.where(RetailContract.status == status_filter)
+    if retail_client_id is not None:
+        stmt = stmt.where(RetailContract.retail_client_id == retail_client_id)
     contracts = list(db.scalars(stmt))
     result: list[RetailContractBrief] = []
     for contract in contracts:

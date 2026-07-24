@@ -16,6 +16,7 @@ import {
   PhoneInput,
   SectionTitle,
 } from "@/components/ui";
+import { PdfDocumentField } from "@/components/PdfDocumentField";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatMoney, formatShortName } from "@/lib/format";
 import { PHONE_PREFIX } from "@/lib/phone";
@@ -28,6 +29,7 @@ import {
   validateAddress,
   validateFullName,
   validatePassport,
+  validatePdfFile,
   validatePhone,
   validatePositiveAmount,
   validateRequiredDate,
@@ -49,6 +51,11 @@ export default function RetailClientsPage() {
   const [clientFormErrors, setClientFormErrors] = useState<Record<string, string>>({});
   const [contractFormErrors, setContractFormErrors] = useState<Record<string, string>>({});
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [clientPassportFile, setClientPassportFile] = useState<File | null>(null);
+  const [guarantorPassportFile, setGuarantorPassportFile] = useState<File | null>(null);
+  const [clientPassportFileError, setClientPassportFileError] = useState<string | null>(null);
+  const [guarantorPassportFileError, setGuarantorPassportFileError] = useState<string | null>(null);
   const [clientForm, setClientForm] = useState({
     full_name: "",
     phone: PHONE_PREFIX,
@@ -108,6 +115,8 @@ export default function RetailClientsPage() {
       return;
     }
     setClientFormErrors({});
+    setCreatingClient(true);
+    let createdId: string | null = null;
     try {
       const created = await retailApi.createClient({
         full_name: clientForm.full_name.trim().replace(/\s+/g, " "),
@@ -118,10 +127,33 @@ export default function RetailClientsPage() {
         guarantor_passport: formatPassport(clientForm.guarantor_passport),
         address: clientForm.address.trim(),
       });
+      createdId = created.id;
+
+      if (clientPassportFile) {
+        await retailApi.uploadClientPassportPdf(created.id, clientPassportFile);
+      }
+      if (guarantorPassportFile) {
+        await retailApi.uploadGuarantorPassportPdf(created.id, guarantorPassportFile);
+      }
+
       setShowClientForm(false);
+      setClientPassportFile(null);
+      setGuarantorPassportFile(null);
+      setClientPassportFileError(null);
+      setGuarantorPassportFileError(null);
       router.push(`/retail/clients/${created.id}`);
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Не удалось создать клиента");
+      const message = err instanceof ApiRequestError ? err.message : "Не удалось создать клиента";
+      setError(
+        createdId
+          ? `${message}. Клиент создан — откройте карточку и загрузите PDF вручную.`
+          : message,
+      );
+      if (createdId) {
+        router.push(`/retail/clients/${createdId}`);
+      }
+    } finally {
+      setCreatingClient(false);
     }
   }
 
@@ -272,8 +304,68 @@ export default function RetailClientsPage() {
                 />
               </FormField>
             </div>
-            <Button type="submit" className="md:col-span-2">
-              Создать клиента
+            <div>
+              <PdfDocumentField
+                label="Скан паспорта клиента"
+                hasFile={Boolean(clientPassportFile)}
+                filename={clientPassportFile?.name}
+                uploading={creatingClient}
+                canUpload={!creatingClient}
+                canDelete={Boolean(clientPassportFile) && !creatingClient}
+                showDownload={false}
+                uploadLabel="Добавить скан"
+                replaceLabel="Заменить скан"
+                emptyLabel="Скан не выбран"
+                onUpload={(file) => {
+                  const pdfError = validatePdfFile(file);
+                  if (pdfError) {
+                    setClientPassportFileError(pdfError);
+                    return;
+                  }
+                  setClientPassportFile(file);
+                  setClientPassportFileError(null);
+                }}
+                onDelete={() => {
+                  setClientPassportFile(null);
+                  setClientPassportFileError(null);
+                }}
+              />
+              {clientPassportFileError ? (
+                <p className="mt-1 text-xs text-rose-600">{clientPassportFileError}</p>
+              ) : null}
+            </div>
+            <div>
+              <PdfDocumentField
+                label="Скан паспорта поручителя"
+                hasFile={Boolean(guarantorPassportFile)}
+                filename={guarantorPassportFile?.name}
+                uploading={creatingClient}
+                canUpload={!creatingClient}
+                canDelete={Boolean(guarantorPassportFile) && !creatingClient}
+                showDownload={false}
+                uploadLabel="Добавить скан"
+                replaceLabel="Заменить скан"
+                emptyLabel="Скан не выбран"
+                onUpload={(file) => {
+                  const pdfError = validatePdfFile(file);
+                  if (pdfError) {
+                    setGuarantorPassportFileError(pdfError);
+                    return;
+                  }
+                  setGuarantorPassportFile(file);
+                  setGuarantorPassportFileError(null);
+                }}
+                onDelete={() => {
+                  setGuarantorPassportFile(null);
+                  setGuarantorPassportFileError(null);
+                }}
+              />
+              {guarantorPassportFileError ? (
+                <p className="mt-1 text-xs text-rose-600">{guarantorPassportFileError}</p>
+              ) : null}
+            </div>
+            <Button type="submit" className="md:col-span-2" disabled={creatingClient}>
+              {creatingClient ? "Сохранение..." : "Создать клиента"}
             </Button>
           </form>
         </Card>

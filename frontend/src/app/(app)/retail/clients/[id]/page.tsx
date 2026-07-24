@@ -51,12 +51,13 @@ export default function RetailClientDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [clientData, contractsData] = await Promise.all([
-        retailApi.getClient(params.id),
-        retailApi.listContracts(),
-      ]);
+      const clientData = await retailApi.getClient(params.id);
       setClient(clientData);
-      setContracts(contractsData.filter((item) => item.retail_client_id === params.id));
+      try {
+        setContracts(await retailApi.listContracts(undefined, params.id));
+      } catch {
+        setContracts([]);
+      }
     } catch (err) {
       setClient(null);
       setContracts([]);

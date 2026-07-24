@@ -10,8 +10,12 @@ type PdfDocumentFieldProps = {
   uploading?: boolean;
   canUpload?: boolean;
   canDelete?: boolean;
+  showDownload?: boolean;
+  uploadLabel?: string;
+  replaceLabel?: string;
+  emptyLabel?: string;
   onUpload: (file: File) => void | Promise<void>;
-  onDownload: () => void | Promise<void>;
+  onDownload?: () => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
   className?: string;
 };
@@ -23,19 +27,25 @@ export function PdfDocumentField({
   uploading = false,
   canUpload = false,
   canDelete = false,
+  showDownload = true,
+  uploadLabel = "Загрузить PDF",
+  replaceLabel = "Заменить PDF",
+  emptyLabel = "PDF не загружен",
   onUpload,
   onDownload,
   onDelete,
   className,
 }: PdfDocumentFieldProps) {
+  const pickLabel = uploading ? "Загрузка..." : hasFile ? replaceLabel : uploadLabel;
+
   return (
     <div className={cn("rounded-md border border-border bg-surface-muted p-2", className)}>
       {label ? <p className="text-xs font-medium text-foreground">{label}</p> : null}
       <p className={cn("truncate text-[11px] text-muted", label ? "mt-1" : undefined)}>
-        {hasFile ? filename || "document.pdf" : "PDF не загружен"}
+        {hasFile ? filename || "document.pdf" : emptyLabel}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {hasFile ? (
+        {hasFile && showDownload && onDownload ? (
           <Button type="button" variant="secondary" onClick={() => void onDownload()}>
             Скачать
           </Button>
@@ -55,7 +65,7 @@ export function PdfDocumentField({
                 event.target.value = "";
               }}
             />
-            {uploading ? "Загрузка..." : hasFile ? "Заменить PDF" : "Загрузить PDF"}
+            {pickLabel}
           </label>
         ) : null}
         {canDelete && hasFile && onDelete ? (
