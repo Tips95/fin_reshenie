@@ -100,6 +100,8 @@ class RetailClientResponse(BaseModel):
     contracts_count: int = 0
     has_passport_pdf: bool = False
     passport_pdf_filename: str | None = None
+    has_guarantor_passport_pdf: bool = False
+    guarantor_passport_pdf_filename: str | None = None
 
 
 class RetailTermRateResponse(BaseModel):

@@ -255,6 +255,12 @@ export const retailApi = {
     downloadFile(`/retail/clients/${clientId}/passport-pdf`, fallbackFilename),
   deleteClientPassportPdf: (clientId: string) =>
     apiFetch<RetailClient>(`/retail/clients/${clientId}/passport-pdf`, { method: "DELETE" }),
+  uploadGuarantorPassportPdf: (clientId: string, file: File) =>
+    uploadFile<RetailClient>(`/retail/clients/${clientId}/guarantor-passport-pdf`, file),
+  downloadGuarantorPassportPdf: (clientId: string, fallbackFilename: string) =>
+    downloadFile(`/retail/clients/${clientId}/guarantor-passport-pdf`, fallbackFilename),
+  deleteGuarantorPassportPdf: (clientId: string) =>
+    apiFetch<RetailClient>(`/retail/clients/${clientId}/guarantor-passport-pdf`, { method: "DELETE" }),
   uploadSignedContractPdf: (contractId: string, file: File) =>
     uploadFile<RetailContractDetail>(`/retail/contracts/${contractId}/signed-contract-pdf`, file),
   downloadSignedContractPdf: (contractId: string, fallbackFilename: string) =>

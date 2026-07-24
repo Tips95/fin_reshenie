@@ -79,12 +79,16 @@ export default function RetailContractsPage() {
                 {contracts.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <Link href={`/retail/contracts/${item.id}`} className="font-semibold text-emerald-700">
+                      <Link href={`/retail/clients/${item.retail_client_id}`} className="link-brand font-medium">
                         {formatShortName(item.client_name)}
                       </Link>
-                      <p className="text-xs text-slate-500">{formatDate(item.contract_date)}</p>
+                      <p className="text-xs text-muted">{formatDate(item.contract_date)}</p>
                     </td>
-                    <td>{item.product_name}</td>
+                    <td>
+                      <Link href={`/retail/contracts/${item.id}`} className="link-brand">
+                        {item.product_name}
+                      </Link>
+                    </td>
                     <td>{item.investor_name}</td>
                     <td>{item.term_months} мес.</td>
                     <td>{formatMoney(item.total_amount)}</td>

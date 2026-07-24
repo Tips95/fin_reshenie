@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { APP_NAME } from "@/lib/brand";
 import { PHONE_PREFIX, applyPhoneInput } from "@/lib/phone";
+import { applyPassportInput, PASSPORT_PLACEHOLDER } from "@/lib/passport";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
@@ -97,6 +98,30 @@ export function PhoneInput({
         onBlur?.(event);
       }}
       onChange={(event) => onValueChange(applyPhoneInput(value, event.target.value))}
+      {...props}
+    />
+  );
+}
+
+export function PassportInput({
+  className,
+  value,
+  onValueChange,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange" | "inputMode"> & {
+  value: string;
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <Input
+      type="text"
+      className={className}
+      value={value}
+      placeholder={PASSPORT_PLACEHOLDER}
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={12}
+      onChange={(event) => onValueChange(applyPassportInput(value, event.target.value))}
       {...props}
     />
   );

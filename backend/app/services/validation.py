@@ -8,7 +8,7 @@ FULL_NAME_RE = re.compile(r"^[\u0401\u0451\u0410-\u044f\s\-']+$", re.UNICODE)
 
 INVALID_FULL_NAME = "Укажите фамилию и имя, только буквы"
 INVALID_PHONE_PREFIX = "Номер должен начинаться с +7"
-INVALID_PASSPORT = "Паспорт: укажите серию и номер (10 цифр)"
+INVALID_PASSPORT = "Паспорт: укажите серию и номер (формат 00 00 000000)"
 INVALID_ADDRESS = "Укажите корректный адрес"
 DIGITS_ONLY_NAME = "ФИО не должно содержать цифры"
 PHONE_TOO_LONG = "Слишком длинный номер телефона"
@@ -48,11 +48,18 @@ def validate_phone_optional(value: str | None) -> str | None:
     return validate_phone_required(trimmed)
 
 
+def format_passport_display(value: str) -> str:
+    digits = re.sub(r"\D", "", value)
+    if len(digits) != 10:
+        return value.strip()
+    return f"{digits[:2]} {digits[2:4]} {digits[4:]}"
+
+
 def validate_passport(value: str) -> str:
     digits = re.sub(r"\D", "", value)
     if len(digits) != 10:
         raise ValueError(INVALID_PASSPORT)
-    return digits
+    return format_passport_display(digits)
 
 
 def validate_address(value: str) -> str:

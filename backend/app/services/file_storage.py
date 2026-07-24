@@ -65,6 +65,10 @@ def retail_client_passport_key(organization_id: UUID, client_id: UUID) -> str:
     return f"{organization_id}/retail/clients/{client_id}/passport.pdf"
 
 
+def retail_client_guarantor_passport_key(organization_id: UUID, client_id: UUID) -> str:
+    return f"{organization_id}/retail/clients/{client_id}/guarantor-passport.pdf"
+
+
 def retail_contract_signed_key(organization_id: UUID, contract_id: UUID) -> str:
     return f"{organization_id}/retail/contracts/{contract_id}/signed.pdf"
 

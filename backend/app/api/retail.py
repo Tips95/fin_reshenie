@@ -50,11 +50,13 @@ from app.services.file_storage import (
     delete_storage_key,
     read_and_validate_pdf,
     resolve_storage_path,
+    retail_client_guarantor_passport_key,
     retail_client_passport_key,
     retail_contract_signed_key,
     save_bytes,
 )
 from app.services.retail_payments import cancel_retail_payment, record_retail_payment
+from app.services.validation import format_passport_display
 from app.models.retail_term_rate import RetailTermRate
 
 router = APIRouter()
@@ -91,14 +93,16 @@ def _serialize_client(db: Session, user: User, client: RetailClient) -> RetailCl
         organization_id=client.organization_id,
         full_name=client.full_name,
         phone=client.phone,
-        passport=client.passport,
+        passport=format_passport_display(client.passport),
         address=client.address,
         guarantor_full_name=client.guarantor_full_name,
         guarantor_phone=client.guarantor_phone,
-        guarantor_passport=client.guarantor_passport,
+        guarantor_passport=format_passport_display(client.guarantor_passport),
         contracts_count=_client_contracts_count(db, user, client.id),
         has_passport_pdf=bool(client.passport_pdf_path),
         passport_pdf_filename=client.passport_pdf_filename,
+        has_guarantor_passport_pdf=bool(client.guarantor_passport_pdf_path),
+        guarantor_passport_pdf_filename=client.guarantor_passport_pdf_filename,
     )
 
 
@@ -164,11 +168,11 @@ def create_client(
         organization_id=current_user.organization_id,
         full_name=payload.full_name.strip(),
         phone=payload.phone.strip(),
-        passport=payload.passport.strip(),
+        passport=payload.passport,
         address=payload.address.strip(),
         guarantor_full_name=payload.guarantor_full_name.strip(),
         guarantor_phone=payload.guarantor_phone.strip(),
-        guarantor_passport=payload.guarantor_passport.strip(),
+        guarantor_passport=payload.guarantor_passport,
     )
     db.add(client)
     db.flush()
@@ -312,6 +316,85 @@ def delete_client_passport_pdf(
         entity_id=client.id,
         action=AuditAction.UPDATE,
         field_name="passport_pdf",
+        old_value=old_name,
+        new_value=None,
+    )
+    db.commit()
+    db.refresh(client)
+    return _serialize_client(db, current_user, client)
+
+
+@router.post("/clients/{client_id}/guarantor-passport-pdf", response_model=RetailClientResponse)
+async def upload_guarantor_passport_pdf(
+    client_id: UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> RetailClientResponse:
+    ensure_retail_organization(db, current_user)
+    client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
+    content, filename = await read_and_validate_pdf(file)
+    storage_key = retail_client_guarantor_passport_key(current_user.organization_id, client.id)
+    delete_storage_key(client.guarantor_passport_pdf_path)
+    save_bytes(storage_key, content)
+    client.guarantor_passport_pdf_path = storage_key
+    client.guarantor_passport_pdf_filename = filename
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_client",
+        entity_id=client.id,
+        action=AuditAction.UPDATE,
+        field_name="guarantor_passport_pdf",
+        new_value=filename,
+    )
+    db.commit()
+    db.refresh(client)
+    return _serialize_client(db, current_user, client)
+
+
+@router.get("/clients/{client_id}/guarantor-passport-pdf")
+def download_guarantor_passport_pdf(
+    client_id: UUID,
+    current_user: User = Depends(require_retail_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    ensure_retail_organization(db, current_user)
+    client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
+    _ensure_investor_client_access(db, current_user, client.id)
+    if not client.guarantor_passport_pdf_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта поручителя не загружен")
+    path = resolve_storage_path(client.guarantor_passport_pdf_path)
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=client.guarantor_passport_pdf_filename or "guarantor-passport.pdf",
+    )
+
+
+@router.delete("/clients/{client_id}/guarantor-passport-pdf", response_model=RetailClientResponse)
+def delete_guarantor_passport_pdf(
+    client_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> RetailClientResponse:
+    ensure_retail_organization(db, current_user)
+    client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
+    if not client.guarantor_passport_pdf_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта поручителя не загружен")
+    delete_storage_key(client.guarantor_passport_pdf_path)
+    old_name = client.guarantor_passport_pdf_filename
+    client.guarantor_passport_pdf_path = None
+    client.guarantor_passport_pdf_filename = None
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_client",
+        entity_id=client.id,
+        action=AuditAction.UPDATE,
+        field_name="guarantor_passport_pdf",
         old_value=old_name,
         new_value=None,
     )

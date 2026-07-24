@@ -1,4 +1,5 @@
 import { PHONE_PREFIX, ensurePhonePrefix } from "@/lib/phone";
+import { applyPassportInput, formatPassport, isPassportComplete, PASSPORT_PLACEHOLDER } from "@/lib/passport";
 
 const FULL_NAME_RE = /^[\u0401\u0451\u0410-\u044fa-zA-Z\s\-']+$/;
 
@@ -82,9 +83,8 @@ export function validateLogin(value: string): string | null {
 }
 
 export function validatePassport(value: string): string | null {
-  const digits = value.replace(/\D/g, "");
-  if (digits.length !== 10) {
-    return "Паспорт: укажите серию и номер (10 цифр)";
+  if (!isPassportComplete(value)) {
+    return "Паспорт: укажите серию и номер (формат 00 00 000000)";
   }
   return null;
 }
@@ -166,8 +166,10 @@ export function filterPersonName(value: string): string {
 }
 
 export function filterPassportInput(value: string): string {
-  return value.replace(/\D/g, "").slice(0, 10);
+  return applyPassportInput("", value);
 }
+
+export { formatPassport, PASSPORT_PLACEHOLDER };
 
 export function filterDecimalInput(value: string): string {
   const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");

@@ -21,6 +21,7 @@ def hard_delete_retail_client(db: Session, client_id: UUID) -> None:
     client = db.get(RetailClient, client_id)
     if client is not None:
         delete_storage_key(client.passport_pdf_path)
+        delete_storage_key(client.guarantor_passport_pdf_path)
     contract_ids = list(
         db.scalars(select(RetailContract.id).where(RetailContract.retail_client_id == client_id))
     )

@@ -23,6 +23,8 @@ class RetailClient(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     guarantor_passport: Mapped[str] = mapped_column(String(64), nullable=False)
     passport_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     passport_pdf_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    guarantor_passport_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    guarantor_passport_pdf_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     organization: Mapped["Organization"] = relationship(back_populates="retail_clients")

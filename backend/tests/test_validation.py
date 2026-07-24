@@ -41,11 +41,12 @@ def test_validate_phone_optional_empty() -> None:
 
 
 def test_validate_passport_ok() -> None:
-    assert validate_passport("1234 567890") == "1234567890"
+    assert validate_passport("1234 567890") == "12 34 567890"
+    assert validate_passport("1234567890") == "12 34 567890"
 
 
 def test_validate_passport_rejects_short() -> None:
-    with pytest.raises(ValueError, match="10"):
+    with pytest.raises(ValueError, match="00 00"):
         validate_passport("123456")
 
 
