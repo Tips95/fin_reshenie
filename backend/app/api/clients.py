@@ -39,6 +39,12 @@ from app.schemas.payment import PaymentAlignResult, PaymentResponse
 from app.schemas.payment_schedule import PaymentScheduleResponse
 from app.services.installment_schedule import create_payment_schedule_models
 from app.services.client_deletion import hard_delete_client
+from app.services.client_duplicates import (
+    DUPLICATE_CLIENT_MESSAGE,
+    INCOMPLETE_PHONE_MESSAGE,
+    find_existing_client,
+    phone_has_minimum_digits,
+)
 from app.services.mandatory_payments import create_default_mandatory_payments
 from app.services.document_collection import (
     create_document_collection,
@@ -240,6 +246,23 @@ def create_client(
             db, user_id=assigned_manager_id, organization_id=current_user.organization_id
         )
 
+    if not phone_has_minimum_digits(payload.phone):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=INCOMPLETE_PHONE_MESSAGE,
+        )
+
+    if find_existing_client(
+        db,
+        organization_id=current_user.organization_id,
+        phone=payload.phone,
+        full_name=payload.full_name,
+    ) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=DUPLICATE_CLIENT_MESSAGE,
+        )
+
     client = Client(
         organization_id=current_user.organization_id,
         assigned_manager_id=assigned_manager_id,
@@ -361,6 +384,28 @@ def update_client(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Изменение ФИО, суммы долга и этапа процедуры доступно только руководителю",
+            )
+
+    if "phone" in updates and updates["phone"] is not None:
+        if not phone_has_minimum_digits(updates["phone"]):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=INCOMPLETE_PHONE_MESSAGE,
+            )
+
+    duplicate_phone = updates.get("phone", client.phone)
+    duplicate_name = updates.get("full_name", client.full_name)
+    if "phone" in updates or "full_name" in updates:
+        if find_existing_client(
+            db,
+            organization_id=current_user.organization_id,
+            phone=duplicate_phone,
+            full_name=duplicate_name,
+            exclude_client_id=client.id,
+        ) is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=DUPLICATE_CLIENT_MESSAGE,
             )
 
     if "assigned_manager_id" in updates:

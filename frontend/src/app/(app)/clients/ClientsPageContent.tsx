@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Badge, Button, Card, Input, LoadingState, PageHeader, PhoneInput, SectionTitle, Select } from "@/components/ui";
+import { Badge, Button, Card, Input, LoadingState, PageHeader, PhoneInput, SectionTitle, Select, Toast } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
 import { PHONE_PREFIX } from "@/lib/phone";
@@ -117,6 +117,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [managers, setManagers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
+    null,
+  );
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("created_at");
@@ -189,9 +192,12 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       });
       router.push(`/clients/${created.id}`);
     } catch (error) {
-      setCreateError(
-        error instanceof ApiRequestError ? error.message : "Не удалось создать клиента",
-      );
+      const message =
+        error instanceof ApiRequestError ? error.message : "Не удалось создать клиента";
+      setCreateError(message);
+      if (error instanceof ApiRequestError && error.status === 409) {
+        setToast({ message, tone: "error" });
+      }
     }
   }
 
@@ -279,6 +285,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
 
   return (
     <div className="space-y-4">
+      {toast && (
+        <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
+      )}
       <div className="flex flex-wrap gap-2">
         <Link
           href="/clients/collection"
