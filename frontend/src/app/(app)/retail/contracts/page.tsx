@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { Badge, Card, LoadingState, PageHeader } from "@/components/ui";
-import { retailApi } from "@/lib/api-client";
+import { Badge, Button, Card, LoadingState, PageHeader } from "@/components/ui";
+import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName } from "@/lib/format";
 import type { RetailContractBrief } from "@/lib/types";
 
@@ -26,15 +26,25 @@ function statusText(status: string): string {
 export default function RetailContractsPage() {
   const [contracts, setContracts] = useState<RetailContractBrief[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
 
-  useEffect(() => {
-    retailApi
-      .listContracts(filter || undefined)
-      .then(setContracts)
-      .catch(() => setContracts([]))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setContracts(await retailApi.listContracts(filter || undefined));
+    } catch (err) {
+      setContracts([]);
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить договоры");
+    } finally {
+      setLoading(false);
+    }
   }, [filter]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   if (loading) return <LoadingState text="Загрузка договоров..." />;
 
@@ -46,7 +56,7 @@ export default function RetailContractsPage() {
         action={
           <select
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(event) => setFilter(event.target.value)}
             className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
           >
             <option value="">Все статусы</option>
@@ -57,9 +67,20 @@ export default function RetailContractsPage() {
         }
       />
 
+      {error ? (
+        <Card variant="accent">
+          <p className="text-sm text-rose-600">{error}</p>
+          <Button type="button" className="mt-3" onClick={() => void load()}>
+            Повторить
+          </Button>
+        </Card>
+      ) : null}
+
       <Card>
         {contracts.length === 0 ? (
-          <p className="py-4 text-center text-xs text-muted">Договоров пока нет</p>
+          <p className="py-4 text-center text-xs text-muted">
+            {error ? "Список недоступен" : "Договоров пока нет"}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">

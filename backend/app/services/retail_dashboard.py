@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.enums import RetailContractStatus, RetailPaymentType, UserRole
 from app.models.retail_contract import RetailContract
@@ -71,8 +71,8 @@ def get_retail_dashboard(db: Session, user: User) -> RetailDashboardSummary:
         .options(
             joinedload(RetailContract.client),
             joinedload(RetailContract.investor),
-            joinedload(RetailContract.payment_schedule),
-            joinedload(RetailContract.payments),
+            selectinload(RetailContract.payment_schedule),
+            selectinload(RetailContract.payments),
         )
         .where(
             RetailContract.organization_id == user.organization_id,

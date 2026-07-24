@@ -10,6 +10,8 @@ import {
   Button,
   Card,
   EmptyState,
+  FormField,
+  Input,
   LoadingState,
   PageHeader,
   SectionTitle,
@@ -17,7 +19,14 @@ import {
 import { PdfDocumentField } from "@/components/PdfDocumentField";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName } from "@/lib/format";
-import type { RetailClient, RetailContractBrief } from "@/lib/types";
+import {
+  collectErrors,
+  filterDecimalInput,
+  hasErrors,
+  validatePositiveAmount,
+  validateRequiredDate,
+} from "@/lib/validation";
+import type { RetailClient, RetailContractBrief, RetailTermRate, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function contractStatusTone(status: string): "default" | "success" | "warning" | "danger" {
@@ -42,10 +51,23 @@ export default function RetailClientDetailPage() {
   const isOwner = user?.role === "owner";
   const [client, setClient] = useState<RetailClient | null>(null);
   const [contracts, setContracts] = useState<RetailContractBrief[]>([]);
+  const [investors, setInvestors] = useState<User[]>([]);
+  const [rates, setRates] = useState<RetailTermRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<"client" | "guarantor" | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showContractForm, setShowContractForm] = useState(false);
+  const [creatingContract, setCreatingContract] = useState(false);
+  const [contractFormErrors, setContractFormErrors] = useState<Record<string, string>>({});
+  const [contractForm, setContractForm] = useState({
+    investor_id: "",
+    product_name: "",
+    product_price: "",
+    term_months: "6",
+    down_payment: "",
+    contract_date: new Date().toISOString().slice(0, 10),
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +93,29 @@ export default function RetailClientDetailPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!isOwner) return;
+    void (async () => {
+      try {
+        const [investorsData, ratesData] = await Promise.all([
+          retailApi.listInvestors(),
+          retailApi.termRates(),
+        ]);
+        setInvestors(investorsData);
+        setRates(ratesData);
+        if (ratesData.length > 0) {
+          setContractForm((current) => ({
+            ...current,
+            term_months: String(ratesData[0].term_months),
+          }));
+        }
+      } catch {
+        setInvestors([]);
+        setRates([]);
+      }
+    })();
+  }, [isOwner]);
+
   async function handleUploadClientPassport(file: File) {
     if (!client) return;
     setUploadingDoc("client");
@@ -94,6 +139,44 @@ export default function RetailClientDetailPage() {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить PDF поручителя");
     } finally {
       setUploadingDoc(null);
+    }
+  }
+
+  async function handleCreateContract(event: React.FormEvent) {
+    event.preventDefault();
+    if (!client) return;
+    setError(null);
+    const errors = collectErrors({
+      investor_id: contractForm.investor_id ? null : "Выберите инвестора",
+      product_name: contractForm.product_name.trim() ? null : "Укажите название товара",
+      product_price: validatePositiveAmount(contractForm.product_price, { label: "Цена товара" }),
+      down_payment: validatePositiveAmount(contractForm.down_payment, {
+        allowZero: true,
+        label: "Первоначальный взнос",
+      }),
+      contract_date: validateRequiredDate(contractForm.contract_date),
+    });
+    if (hasErrors(errors)) {
+      setContractFormErrors(errors);
+      return;
+    }
+    setContractFormErrors({});
+    setCreatingContract(true);
+    try {
+      const created = await retailApi.createContract({
+        retail_client_id: client.id,
+        investor_id: contractForm.investor_id,
+        product_name: contractForm.product_name.trim(),
+        product_price: contractForm.product_price,
+        term_months: contractForm.term_months,
+        down_payment: contractForm.down_payment,
+        contract_date: contractForm.contract_date,
+      });
+      router.push(`/retail/contracts/${created.id}`);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось создать договор");
+    } finally {
+      setCreatingContract(false);
     }
   }
 
@@ -131,14 +214,113 @@ export default function RetailClientDetailPage() {
         back={<BackLink href="/retail/clients">К клиентам</BackLink>}
         action={
           isOwner ? (
-            <Button variant="danger" disabled={deleting} onClick={handleDeleteClient}>
-              {deleting ? "Удаление..." : "Удалить клиента"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => setShowContractForm((value) => !value)}>
+                {showContractForm ? "Скрыть договор" : "Новый договор"}
+              </Button>
+              <Button variant="danger" disabled={deleting} onClick={handleDeleteClient}>
+                {deleting ? "Удаление..." : "Удалить клиента"}
+              </Button>
+            </div>
           ) : undefined
         }
       />
 
       {error ? <p className="alert-danger">{error}</p> : null}
+
+      {isOwner && showContractForm && (
+        <Card>
+          <SectionTitle
+            title="Создать договор"
+            description={`Клиент: ${client.full_name}. Назначьте инвестора — взнос пойдёт в его кассу.`}
+          />
+          <form onSubmit={handleCreateContract} className="grid gap-2 md:grid-cols-2">
+            <FormField label="Инвестор" error={contractFormErrors.investor_id}>
+              <select
+                value={contractForm.investor_id}
+                onChange={(event) =>
+                  setContractForm({ ...contractForm, investor_id: event.target.value })
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2"
+                required
+              >
+                <option value="">Выберите инвестора</option>
+                {investors.map((investor) => (
+                  <option key={investor.id} value={investor.id}>
+                    {investor.full_name} (вклад {formatMoney(investor.investment_amount ?? "0")})
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Название товара" error={contractFormErrors.product_name}>
+              <Input
+                placeholder="Название товара"
+                value={contractForm.product_name}
+                onChange={(event) =>
+                  setContractForm({ ...contractForm, product_name: event.target.value })
+                }
+                required
+              />
+            </FormField>
+            <FormField label="Цена товара" error={contractFormErrors.product_price}>
+              <Input
+                inputMode="decimal"
+                placeholder="50000"
+                value={contractForm.product_price}
+                onChange={(event) =>
+                  setContractForm({
+                    ...contractForm,
+                    product_price: filterDecimalInput(event.target.value),
+                  })
+                }
+                required
+              />
+            </FormField>
+            <FormField label="Срок">
+              <select
+                value={contractForm.term_months}
+                onChange={(event) =>
+                  setContractForm({ ...contractForm, term_months: event.target.value })
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2"
+              >
+                {rates.map((rate) => (
+                  <option key={rate.id} value={rate.term_months}>
+                    {rate.term_months} мес. ({rate.markup_percent}%)
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Первоначальный взнос" error={contractFormErrors.down_payment}>
+              <Input
+                inputMode="decimal"
+                placeholder="0"
+                value={contractForm.down_payment}
+                onChange={(event) =>
+                  setContractForm({
+                    ...contractForm,
+                    down_payment: filterDecimalInput(event.target.value),
+                  })
+                }
+                required
+              />
+            </FormField>
+            <FormField label="Дата договора" error={contractFormErrors.contract_date}>
+              <Input
+                type="date"
+                value={contractForm.contract_date}
+                onChange={(event) =>
+                  setContractForm({ ...contractForm, contract_date: event.target.value })
+                }
+                required
+              />
+            </FormField>
+            <Button type="submit" className="md:col-span-2" disabled={creatingContract}>
+              {creatingContract ? "Создание..." : "Создать и открыть договор"}
+            </Button>
+          </form>
+        </Card>
+      )}
 
       <div className="grid gap-2 lg:grid-cols-2">
         <Card>
@@ -240,9 +422,30 @@ export default function RetailClientDetailPage() {
       </div>
 
       <Card>
-        <SectionTitle title="Договоры" description="Все договоры по этому клиенту" />
+        <SectionTitle
+          title="Договоры"
+          description="Все договоры по этому клиенту"
+          action={
+            isOwner ? (
+              <Button type="button" variant="secondary" onClick={() => setShowContractForm(true)}>
+                Новый договор
+              </Button>
+            ) : undefined
+          }
+        />
         {contracts.length === 0 ? (
-          <EmptyState>Договоров пока нет</EmptyState>
+          <EmptyState>
+            {isOwner ? (
+              <div className="space-y-2">
+                <p>Договоров пока нет</p>
+                <Button type="button" onClick={() => setShowContractForm(true)}>
+                  Создать договор
+                </Button>
+              </div>
+            ) : (
+              "Договоров пока нет"
+            )}
+          </EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">

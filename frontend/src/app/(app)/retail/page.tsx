@@ -1,29 +1,58 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { Badge, Card, LoadingState, PageHeader, SectionTitle, StatCard } from "@/components/ui";
-import { retailApi } from "@/lib/api-client";
+import { Badge, Button, Card, LoadingState, PageHeader, SectionTitle, StatCard } from "@/components/ui";
+import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import type { RetailDashboardSummary } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 export default function RetailDashboardPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [data, setData] = useState<RetailDashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    retailApi
-      .dashboard()
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await retailApi.dashboard());
+    } catch (err) {
+      setData(null);
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить дашборд");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  if (loading) return <LoadingState text="Загрузка дашборда..." />;
-  if (!data) return <LoadingState text="Не удалось загрузить дашборд" />;
+  useEffect(() => {
+    if (authLoading || !user) return;
+    void load();
+  }, [authLoading, user, load]);
+
+  if (authLoading || loading) {
+    return <LoadingState text="Загрузка дашборда..." />;
+  }
+
+  if (error || !data) {
+    return (
+      <div className="page-stack">
+        <PageHeader
+          title="Товарная рассрочка"
+          subtitle={user?.role === "owner" ? "Сводка по всем инвесторам" : "Мои договоры и касса"}
+        />
+        <Card variant="accent">
+          <p className="text-sm text-rose-600">{error || "Не удалось загрузить дашборд"}</p>
+          <Button type="button" className="mt-3" onClick={() => void load()}>
+            Повторить
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   const isEmpty = data.contracts_count === 0;
 

@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import get_current_active_user, require_owner, require_roles
 from app.core.database import get_db
@@ -420,8 +420,8 @@ def list_contracts(
         .options(
             joinedload(RetailContract.client),
             joinedload(RetailContract.investor),
-            joinedload(RetailContract.payment_schedule),
-            joinedload(RetailContract.payments),
+            selectinload(RetailContract.payment_schedule),
+            selectinload(RetailContract.payments),
         )
         .where(
             RetailContract.organization_id == current_user.organization_id,
