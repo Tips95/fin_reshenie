@@ -4,7 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.models.enums import ClientStatus
-from app.services.client_list import ClientSortField, SortDirection, sort_clients
+from app.services.client_list import ClientSortField, SortDirection, paginate_clients, sort_clients
 
 
 def make_client(
@@ -65,3 +65,22 @@ class TestClientSorting:
         )
 
         assert [client.full_name for client in sorted_clients] == ["B", "A"]
+
+
+class TestPaginateClients:
+    def test_returns_requested_page(self):
+        clients = [
+            make_client(full_name=f"Client {index}", contract_date=date(2025, 1, 1), created_at=datetime(2025, 1, index))
+            for index in range(1, 6)
+        ]
+
+        page_items, total = paginate_clients(clients, page=2, page_size=2)
+
+        assert total == 5
+        assert [client.full_name for client in page_items] == ["Client 3", "Client 4"]
+
+    def test_empty_list(self):
+        page_items, total = paginate_clients([], page=1, page_size=25)
+
+        assert page_items == []
+        assert total == 0

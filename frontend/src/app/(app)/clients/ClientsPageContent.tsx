@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Badge, Button, Card, Input, LoadingState, PageHeader, PhoneInput, SectionTitle, Select, Toast } from "@/components/ui";
+import { Badge, Button, Card, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, Toast } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
 import { PHONE_PREFIX } from "@/lib/phone";
@@ -71,6 +71,8 @@ const COLLECTION_VIEW_OPTIONS: Array<{ value: CollectionViewFilter; label: strin
   { value: "all", label: "Все" },
 ];
 
+const CLIENTS_PAGE_SIZE = 25;
+
 const WORKSPACE_CONFIG: Record<
   ClientWorkspace,
   {
@@ -124,6 +126,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [exportError, setExportError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
+  const [totalClients, setTotalClients] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [collectionView, setCollectionView] = useState<CollectionViewFilter>("active");
   const [savingField, setSavingField] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -150,12 +155,34 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         due_month: dueMonth || undefined,
         sort_by: sortBy,
         sort_dir: sortDir,
+        page,
+        page_size: CLIENTS_PAGE_SIZE,
       });
-      setClients(data);
+      setClients(data.items);
+      setTotalClients(data.total);
+      setTotalPages(data.total_pages);
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, procedureFilter, workspaceConfig.engagementStage, isCollectionView, collectionView, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir]);
+  }, [statusFilter, procedureFilter, workspaceConfig.engagementStage, isCollectionView, collectionView, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    statusFilter,
+    procedureFilter,
+    workspaceConfig.engagementStage,
+    isCollectionView,
+    collectionView,
+    overdueFilter,
+    managerFilter,
+    phoneSearch,
+    nameSearch,
+    contractMonth,
+    dueMonth,
+    sortBy,
+    sortDir,
+  ]);
 
   useEffect(() => {
     loadClients();
@@ -329,7 +356,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         subtitle={
           loading
             ? workspaceConfig.subtitle
-            : `${workspaceConfig.subtitle} · ${clients.length} в списке`
+            : `${workspaceConfig.subtitle} · ${totalClients} всего${totalPages > 1 ? ` · стр. ${page}/${totalPages}` : ""}`
         }
         action={
           <div className="flex flex-wrap gap-2">
@@ -726,6 +753,15 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && clients.length > 0 && (
+          <Pagination
+            page={page}
+            pageSize={CLIENTS_PAGE_SIZE}
+            total={totalClients}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </Card>
     </div>

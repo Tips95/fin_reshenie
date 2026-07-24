@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   Card,
+  CollapsibleCard,
   EmptyState,
   FormField,
   Input,
@@ -140,6 +141,7 @@ export default function ClientDetailPage() {
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>(EMPTY_SCHEDULE_DRAFT);
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
@@ -241,6 +243,23 @@ export default function ClientDetailPage() {
       Object.fromEntries(client.payments.map((payment) => [payment.id, payment.payment_date])),
     );
   }, [client]);
+
+  useEffect(() => {
+    if (!client || !isDetail(client)) {
+      setScheduleOpen(false);
+      return;
+    }
+    const items = client.payment_schedule ?? [];
+    const canEdit = user?.role === "owner" || user?.role === "manager";
+    setScheduleOpen(items.length === 0 && canEdit);
+  }, [client?.id, client, user?.role]);
+
+  useEffect(() => {
+    if (!client || !isDetail(client)) return;
+    if (isScheduleDraftDirty(scheduleDraft, client.payment_schedule ?? [])) {
+      setScheduleOpen(true);
+    }
+  }, [scheduleDraft, client]);
 
   function isDetail(data: ClientDetail | ClientBrief | null): data is ClientDetail {
     return data !== null && "debt_amount" in data;
@@ -1563,27 +1582,35 @@ export default function ClientDetailPage() {
             )}
           </Card>
 
-          <Card>
-            <SectionTitle
-              title="График платежей"
-              description={
-                canEditSchedule
-                  ? "1-й месяц = дата договора, дальше по месяцам. Для legacy-клиентов меняйте суммы (20k, 30k…) и сохраняйте график"
-                  : undefined
-              }
-              action={
-                canEditSchedule && detail?.installment_plan ? (
-                  <Button type="button" variant="secondary" onClick={handleAddPendingMonth}>
-                    + Добавить месяц
-                  </Button>
-                ) : undefined
-              }
-            />
+          <CollapsibleCard
+            title="График платежей"
+            description={
+              canEditSchedule
+                ? "1-й месяц = дата договора, дальше по месяцам. Раскройте, чтобы изменить суммы или добавить месяцы"
+                : "Раскройте, чтобы посмотреть помесячный график"
+            }
+            badge={
+              schedule.length > 0 ? (
+                <Badge tone="default">{schedule.length} мес.</Badge>
+              ) : (
+                <Badge tone="warning">Не настроен</Badge>
+              )
+            }
+            open={scheduleOpen}
+            onOpenChange={setScheduleOpen}
+          >
+            {canEditSchedule && detail?.installment_plan ? (
+              <div className="mb-2 flex justify-end">
+                <Button type="button" variant="secondary" onClick={handleAddPendingMonth}>
+                  + Добавить месяц
+                </Button>
+              </div>
+            ) : null}
             {refreshing && (
-              <p className="mb-4 text-sm text-slate-500">Обновление данных...</p>
+              <p className="mb-2 text-xs text-muted">Обновление данных...</p>
             )}
             {scheduleError && (
-              <p className="mb-4 alert-danger">
+              <p className="mb-2 alert-danger">
                 {scheduleError}
               </p>
             )}
@@ -1886,8 +1913,8 @@ export default function ClientDetailPage() {
                 </div>
               )}
               </>
-            )}
-          </Card>
+              )}
+          </CollapsibleCard>
 
           {canRecordSchedulePayment && (
             <>
@@ -1939,11 +1966,11 @@ export default function ClientDetailPage() {
                 </form>
               </Card>
 
-              <Card>
-                <SectionTitle
-                  title="Оформить возврат"
-                  description="Возврат уменьшает оплаченную сумму по выбранному месяцу графика."
-                />
+              <CollapsibleCard
+                title="Оформить возврат"
+                description="Редкая операция — раскройте, если нужно уменьшить оплаченную сумму по месяцу графика"
+                defaultOpen={false}
+              >
                 <form onSubmit={handleRefund} className="grid gap-2 md:grid-cols-2">
                   <FormField label="Месяц графика">
                     <Select
@@ -1987,7 +2014,7 @@ export default function ClientDetailPage() {
                     Оформить возврат
                   </Button>
                 </form>
-              </Card>
+              </CollapsibleCard>
             </>
           )}
 

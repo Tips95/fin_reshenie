@@ -5,6 +5,7 @@ import type {
   Client,
   ClientBrief,
   ClientDetail,
+  ClientListResponse,
   DashboardSummary,
   AnalyticsOverview,
   FunnelOverview,
@@ -255,6 +256,8 @@ export const clientsApi = {
     collection_view?: "active" | "paid" | "converted" | "all";
     sort_by?: string;
     sort_dir?: "asc" | "desc";
+    page?: number;
+    page_size?: number;
   }) => {
     const search = new URLSearchParams();
     if (params?.status) search.set("status", params.status);
@@ -269,8 +272,10 @@ export const clientsApi = {
     if (params?.collection_view) search.set("collection_view", params.collection_view);
     if (params?.sort_by) search.set("sort_by", params.sort_by);
     if (params?.sort_dir) search.set("sort_dir", params.sort_dir);
+    if (params?.page) search.set("page", String(params.page));
+    if (params?.page_size) search.set("page_size", String(params.page_size));
     const query = search.toString();
-    return apiFetch<Array<Client | ClientBrief>>(`/clients${query ? `?${query}` : ""}`);
+    return apiFetch<ClientListResponse>(`/clients${query ? `?${query}` : ""}`);
   },
   get: (id: string) => apiFetch<Client | ClientBrief>(`/clients/${id}`),
   getDetail: (id: string) => apiFetch<ClientDetail>(`/clients/${id}/detail`),

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { APP_NAME } from "@/lib/brand";
@@ -334,5 +334,109 @@ export function BrandFooter() {
     <p className="text-center text-[11px] text-muted">
       {APP_NAME} · финансовая платформа для юридической компании
     </p>
+  );
+}
+
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (total <= pageSize) {
+    return null;
+  }
+
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-xs text-muted">
+      <p>
+        Показано {from}–{to} из {total}
+      </p>
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          ← Назад
+        </Button>
+        <span className="px-2">
+          {page} / {totalPages}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Вперёд →
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function CollapsibleCard({
+  title,
+  description,
+  badge,
+  defaultOpen = false,
+  open,
+  onOpenChange,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  badge?: React.ReactNode;
+  defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const isOpen = open ?? internalOpen;
+
+  function toggleOpen() {
+    const next = !isOpen;
+    if (open === undefined) {
+      setInternalOpen(next);
+    }
+    onOpenChange?.(next);
+  }
+
+  return (
+    <Card className={cn("overflow-hidden p-0", className)}>
+      <button
+        type="button"
+        className="collapsible-summary w-full text-left"
+        aria-expanded={isOpen}
+        onClick={toggleOpen}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="section-title">{title}</h2>
+            {badge}
+          </div>
+          {description && <p className="mt-0.5 text-[11px] text-muted">{description}</p>}
+        </div>
+        <span className={cn("collapsible-chevron", isOpen && "rotate-180")} aria-hidden>
+          ▼
+        </span>
+      </button>
+      {isOpen ? <div className="border-t border-border p-card">{children}</div> : null}
+    </Card>
   );
 }

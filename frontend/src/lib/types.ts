@@ -96,6 +96,14 @@ export interface ClientBrief {
   assigned_manager_id: string | null;
 }
 
+export interface ClientListResponse {
+  items: Array<Client | ClientBrief>;
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export interface PricingTier {
   id: string;
   organization_id: string;

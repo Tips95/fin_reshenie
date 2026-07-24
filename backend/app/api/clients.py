@@ -19,6 +19,7 @@ from app.schemas.client import (
     ClientBriefResponse,
     ClientCreate,
     ClientDetailResponse,
+    ClientListResponse,
     ClientResponse,
     ClientUpdate,
 )
@@ -32,7 +33,7 @@ from app.services.access import (
     pricing_tier_not_found_message,
 )
 from app.services.audit import log_audit
-from app.services.client_list import ClientSortField, CollectionViewFilter, SortDirection, query_clients
+from app.services.client_list import ClientSortField, CollectionViewFilter, SortDirection, paginate_clients, query_clients
 from app.schemas.installment_plan import InstallmentPlanResponse
 from app.schemas.mandatory_payment import MandatoryPaymentResponse
 from app.schemas.payment import PaymentAlignResult, PaymentResponse
@@ -189,7 +190,7 @@ def _create_installment_for_client(
     return plan
 
 
-@router.get("")
+@router.get("", response_model=ClientListResponse)
 def list_clients(
     status_filter: ClientStatus | None = Query(default=None, alias="status"),
     procedure_stage: ProcedureStage | None = Query(default=None),
@@ -203,9 +204,11 @@ def list_clients(
     collection_view: CollectionViewFilter | None = Query(default=None),
     sort_by: ClientSortField = Query(default=ClientSortField.CREATED_AT),
     sort_dir: SortDirection = Query(default=SortDirection.DESC),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-) -> list[ClientResponse] | list[ClientBriefResponse]:
+) -> ClientListResponse:
     if manager_id is not None and current_user.role != UserRole.OWNER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Фильтр по менеджеру только для owner")
 
@@ -225,11 +228,21 @@ def list_clients(
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
+    page_clients, total = paginate_clients(clients, page=page, page_size=page_size)
+    total_pages = max(1, (total + page_size - 1) // page_size) if total else 1
 
     if current_user.role == UserRole.CALL_CENTER:
-        return [ClientBriefResponse.model_validate(client) for client in clients]
+        items = [ClientBriefResponse.model_validate(client) for client in page_clients]
+    else:
+        items = [_to_client_response(client, db) for client in page_clients]
 
-    return [_to_client_response(client, db) for client in clients]
+    return ClientListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

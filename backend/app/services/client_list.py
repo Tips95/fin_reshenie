@@ -150,3 +150,16 @@ def query_clients(
         ]
 
     return sort_clients(db, clients, sort_by=sort_by, sort_dir=sort_dir)
+
+
+def paginate_clients(
+    clients: list[Client],
+    *,
+    page: int,
+    page_size: int,
+) -> tuple[list[Client], int]:
+    total = len(clients)
+    if total == 0:
+        return [], 0
+    start = (page - 1) * page_size
+    return clients[start : start + page_size], total
