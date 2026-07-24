@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Button, Card, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, Toast } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
+import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import type { Client, ClientBrief, ClientStatus, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -378,7 +379,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
 
       <Card>
         <div className="filter-grid">
-          <div className="min-w-[220px] flex-1">
+          <div className="min-w-0 w-full flex-1 sm:min-w-[180px]">
             <label className="mb-1 block text-sm text-muted">Поиск по ФИО</label>
             <Input
               placeholder="Иванов Иван"
@@ -386,7 +387,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               onChange={(e) => setNameSearch(e.target.value)}
             />
           </div>
-          <div className="min-w-[220px] flex-1">
+          <div className="min-w-0 w-full flex-1 sm:min-w-[180px]">
             <label className="mb-1 block text-sm text-muted">Поиск по телефону</label>
             <Input
               placeholder="+7 928 000-00-00"
@@ -394,7 +395,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               onChange={(e) => setPhoneSearch(e.target.value)}
             />
           </div>
-          <div className="min-w-[180px]">
+          <div className="min-w-0 w-full sm:min-w-[180px]">
             <label className="mb-1 block text-sm text-muted">Статус</label>
             <Select
               value={statusFilter}
@@ -408,7 +409,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             </Select>
           </div>
           {!isCollectionView && (
-            <div className="min-w-[180px]">
+            <div className="min-w-0 w-full sm:min-w-[180px]">
               <label className="mb-1 block text-sm text-muted">Этап процедуры</label>
               <Select
                 value={procedureFilter}
@@ -423,7 +424,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               </Select>
             </div>
           )}
-          <div className="min-w-[180px]">
+          <div className="min-w-0 w-full sm:min-w-[180px]">
             <label className="mb-1 block text-sm text-muted">Месяц договора</label>
             <Input
               type="month"
@@ -432,7 +433,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             />
           </div>
           {!isCollectionView && (
-            <div className="min-w-[180px]">
+            <div className="min-w-0 w-full sm:min-w-[180px]">
               <label className="mb-1 block text-sm text-muted">Платёж в месяце</label>
               <Input
                 type="month"
@@ -454,7 +455,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             </div>
           )}
           {user?.role === "owner" && managers.length > 0 && (
-            <div className="min-w-[180px]">
+            <div className="min-w-0 w-full sm:min-w-[180px]">
               <label className="mb-1 block text-sm text-muted">Менеджер</label>
               <Select
                 value={managerFilter}
@@ -525,7 +526,93 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             {workspaceConfig.emptyText}
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <div className="mobile-only space-y-2">
+              {clients.map((client) => {
+                const isOverdue = isFullClient(client) && client.has_overdue;
+                return (
+                  <article
+                    key={client.id}
+                    className={cn(
+                      "mobile-client-card",
+                      isOverdue && "mobile-client-card-overdue",
+                    )}
+                  >
+                    <Link href={`/clients/${client.id}`} className="block">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p
+                            className={cn(
+                              "truncate font-semibold text-foreground",
+                              isOverdue && "text-status-danger-text",
+                            )}
+                          >
+                            {formatShortName(client.full_name)}
+                          </p>
+                          <p className="text-xs text-muted">{client.phone}</p>
+                        </div>
+                        <Badge
+                          tone={
+                            client.status === "active"
+                              ? "success"
+                              : client.status === "defaulted"
+                                ? "danger"
+                                : "default"
+                          }
+                        >
+                          {statusLabel(client.status)}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                        <span>Договор: {formatDate(client.contract_date)}</span>
+                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && client.contract_total ? (
+                          <span className="font-medium text-foreground">
+                            {formatMoney(client.contract_total)}
+                          </span>
+                        ) : null}
+                        {canSeeClientAmounts && !isCollectionView && isOverdue ? (
+                          <Badge tone="danger">Просрочка</Badge>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {isCollectionView ? (
+                          isFullClient(client) ? (
+                            client.engagement_stage === "bankruptcy" ? (
+                              <Badge tone="success">На банкротстве</Badge>
+                            ) : client.document_collection_status === "paid" ? (
+                              <Badge tone="success">Оплачен сбор</Badge>
+                            ) : (
+                              <Badge tone="warning">Ожидает оплату</Badge>
+                            )
+                          ) : (
+                            <Badge tone="warning">Сбор документов</Badge>
+                          )
+                        ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
+                          <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
+                        ) : (
+                          <Badge tone="default">{procedureStageLabel(client.procedure_stage)}</Badge>
+                        )}
+                        {isManager && isCollectionView && isFullClient(client) && client.assigned_manager_id === user?.id ? (
+                          <Badge tone="success">За вами</Badge>
+                        ) : null}
+                      </div>
+                    </Link>
+                    {isManager && isCollectionView && isFullClient(client) && !client.assigned_manager_id ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="mt-2 w-full"
+                        disabled={savingField === `${client.id}:claim`}
+                        onClick={() => handleClaimClient(client.id)}
+                      >
+                        {savingField === `${client.id}:claim` ? "Закрепление..." : "Принять в работу"}
+                      </Button>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+            <div className="desktop-only overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
@@ -753,6 +840,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               </tbody>
             </table>
           </div>
+          </>
         )}
         {!loading && clients.length > 0 && (
           <Pagination

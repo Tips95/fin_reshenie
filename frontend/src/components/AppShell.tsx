@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { LogoMark } from "@/components/ui";
-import { cn } from "@/lib/cn";
 import { APP_CREATOR, APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
-  { href: "/", label: "Дашборд", icon: "◈" },
-  { href: "/clients/collection", label: "Сбор документов", icon: "◫" },
-  { href: "/clients/contracts", label: "Договоры", icon: "◎" },
+  { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
+  { href: "/clients/collection", label: "Сбор документов", icon: "◫", shortLabel: "Сбор" },
+  { href: "/clients/contracts", label: "Договоры", icon: "◎", shortLabel: "Договоры" },
   { href: "/analytics", label: "Аналитика", icon: "◉", ownerOnly: true },
-  { href: "/tasks", label: "Задачи", icon: "◐" },
+  { href: "/tasks", label: "Задачи", icon: "◐", shortLabel: "Задачи" },
   { href: "/expenses", label: "Расходы", icon: "◇", ownerOnly: true },
   { href: "/audit", label: "Журнал", icon: "▣", ownerOnly: true },
   { href: "/users", label: "Команда", icon: "◌", ownerOnly: true },
@@ -23,14 +23,15 @@ const navItems = [
   href: string;
   label: string;
   icon: string;
+  shortLabel?: string;
   ownerOnly?: boolean;
 }>;
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
-  if (pathname.startsWith("/clients/")) return "Карточка клиента";
   if (pathname.startsWith("/clients/collection")) return "Сбор документов";
   if (pathname.startsWith("/clients/contracts")) return "Договоры";
+  if (pathname.startsWith("/clients/")) return "Карточка клиента";
   if (pathname.startsWith("/clients")) return "Клиенты";
   if (pathname.startsWith("/analytics")) return "Аналитика";
   if (pathname.startsWith("/tasks")) return "Задачи";
@@ -53,6 +54,8 @@ function isNavActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
+const MOBILE_PRIMARY_HREFS = ["/", "/clients/collection", "/clients/contracts", "/tasks"];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
@@ -64,7 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen mesh-bg">
-      <div className="mx-auto flex min-h-screen max-w-[1440px]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
         <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col border-r border-brand-900 bg-brand-950 px-2 py-2 text-white shadow-card lg:flex">
           <div className="flex items-center gap-2 border-b border-brand-800 pb-2">
             <LogoMark />
@@ -117,51 +120,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border bg-surface px-page-x py-1.5 shadow-soft lg:px-3">
+          <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:px-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 lg:hidden">
-                <LogoMark className="h-7 w-7 text-[10px]" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{APP_NAME}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <LogoMark className="h-7 w-7 text-[10px] lg:hidden" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground lg:text-xs lg:font-medium lg:text-muted">
+                    {pageTitle(pathname)}
+                  </p>
+                  <p className="truncate text-[11px] text-muted lg:hidden">{APP_NAME}</p>
                 </div>
               </div>
-              <div className="hidden lg:block">
-                <p className="text-xs font-medium text-muted">{pageTitle(pathname)}</p>
-              </div>
               {user && (
-                <div className="text-right lg:hidden">
-                  <p className="text-xs font-medium text-foreground">{user.full_name}</p>
+                <div className="shrink-0 text-right">
+                  <p className="max-w-[120px] truncate text-xs font-medium text-foreground sm:max-w-none">
+                    {user.full_name}
+                  </p>
                   <button
                     onClick={logout}
-                    className="interactive text-[10px] text-muted hover:text-brand-700"
+                    className="interactive text-[10px] text-muted hover:text-brand-700 lg:hidden"
                   >
                     Выйти
                   </button>
                 </div>
               )}
             </div>
-            <nav className="mt-2 flex gap-1 overflow-x-auto lg:hidden">
-              {visibleNav.map((item) => {
-                const active = isNavActive(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "interactive whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium",
-                      active
-                        ? "bg-brand-700 text-white shadow-soft"
-                        : "bg-surface-muted text-muted hover:bg-brand-50 hover:text-brand-800",
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
           </header>
 
-          <main className="flex-1 px-page-x py-page-y lg:px-3 lg:py-2">{children}</main>
+          <main className="mobile-shell-main min-w-0 flex-1 px-page-x py-page-y lg:px-3 lg:py-2">
+            {children}
+          </main>
+
+          <MobileBottomNav
+            items={visibleNav}
+            primaryHrefs={MOBILE_PRIMARY_HREFS}
+            pathname={pathname}
+            extraLinks={[{ href: "/login", label: "Товарная рассрочка" }]}
+          />
         </div>
       </div>
     </div>

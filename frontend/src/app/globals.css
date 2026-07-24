@@ -59,8 +59,17 @@
   --space-card: 0.625rem;
   --space-stack: 0.5rem;
   --space-section: 0.625rem;
+  --mobile-nav-height: 3.75rem;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 
   --font-sans: system-ui, sans-serif;
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --space-page-x: 0.625rem;
+    --space-page-y: 0.5rem;
+  }
 }
 
 body {
@@ -70,6 +79,20 @@ body {
   font-size: 13px;
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (max-width: 1023px) {
+  body {
+    font-size: 14px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 @layer utilities {
@@ -225,5 +248,44 @@ body {
 
   .collapsible-chevron {
     @apply mt-0.5 shrink-0 text-[10px] text-muted transition-transform duration-150;
+  }
+
+  .mobile-shell-main {
+    @apply pb-[calc(var(--mobile-nav-height)+var(--safe-area-bottom))] lg:pb-0;
+  }
+
+  .mobile-bottom-nav {
+    @apply fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface shadow-card backdrop-blur;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    padding-bottom: var(--safe-area-bottom);
+    min-height: calc(var(--mobile-nav-height) + var(--safe-area-bottom));
+  }
+
+  .mobile-bottom-nav-item {
+    @apply interactive flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium text-muted;
+  }
+
+  .mobile-bottom-nav-item-active {
+    @apply text-brand-700;
+  }
+
+  .mobile-menu-sheet {
+    @apply fixed inset-x-2 bottom-[calc(var(--mobile-nav-height)+var(--safe-area-bottom)+0.5rem)] z-50 max-h-[55vh] overflow-y-auto rounded-lg border border-border bg-surface p-3 shadow-hover;
+  }
+
+  .mobile-client-card {
+    @apply interactive block rounded-md border border-border bg-surface p-3 shadow-soft hover:shadow-card;
+  }
+
+  .mobile-client-card-overdue {
+    @apply border-status-danger-border bg-status-danger-bg;
+  }
+
+  .desktop-only {
+    @apply hidden lg:block;
+  }
+
+  .mobile-only {
+    @apply lg:hidden;
   }
 }

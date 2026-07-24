@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
 import { AuthProvider } from "@/modules/auth/AuthProvider";
@@ -17,6 +17,12 @@ export const metadata: Metadata = {
   description: APP_TAGLINE,
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -24,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} font-sans antialiased overflow-x-hidden`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

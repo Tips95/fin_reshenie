@@ -3,19 +3,33 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { LogoMark } from "@/components/ui";
-import { cn } from "@/lib/cn";
 import { APP_CREATOR, APP_NAME } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const retailNavItems = [
-  { href: "/retail", label: "Дашборд", icon: "◈", ownerOnly: false, investorOnly: false },
-  { href: "/retail/contracts", label: "Договоры", icon: "◎", ownerOnly: false, investorOnly: false },
-  { href: "/retail/clients", label: "Клиенты", icon: "◉", ownerOnly: false, investorOnly: false, investorLabel: "Мои клиенты" },
-  { href: "/retail/capital", label: "Мой вклад", icon: "◇", ownerOnly: false, investorOnly: true },
-  { href: "/retail/investors", label: "Инвесторы", icon: "◌", ownerOnly: true, investorOnly: false },
-] as const;
+  { href: "/retail", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
+  { href: "/retail/contracts", label: "Договоры", icon: "◎", shortLabel: "Договоры" },
+  {
+    href: "/retail/clients",
+    label: "Клиенты",
+    icon: "◉",
+    shortLabel: "Клиенты",
+    investorLabel: "Мои клиенты",
+  },
+  { href: "/retail/capital", label: "Мой вклад", icon: "◇", shortLabel: "Вклад", investorOnly: true },
+  { href: "/retail/investors", label: "Инвесторы", icon: "◌", shortLabel: "Инвест.", ownerOnly: true },
+] as Array<{
+  href: string;
+  label: string;
+  icon: string;
+  shortLabel: string;
+  investorLabel?: string;
+  investorOnly?: boolean;
+  ownerOnly?: boolean;
+}>;
 
 function pageTitle(pathname: string): string {
   if (pathname === "/retail") return "Дашборд";
@@ -32,15 +46,25 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  const visibleNav = retailNavItems.filter((item) => {
-    if (item.ownerOnly && user?.role !== "owner") return false;
-    if (item.investorOnly && user?.role !== "investor") return false;
-    return true;
-  });
+  const visibleNav = retailNavItems
+    .filter((item) => {
+      if (item.ownerOnly && user?.role !== "owner") return false;
+      if (item.investorOnly && user?.role !== "investor") return false;
+      return true;
+    })
+    .map((item) => ({
+      href: item.href,
+      icon: item.icon,
+      shortLabel: item.shortLabel,
+      label:
+        user?.role === "investor" && "investorLabel" in item && item.investorLabel
+          ? item.investorLabel
+          : item.label,
+    }));
 
   return (
     <div className="min-h-screen mesh-bg">
-      <div className="mx-auto flex min-h-screen max-w-[1440px]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
         <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col border-r border-brand-900 bg-brand-950 px-2 py-2 text-white shadow-card lg:flex">
           <div className="flex items-center gap-2 border-b border-brand-800 pb-2">
             <LogoMark />
@@ -63,9 +87,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
                   className={active ? "nav-item-active" : "nav-item-inactive"}
                 >
                   <span className="w-4 text-center text-[11px] opacity-70">{item.icon}</span>
-                  {user?.role === "investor" && "investorLabel" in item && item.investorLabel
-                    ? item.investorLabel
-                    : item.label}
+                  {item.label}
                 </Link>
               );
             })}
@@ -98,50 +120,43 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border bg-surface px-page-x py-1.5 shadow-soft lg:px-3">
+          <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:px-3">
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium text-muted">{pageTitle(pathname)}</p>
-                <p className="text-[11px] text-muted">{APP_NAME}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <LogoMark className="h-7 w-7 text-[10px] lg:hidden" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground lg:text-xs lg:font-medium lg:text-muted">
+                    {pageTitle(pathname)}
+                  </p>
+                  <p className="truncate text-[11px] text-muted lg:hidden">{APP_NAME}</p>
+                </div>
               </div>
               {user && (
-                <div className="text-right">
-                  <p className="text-xs font-medium text-foreground">{user.full_name}</p>
+                <div className="shrink-0 text-right">
+                  <p className="max-w-[120px] truncate text-xs font-medium text-foreground sm:max-w-none">
+                    {user.full_name}
+                  </p>
                   <button
                     onClick={logout}
-                    className="interactive text-[10px] text-muted hover:text-brand-700"
+                    className="interactive text-[10px] text-muted hover:text-brand-700 lg:hidden"
                   >
                     Выйти
                   </button>
                 </div>
               )}
             </div>
-            <nav className="mt-2 flex gap-1 overflow-x-auto lg:hidden">
-              {visibleNav.map((item) => {
-                const active =
-                  item.href === "/retail"
-                    ? pathname === "/retail"
-                    : pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "interactive whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium",
-                      active
-                        ? "bg-brand-700 text-white shadow-soft"
-                        : "bg-surface-muted text-muted hover:bg-brand-50 hover:text-brand-800",
-                    )}
-                  >
-                    {user?.role === "investor" && "investorLabel" in item && item.investorLabel
-                      ? item.investorLabel
-                      : item.label}
-                  </Link>
-                );
-              })}
-            </nav>
           </header>
-          <main className="flex-1 px-page-x py-page-y lg:px-3 lg:py-2">{children}</main>
+
+          <main className="mobile-shell-main min-w-0 flex-1 px-page-x py-page-y lg:px-3 lg:py-2">
+            {children}
+          </main>
+
+          <MobileBottomNav
+            items={visibleNav}
+            primaryHrefs={visibleNav.map((item) => item.href)}
+            pathname={pathname}
+            extraLinks={[{ href: "/login", label: "Юрфирма" }]}
+          />
         </div>
       </div>
     </div>
