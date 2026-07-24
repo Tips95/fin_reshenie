@@ -60,6 +60,8 @@ def build_contract_brief(contract: RetailContract) -> dict:
         "collected_total": collected,
         "remainder_total": remainder,
         "has_overdue": has_overdue,
+        "has_signed_contract_pdf": bool(contract.signed_contract_pdf_path),
+        "signed_contract_pdf_filename": contract.signed_contract_pdf_filename,
     }
 
 

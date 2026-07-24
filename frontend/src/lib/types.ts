@@ -377,6 +377,8 @@ export interface RetailClient {
   guarantor_phone: string;
   guarantor_passport: string;
   contracts_count: number;
+  has_passport_pdf: boolean;
+  passport_pdf_filename: string | null;
 }
 
 export interface RetailTermRate {
@@ -433,6 +435,8 @@ export interface RetailContractBrief {
   collected_total: string;
   remainder_total: string;
   has_overdue: boolean;
+  has_signed_contract_pdf: boolean;
+  signed_contract_pdf_filename: string | null;
 }
 
 export interface RetailContractDetail extends RetailContractBrief {

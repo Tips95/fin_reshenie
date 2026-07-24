@@ -50,6 +50,8 @@ class RetailContract(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         default=RetailContractStatus.ACTIVE,
     )
+    signed_contract_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    signed_contract_pdf_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     organization: Mapped["Organization"] = relationship(back_populates="retail_contracts")

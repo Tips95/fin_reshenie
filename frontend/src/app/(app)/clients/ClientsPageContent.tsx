@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Badge, Button, Card, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, Toast } from "@/components/ui";
+import { Badge, Button, Card, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, Toast } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
+import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
 import type { Client, ClientBrief, ClientStatus, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -120,6 +121,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [managers, setManagers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
     null,
   );
@@ -203,9 +205,21 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     setCreateError(null);
+    const errors = collectErrors({
+      full_name: validateFullName(form.full_name),
+      phone: validatePhone(form.phone),
+      contract_date: validateRequiredDate(form.contract_date),
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     try {
       const created = await clientsApi.create({
         ...form,
+        full_name: form.full_name.trim().replace(/\s+/g, " "),
+        phone: form.phone.trim(),
         debt_amount: "0",
         assigned_manager_id: form.assigned_manager_id || undefined,
         create_installment_plan: false,
@@ -480,23 +494,31 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             description="Сначала оформляется сбор документов (13 000 ₽). Банкротство — после завершения сбора."
           />
           <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2">
-            <Input
-              placeholder="ФИО"
-              value={form.full_name}
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              required
-            />
-            <PhoneInput
-              value={form.phone}
-              onValueChange={(phone) => setForm({ ...form, phone })}
-              required
-            />
-            <Input
-              type="date"
-              value={form.contract_date}
-              onChange={(e) => setForm({ ...form, contract_date: e.target.value })}
-              required
-            />
+            <FormField label="ФИО" error={formErrors.full_name}>
+              <Input
+                placeholder="Иванов Иван"
+                value={form.full_name}
+                onChange={(e) =>
+                  setForm({ ...form, full_name: e.target.value.replace(/\s+/g, " ").replace(/[^\u0401\u0451\u0410-\u044fa-zA-Z\s\-']/g, "") })
+                }
+                required
+              />
+            </FormField>
+            <FormField label="Телефон" error={formErrors.phone}>
+              <PhoneInput
+                value={form.phone}
+                onValueChange={(phone) => setForm({ ...form, phone })}
+                required
+              />
+            </FormField>
+            <FormField label="Дата договора" error={formErrors.contract_date}>
+              <Input
+                type="date"
+                value={form.contract_date}
+                onChange={(e) => setForm({ ...form, contract_date: e.target.value })}
+                required
+              />
+            </FormField>
             {canAssignManager && managers.length > 0 && (
               <Select
                 value={form.assigned_manager_id}

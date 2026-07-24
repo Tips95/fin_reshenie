@@ -11,11 +11,22 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  PhoneInput,
   SectionTitle,
   Select,
 } from "@/components/ui";
 import { ApiRequestError, usersApi } from "@/lib/api-client";
 import { statusLabel } from "@/lib/format";
+import { PHONE_PREFIX } from "@/lib/phone";
+import {
+  collectErrors,
+  filterPersonName,
+  hasErrors,
+  validateEmail,
+  validateFullName,
+  validatePassword,
+  validatePhoneOptional,
+} from "@/lib/validation";
 import type { User, UserRole } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -65,6 +76,8 @@ export default function UsersPage() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (currentUser && currentUser.role !== "owner") {
@@ -90,15 +103,26 @@ export default function UsersPage() {
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    if (!form.email.trim() && !form.phone.trim()) {
-      setError("Укажите email или телефон для входа");
+    const errors = collectErrors({
+      full_name: validateFullName(form.full_name),
+      email: form.email.trim() ? validateEmail(form.email) : null,
+      phone: validatePhoneOptional(form.phone),
+      password: validatePassword(form.password),
+      login:
+        !form.email.trim() && (!form.phone.trim() || form.phone.trim() === PHONE_PREFIX)
+          ? "Укажите email или телефон для входа"
+          : null,
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
       return;
     }
+    setFormErrors({});
     try {
       await usersApi.create({
-        full_name: form.full_name.trim(),
+        full_name: form.full_name.trim().replace(/\s+/g, " "),
         email: form.email.trim() || null,
-        phone: form.phone.trim() || null,
+        phone: form.phone.trim() && form.phone.trim() !== PHONE_PREFIX ? form.phone.trim() : null,
         password: form.password,
         role: form.role,
         is_active: form.is_active,
@@ -126,16 +150,30 @@ export default function UsersPage() {
     if (!editForm) return;
     setSavingId(userId);
     setError(null);
-    if (!editForm.email.trim() && !editForm.phone.trim()) {
-      setError("Укажите email или телефон для входа");
+    const errors = collectErrors({
+      full_name: validateFullName(editForm.full_name),
+      email: editForm.email.trim() ? validateEmail(editForm.email) : null,
+      phone: validatePhoneOptional(editForm.phone),
+      password: editForm.password.trim() ? validatePassword(editForm.password) : null,
+      login:
+        !editForm.email.trim() && (!editForm.phone.trim() || editForm.phone.trim() === PHONE_PREFIX)
+          ? "Укажите email или телефон для входа"
+          : null,
+    });
+    if (hasErrors(errors)) {
+      setEditErrors(errors);
       setSavingId(null);
       return;
     }
+    setEditErrors({});
     try {
       const payload: Record<string, unknown> = {
-        full_name: editForm.full_name.trim(),
+        full_name: editForm.full_name.trim().replace(/\s+/g, " "),
         email: editForm.email.trim() || null,
-        phone: editForm.phone.trim() || null,
+        phone:
+          editForm.phone.trim() && editForm.phone.trim() !== PHONE_PREFIX
+            ? editForm.phone.trim()
+            : null,
         role: editForm.role,
         is_active: editForm.is_active,
       };
@@ -223,31 +261,39 @@ export default function UsersPage() {
             description="Для входа используется email или телефон и пароль"
           />
           <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2">
-            <Input
-              placeholder="ФИО"
-              value={form.full_name}
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              required
-            />
-            <Input
-              placeholder="Email"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-            <Input
-              placeholder="Телефон"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
-            <Input
-              placeholder="Пароль (мин. 6 символов)"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required
-              minLength={6}
-            />
+            <FormField label="ФИО" error={formErrors.full_name}>
+              <Input
+                placeholder="Иванов Иван"
+                value={form.full_name}
+                onChange={(e) => setForm({ ...form, full_name: filterPersonName(e.target.value) })}
+                required
+              />
+            </FormField>
+            <FormField label="Email" error={formErrors.email || formErrors.login}>
+              <Input
+                placeholder="user@example.com"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Телефон" error={formErrors.phone}>
+              <PhoneInput
+                allowEmpty
+                value={form.phone}
+                onValueChange={(phone) => setForm({ ...form, phone })}
+              />
+            </FormField>
+            <FormField label="Пароль" error={formErrors.password}>
+              <Input
+                placeholder="Мин. 6 символов"
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                minLength={6}
+              />
+            </FormField>
             <Select
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
@@ -302,15 +348,15 @@ export default function UsersPage() {
                       <tr key={item.id} className="is-editing">
                         <td colSpan={6}>
                           <div className="grid gap-2 py-2 md:grid-cols-2 xl:grid-cols-3">
-                            <FormField label="ФИО">
+                            <FormField label="ФИО" error={editErrors.full_name}>
                               <Input
                                 value={editForm.full_name}
                                 onChange={(e) =>
-                                  setEditForm({ ...editForm, full_name: e.target.value })
+                                  setEditForm({ ...editForm, full_name: filterPersonName(e.target.value) })
                                 }
                               />
                             </FormField>
-                            <FormField label="Email">
+                            <FormField label="Email" error={editErrors.email || editErrors.login}>
                               <Input
                                 type="email"
                                 value={editForm.email}
@@ -319,15 +365,16 @@ export default function UsersPage() {
                                 }
                               />
                             </FormField>
-                            <FormField label="Телефон">
-                              <Input
-                                value={editForm.phone}
-                                onChange={(e) =>
-                                  setEditForm({ ...editForm, phone: e.target.value })
+                            <FormField label="Телефон" error={editErrors.phone}>
+                              <PhoneInput
+                                allowEmpty
+                                value={editForm.phone || ""}
+                                onValueChange={(phone) =>
+                                  setEditForm({ ...editForm, phone })
                                 }
                               />
                             </FormField>
-                            <FormField label="Новый пароль">
+                            <FormField label="Новый пароль" error={editErrors.password}>
                               <Input
                                 type="password"
                                 placeholder="Оставьте пустым, если не меняете"

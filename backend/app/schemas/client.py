@@ -2,10 +2,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import ClientStatus, DocumentCollectionStatus, EngagementStage, ProcedureStage
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
+from app.services.validation import validate_full_name, validate_phone_optional, validate_phone_required
 
 
 class ClientCreate(BaseModel):
@@ -19,6 +20,16 @@ class ClientCreate(BaseModel):
     procedure_stage: ProcedureStage = ProcedureStage.CONTRACT_SIGNED
     create_installment_plan: bool = False
 
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, value: str) -> str:
+        return validate_full_name(value)
+
+    @field_validator("phone")
+    @classmethod
+    def check_phone(cls, value: str) -> str:
+        return validate_phone_required(value)
+
 
 class ClientUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -29,6 +40,18 @@ class ClientUpdate(BaseModel):
     status: ClientStatus | None = None
     engagement_stage: EngagementStage | None = None
     procedure_stage: ProcedureStage | None = None
+
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_full_name(value)
+
+    @field_validator("phone")
+    @classmethod
+    def check_phone(cls, value: str | None) -> str | None:
+        return validate_phone_optional(value)
 
 
 class ClientResponse(BaseModel):

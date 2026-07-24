@@ -20,6 +20,7 @@ import {
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { RetailContractDetail } from "@/lib/types";
+import { PdfDocumentField } from "@/components/PdfDocumentField";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function statusTone(status: string): "default" | "success" | "warning" | "danger" {
@@ -47,6 +48,8 @@ export default function RetailContractDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+  const [uploadingContractPdf, setUploadingContractPdf] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     payment_date: new Date().toISOString().slice(0, 10),
@@ -146,6 +149,54 @@ export default function RetailContractDetailPage() {
     }
   }
 
+  async function handleUploadSignedContract(file: File) {
+    if (!contract) return;
+    setUploadingContractPdf(true);
+    setDocumentError(null);
+    try {
+      const updated = await retailApi.uploadSignedContractPdf(contract.id, file);
+      setContract(updated);
+    } catch (error) {
+      setDocumentError(
+        error instanceof ApiRequestError ? error.message : "Не удалось загрузить договор",
+      );
+    } finally {
+      setUploadingContractPdf(false);
+    }
+  }
+
+  async function handleDownloadSignedContract() {
+    if (!contract) return;
+    setDocumentError(null);
+    try {
+      await retailApi.downloadSignedContractPdf(
+        contract.id,
+        contract.signed_contract_pdf_filename || `contract-${contract.product_name}.pdf`,
+      );
+    } catch (error) {
+      setDocumentError(
+        error instanceof ApiRequestError ? error.message : "Не удалось скачать договор",
+      );
+    }
+  }
+
+  async function handleDeleteSignedContract() {
+    if (!contract) return;
+    if (!window.confirm("Удалить PDF подписанного договора?")) return;
+    setUploadingContractPdf(true);
+    setDocumentError(null);
+    try {
+      const updated = await retailApi.deleteSignedContractPdf(contract.id);
+      setContract(updated);
+    } catch (error) {
+      setDocumentError(
+        error instanceof ApiRequestError ? error.message : "Не удалось удалить договор",
+      );
+    } finally {
+      setUploadingContractPdf(false);
+    }
+  }
+
   async function handleDeletePayment(paymentId: string) {
     if (
       !window.confirm(
@@ -197,6 +248,25 @@ export default function RetailContractDetailPage() {
         <StatCard label="Получено" value={formatMoney(contract.collected_total)} tone="success" />
         <StatCard label="Остаток" value={formatMoney(contract.remainder_total)} tone="warning" />
       </div>
+
+      <Card>
+        <SectionTitle
+          title="Подписанный договор"
+          description="Загрузите скан подписанного договора в формате PDF"
+        />
+        <PdfDocumentField
+          label="PDF договора"
+          hasFile={contract.has_signed_contract_pdf}
+          filename={contract.signed_contract_pdf_filename}
+          uploading={uploadingContractPdf}
+          canUpload={isOwner}
+          canDelete={isOwner}
+          onUpload={handleUploadSignedContract}
+          onDownload={handleDownloadSignedContract}
+          onDelete={handleDeleteSignedContract}
+        />
+        {documentError ? <p className="mt-2 text-xs text-status-danger-text">{documentError}</p> : null}
+      </Card>
 
       <Card>
         <SectionTitle title="График платежей" />

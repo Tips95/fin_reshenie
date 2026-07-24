@@ -2,13 +2,20 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import (
     PaymentScheduleStatus,
     RetailContractStatus,
     RetailOverdueStatus,
     RetailPaymentType,
+)
+from app.services.validation import (
+    validate_address,
+    validate_full_name,
+    validate_passport,
+    validate_phone_optional,
+    validate_phone_required,
 )
 
 
@@ -21,6 +28,26 @@ class RetailClientCreate(BaseModel):
     guarantor_phone: str = Field(min_length=1, max_length=32)
     guarantor_passport: str = Field(min_length=1, max_length=64)
 
+    @field_validator("full_name", "guarantor_full_name")
+    @classmethod
+    def check_full_name(cls, value: str) -> str:
+        return validate_full_name(value)
+
+    @field_validator("phone", "guarantor_phone")
+    @classmethod
+    def check_phone(cls, value: str) -> str:
+        return validate_phone_required(value)
+
+    @field_validator("passport", "guarantor_passport")
+    @classmethod
+    def check_passport(cls, value: str) -> str:
+        return validate_passport(value)
+
+    @field_validator("address")
+    @classmethod
+    def check_address(cls, value: str) -> str:
+        return validate_address(value)
+
 
 class RetailClientUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -30,6 +57,32 @@ class RetailClientUpdate(BaseModel):
     guarantor_full_name: str | None = Field(default=None, min_length=1, max_length=255)
     guarantor_phone: str | None = Field(default=None, min_length=1, max_length=32)
     guarantor_passport: str | None = Field(default=None, min_length=1, max_length=64)
+
+    @field_validator("full_name", "guarantor_full_name")
+    @classmethod
+    def check_full_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_full_name(value)
+
+    @field_validator("phone", "guarantor_phone")
+    @classmethod
+    def check_phone(cls, value: str | None) -> str | None:
+        return validate_phone_optional(value)
+
+    @field_validator("passport", "guarantor_passport")
+    @classmethod
+    def check_passport(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_passport(value)
+
+    @field_validator("address")
+    @classmethod
+    def check_address(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_address(value)
 
 
 class RetailClientResponse(BaseModel):
@@ -45,6 +98,8 @@ class RetailClientResponse(BaseModel):
     guarantor_phone: str
     guarantor_passport: str
     contracts_count: int = 0
+    has_passport_pdf: bool = False
+    passport_pdf_filename: str | None = None
 
 
 class RetailTermRateResponse(BaseModel):
@@ -128,6 +183,8 @@ class RetailContractBrief(BaseModel):
     collected_total: Decimal = Decimal("0.00")
     remainder_total: Decimal = Decimal("0.00")
     has_overdue: bool = False
+    has_signed_contract_pdf: bool = False
+    signed_contract_pdf_filename: str | None = None
 
 
 class RetailContractDetail(RetailContractBrief):

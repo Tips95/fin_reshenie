@@ -155,6 +155,46 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
   URL.revokeObjectURL(url);
 }
 
+export async function uploadFile<T = unknown>(path: string, file: File, fieldName = "file"): Promise<T> {
+  const formData = new FormData();
+  formData.append(fieldName, file);
+
+  const headers = new Headers();
+  const accessToken = getAccessToken();
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  let response = await fetch(getApiUrl(path), {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (response.status === 401 && getRefreshToken()) {
+    const refreshed = await refreshTokens();
+    if (refreshed) {
+      headers.set("Authorization", `Bearer ${getAccessToken()}`);
+      response = await fetch(getApiUrl(path), {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+    }
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) clearTokens();
+    throw new ApiRequestError(await parseError(response), response.status);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
 export const authApi = {
   login: (login: string, password: string, workspace: Workspace = "legal") =>
     apiFetch<TokenResponse>("/auth/login", {
@@ -208,6 +248,20 @@ export const retailApi = {
     apiFetch<User>("/retail/investors/me", {
       method: "PATCH",
       body: JSON.stringify({ investment_amount }),
+    }),
+  uploadClientPassportPdf: (clientId: string, file: File) =>
+    uploadFile<RetailClient>(`/retail/clients/${clientId}/passport-pdf`, file),
+  downloadClientPassportPdf: (clientId: string, fallbackFilename: string) =>
+    downloadFile(`/retail/clients/${clientId}/passport-pdf`, fallbackFilename),
+  deleteClientPassportPdf: (clientId: string) =>
+    apiFetch<RetailClient>(`/retail/clients/${clientId}/passport-pdf`, { method: "DELETE" }),
+  uploadSignedContractPdf: (contractId: string, file: File) =>
+    uploadFile<RetailContractDetail>(`/retail/contracts/${contractId}/signed-contract-pdf`, file),
+  downloadSignedContractPdf: (contractId: string, fallbackFilename: string) =>
+    downloadFile(`/retail/contracts/${contractId}/signed-contract-pdf`, fallbackFilename),
+  deleteSignedContractPdf: (contractId: string) =>
+    apiFetch<RetailContractDetail>(`/retail/contracts/${contractId}/signed-contract-pdf`, {
+      method: "DELETE",
     }),
 };
 

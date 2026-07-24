@@ -3,9 +3,21 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button, Card, FormField, Input, LoadingState, PageHeader, SectionTitle } from "@/components/ui";
+import { Button, Card, FormField, Input, LoadingState, PageHeader, PhoneInput, SectionTitle } from "@/components/ui";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
+import { PHONE_PREFIX } from "@/lib/phone";
+import {
+  collectErrors,
+  filterDecimalInput,
+  filterPersonName,
+  hasErrors,
+  validateEmail,
+  validateFullName,
+  validatePassword,
+  validatePhoneOptional,
+  validatePositiveAmount,
+} from "@/lib/validation";
 import type { User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -17,6 +29,7 @@ export default function RetailInvestorsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
@@ -43,11 +56,25 @@ export default function RetailInvestorsPage() {
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    const errors = collectErrors({
+      full_name: validateFullName(form.full_name),
+      email: form.email.trim() ? validateEmail(form.email) : null,
+      phone: validatePhoneOptional(form.phone),
+      password: validatePassword(form.password),
+      investment_amount: form.investment_amount.trim()
+        ? validatePositiveAmount(form.investment_amount, { allowZero: true, label: "Сумма вклада" })
+        : null,
+    });
+    if (hasErrors(errors)) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     try {
       const created = await retailApi.createInvestor({
-        full_name: form.full_name,
-        email: form.email || undefined,
-        phone: form.phone || undefined,
+        full_name: form.full_name.trim().replace(/\s+/g, " "),
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim() && form.phone.trim() !== PHONE_PREFIX ? form.phone.trim() : undefined,
         password: form.password,
         investment_amount: form.investment_amount || "0",
         is_active: true,
@@ -69,6 +96,14 @@ export default function RetailInvestorsPage() {
 
   async function handleSaveAmount(investor: User) {
     const value = amountEdits[investor.id] ?? investor.investment_amount ?? "0";
+    const amountError = validatePositiveAmount(String(value), {
+      allowZero: true,
+      label: "Сумма вклада",
+    });
+    if (amountError) {
+      setError(amountError);
+      return;
+    }
     setSavingId(investor.id);
     setError(null);
     try {
@@ -125,32 +160,40 @@ export default function RetailInvestorsPage() {
         <Card>
           <SectionTitle title="Новый инвестор" />
           <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2">
-            <Input
-              placeholder="ФИО"
-              value={form.full_name}
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              required
-            />
-            <Input
-              placeholder="Email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-            <Input
-              placeholder="Телефон"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
-            <Input
-              type="number"
-              min={0}
-              step={1000}
-              placeholder="Сумма вклада, ₽"
-              value={form.investment_amount}
-              onChange={(e) => setForm({ ...form, investment_amount: e.target.value })}
-            />
+            <FormField label="ФИО" error={formErrors.full_name}>
+              <Input
+                placeholder="Иванов Иван"
+                value={form.full_name}
+                onChange={(e) => setForm({ ...form, full_name: filterPersonName(e.target.value) })}
+                required
+              />
+            </FormField>
+            <FormField label="Email" error={formErrors.email}>
+              <Input
+                placeholder="investor@example.com"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Телефон" error={formErrors.phone}>
+              <PhoneInput
+                allowEmpty
+                value={form.phone}
+                onValueChange={(phone) => setForm({ ...form, phone })}
+              />
+            </FormField>
+            <FormField label="Сумма вклада" error={formErrors.investment_amount}>
+              <Input
+                inputMode="decimal"
+                placeholder="0"
+                value={form.investment_amount}
+                onChange={(e) =>
+                  setForm({ ...form, investment_amount: filterDecimalInput(e.target.value) })
+                }
+              />
+            </FormField>
             <div className="md:col-span-2">
-              <FormField label="Пароль">
+              <FormField label="Пароль" error={formErrors.password}>
                 <div className="flex gap-2">
                   <Input
                     type={showPassword ? "text" : "password"}

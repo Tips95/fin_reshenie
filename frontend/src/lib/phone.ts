@@ -1,26 +1,28 @@
 export const PHONE_PREFIX = "+7";
 
-export function applyPhoneInput(current: string, next: string): string {
+export function applyPhoneInput(_current: string, next: string): string {
   if (next.length < PHONE_PREFIX.length) {
     return PHONE_PREFIX;
   }
 
   if (!next.startsWith("+")) {
-    return ensurePhonePrefix(next);
+    return limitPhoneLength(ensurePhonePrefix(next));
   }
 
   if (!next.startsWith(PHONE_PREFIX)) {
-    const digits = next.replace(/\D/g, "");
-    if (digits.startsWith("7")) {
-      return `+${digits}`;
-    }
-    if (digits.startsWith("8")) {
-      return `+7${digits.slice(1)}`;
-    }
-    return `${PHONE_PREFIX}${digits}`;
+    return limitPhoneLength(ensurePhonePrefix(next));
   }
 
-  return next;
+  const digits = next.slice(PHONE_PREFIX.length).replace(/\D/g, "").slice(0, 10);
+  return digits ? `${PHONE_PREFIX}${digits}` : PHONE_PREFIX;
+}
+
+function limitPhoneLength(value: string): string {
+  if (!value.startsWith(PHONE_PREFIX)) {
+    return PHONE_PREFIX;
+  }
+  const digits = value.slice(PHONE_PREFIX.length).replace(/\D/g, "").slice(0, 10);
+  return digits ? `${PHONE_PREFIX}${digits}` : PHONE_PREFIX;
 }
 
 export function ensurePhonePrefix(value: string): string {
@@ -34,12 +36,12 @@ export function ensurePhonePrefix(value: string): string {
     return PHONE_PREFIX;
   }
   if (digits.startsWith("7")) {
-    return `+${digits}`;
+    return limitPhoneLength(`+${digits}`);
   }
   if (digits.startsWith("8")) {
-    return `+7${digits.slice(1)}`;
+    return limitPhoneLength(`${PHONE_PREFIX}${digits.slice(1)}`);
   }
-  return `${PHONE_PREFIX}${digits}`;
+  return limitPhoneLength(`${PHONE_PREFIX}${digits}`);
 }
 
 export function addOneMonth(dateStr: string): string {

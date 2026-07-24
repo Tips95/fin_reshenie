@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -45,6 +46,14 @@ from app.services.retail_access import (
 from app.services.retail_contracts import create_retail_contract, sync_contract_status
 from app.services.retail_dashboard import build_contract_brief, get_retail_dashboard
 from app.services.retail_deletion import hard_delete_retail_client, hard_delete_retail_contract
+from app.services.file_storage import (
+    delete_storage_key,
+    read_and_validate_pdf,
+    resolve_storage_path,
+    retail_client_passport_key,
+    retail_contract_signed_key,
+    save_bytes,
+)
 from app.services.retail_payments import cancel_retail_payment, record_retail_payment
 from app.models.retail_term_rate import RetailTermRate
 
@@ -74,6 +83,23 @@ def _ensure_investor_client_access(db: Session, user: User, client_id: UUID) -> 
     )
     if not has_access:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к клиенту")
+
+
+def _serialize_client(db: Session, user: User, client: RetailClient) -> RetailClientResponse:
+    return RetailClientResponse(
+        id=client.id,
+        organization_id=client.organization_id,
+        full_name=client.full_name,
+        phone=client.phone,
+        passport=client.passport,
+        address=client.address,
+        guarantor_full_name=client.guarantor_full_name,
+        guarantor_phone=client.guarantor_phone,
+        guarantor_passport=client.guarantor_passport,
+        contracts_count=_client_contracts_count(db, user, client.id),
+        has_passport_pdf=bool(client.passport_pdf_path),
+        passport_pdf_filename=client.passport_pdf_filename,
+    )
 
 
 @router.get("/dashboard/summary", response_model=RetailDashboardSummary)
@@ -124,12 +150,7 @@ def list_clients(
             )
         )
     clients = list(db.scalars(stmt.order_by(RetailClient.full_name)))
-    result: list[RetailClientResponse] = []
-    for client in clients:
-        item = RetailClientResponse.model_validate(client)
-        item.contracts_count = _client_contracts_count(db, current_user, client.id)
-        result.append(item)
-    return result
+    return [_serialize_client(db, current_user, client) for client in clients]
 
 
 @router.post("/clients", response_model=RetailClientResponse, status_code=status.HTTP_201_CREATED)
@@ -160,7 +181,7 @@ def create_client(
     )
     db.commit()
     db.refresh(client)
-    return RetailClientResponse.model_validate(client)
+    return _serialize_client(db, current_user, client)
 
 
 @router.delete("/clients/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -193,9 +214,7 @@ def get_client(
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
     _ensure_investor_client_access(db, current_user, client.id)
-    item = RetailClientResponse.model_validate(client)
-    item.contracts_count = _client_contracts_count(db, current_user, client.id)
-    return item
+    return _serialize_client(db, current_user, client)
 
 
 @router.patch("/clients/{client_id}", response_model=RetailClientResponse)
@@ -219,7 +238,86 @@ def update_client(
     )
     db.commit()
     db.refresh(client)
-    return RetailClientResponse.model_validate(client)
+    return _serialize_client(db, current_user, client)
+
+
+@router.post("/clients/{client_id}/passport-pdf", response_model=RetailClientResponse)
+async def upload_client_passport_pdf(
+    client_id: UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> RetailClientResponse:
+    ensure_retail_organization(db, current_user)
+    client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
+    content, filename = await read_and_validate_pdf(file)
+    storage_key = retail_client_passport_key(current_user.organization_id, client.id)
+    delete_storage_key(client.passport_pdf_path)
+    save_bytes(storage_key, content)
+    client.passport_pdf_path = storage_key
+    client.passport_pdf_filename = filename
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_client",
+        entity_id=client.id,
+        action=AuditAction.UPDATE,
+        field_name="passport_pdf",
+        new_value=filename,
+    )
+    db.commit()
+    db.refresh(client)
+    return _serialize_client(db, current_user, client)
+
+
+@router.get("/clients/{client_id}/passport-pdf")
+def download_client_passport_pdf(
+    client_id: UUID,
+    current_user: User = Depends(require_retail_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    ensure_retail_organization(db, current_user)
+    client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
+    _ensure_investor_client_access(db, current_user, client.id)
+    if not client.passport_pdf_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта не загружен")
+    path = resolve_storage_path(client.passport_pdf_path)
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=client.passport_pdf_filename or "passport.pdf",
+    )
+
+
+@router.delete("/clients/{client_id}/passport-pdf", response_model=RetailClientResponse)
+def delete_client_passport_pdf(
+    client_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> RetailClientResponse:
+    ensure_retail_organization(db, current_user)
+    client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
+    if not client.passport_pdf_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта не загружен")
+    delete_storage_key(client.passport_pdf_path)
+    old_name = client.passport_pdf_filename
+    client.passport_pdf_path = None
+    client.passport_pdf_filename = None
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_client",
+        entity_id=client.id,
+        action=AuditAction.UPDATE,
+        field_name="passport_pdf",
+        old_value=old_name,
+        new_value=None,
+    )
+    db.commit()
+    db.refresh(client)
+    return _serialize_client(db, current_user, client)
 
 
 @router.get("/contracts", response_model=list[RetailContractBrief])
@@ -324,6 +422,99 @@ def get_contract(
     ensure_contract_access(db, current_user, contract)
     sync_contract_status(contract)
     db.commit()
+    return RetailContractDetail(
+        **build_contract_brief(contract),
+        payment_schedule=[
+            RetailPaymentScheduleResponse.model_validate(item) for item in contract.payment_schedule
+        ],
+        payments=[RetailPaymentResponse.model_validate(item) for item in contract.payments if not item.is_deleted],
+        overdue_logs=[RetailOverdueLogResponse.model_validate(item) for item in contract.overdue_logs],
+    )
+
+
+@router.post("/contracts/{contract_id}/signed-contract-pdf", response_model=RetailContractDetail)
+async def upload_signed_contract_pdf(
+    contract_id: UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> RetailContractDetail:
+    ensure_retail_organization(db, current_user)
+    contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
+    content, filename = await read_and_validate_pdf(file)
+    storage_key = retail_contract_signed_key(current_user.organization_id, contract.id)
+    delete_storage_key(contract.signed_contract_pdf_path)
+    save_bytes(storage_key, content)
+    contract.signed_contract_pdf_path = storage_key
+    contract.signed_contract_pdf_filename = filename
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_contract",
+        entity_id=contract.id,
+        action=AuditAction.UPDATE,
+        field_name="signed_contract_pdf",
+        new_value=filename,
+    )
+    db.commit()
+    contract = get_retail_contract(db, contract_id=contract.id, organization_id=current_user.organization_id)
+    return RetailContractDetail(
+        **build_contract_brief(contract),
+        payment_schedule=[
+            RetailPaymentScheduleResponse.model_validate(item) for item in contract.payment_schedule
+        ],
+        payments=[RetailPaymentResponse.model_validate(item) for item in contract.payments if not item.is_deleted],
+        overdue_logs=[RetailOverdueLogResponse.model_validate(item) for item in contract.overdue_logs],
+    )
+
+
+@router.get("/contracts/{contract_id}/signed-contract-pdf")
+def download_signed_contract_pdf(
+    contract_id: UUID,
+    current_user: User = Depends(require_retail_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    ensure_retail_organization(db, current_user)
+    contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
+    ensure_contract_access(db, current_user, contract)
+    if not contract.signed_contract_pdf_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписанный договор не загружен")
+    path = resolve_storage_path(contract.signed_contract_pdf_path)
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=contract.signed_contract_pdf_filename or "contract.pdf",
+    )
+
+
+@router.delete("/contracts/{contract_id}/signed-contract-pdf", response_model=RetailContractDetail)
+def delete_signed_contract_pdf(
+    contract_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> RetailContractDetail:
+    ensure_retail_organization(db, current_user)
+    contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
+    if not contract.signed_contract_pdf_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписанный договор не загружен")
+    delete_storage_key(contract.signed_contract_pdf_path)
+    old_name = contract.signed_contract_pdf_filename
+    contract.signed_contract_pdf_path = None
+    contract.signed_contract_pdf_filename = None
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_contract",
+        entity_id=contract.id,
+        action=AuditAction.UPDATE,
+        field_name="signed_contract_pdf",
+        old_value=old_name,
+        new_value=None,
+    )
+    db.commit()
+    contract = get_retail_contract(db, contract_id=contract.id, organization_id=current_user.organization_id)
     return RetailContractDetail(
         **build_contract_brief(contract),
         payment_schedule=[

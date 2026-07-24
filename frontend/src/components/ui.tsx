@@ -68,10 +68,13 @@ export function PhoneInput({
   value,
   onValueChange,
   onFocus,
+  onBlur,
+  allowEmpty = false,
   ...props
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
   value: string;
   onValueChange: (value: string) => void;
+  allowEmpty?: boolean;
 }) {
   return (
     <Input
@@ -79,11 +82,19 @@ export function PhoneInput({
       className={className}
       value={value}
       placeholder="+7 928 000-00-00"
+      inputMode="tel"
+      autoComplete="tel"
       onFocus={(event) => {
-        if (!value) {
+        if (!value && !allowEmpty) {
           onValueChange(PHONE_PREFIX);
         }
         onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        if (allowEmpty && value === PHONE_PREFIX) {
+          onValueChange("");
+        }
+        onBlur?.(event);
       }}
       onChange={(event) => onValueChange(applyPhoneInput(value, event.target.value))}
       {...props}
@@ -279,14 +290,17 @@ export function ProgressBar({
 export function FormField({
   label,
   children,
+  error,
 }: {
   label: string;
   children: React.ReactNode;
+  error?: string | null;
 }) {
   return (
     <div>
       <label className="mb-0.5 block text-xs font-medium text-muted">{label}</label>
       {children}
+      {error ? <p className="mt-0.5 text-[11px] text-status-danger-text">{error}</p> : null}
     </div>
   );
 }

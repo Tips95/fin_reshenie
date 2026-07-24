@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 
 import { BrandFooter, Button, Card, Input, LogoMark } from "@/components/ui";
 import { APP_NAME } from "@/lib/brand";
+import { PHONE_PREFIX } from "@/lib/phone";
 import type { Workspace } from "@/lib/types";
+import { validateLogin } from "@/lib/validation";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
 export default function LoginPage() {
@@ -27,8 +29,20 @@ export default function LoginPage() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    const loginError = validateLogin(loginValue);
+    if (loginError) {
+      setError(loginError);
+      setSubmitting(false);
+      return;
+    }
     try {
-      await login(loginValue, password, workspace);
+      const normalizedLogin =
+        loginValue.includes("@") || !/^[\d+\s()-]+$/.test(loginValue.trim())
+          ? loginValue.trim()
+          : loginValue.trim().startsWith("+")
+            ? loginValue.trim()
+            : `${PHONE_PREFIX}${loginValue.replace(/\D/g, "").replace(/^7/, "").slice(0, 10)}`;
+      await login(normalizedLogin, password, workspace);
     } catch (err) {
       setError(getAuthErrorMessage(err));
     } finally {

@@ -23,6 +23,14 @@ import {
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix } from "@/lib/phone";
+import {
+  filterDecimalInput,
+  filterPersonName,
+  validateFullName,
+  validatePhone,
+  validatePositiveAmount,
+  validateRequiredDate,
+} from "@/lib/validation";
 import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -293,6 +301,13 @@ export default function ClientDetailPage() {
     event.preventDefault();
     if (!client) return;
 
+    const amountError = validatePositiveAmount(refundForm.amount, { label: "Сумма возврата" });
+    const dateError = validateRequiredDate(refundForm.payment_date);
+    if (amountError || dateError) {
+      showToast(amountError || dateError || "Проверьте данные формы", "error");
+      return;
+    }
+
     await paymentsApi.create({
       client_id: client.id,
       payment_schedule_id: refundForm.payment_schedule_id,
@@ -415,6 +430,13 @@ export default function ClientDetailPage() {
     event.preventDefault();
     if (!client) return;
 
+    const amountError = validatePositiveAmount(paymentForm.amount, { label: "Сумма платежа" });
+    const dateError = validateRequiredDate(paymentForm.payment_date);
+    if (amountError || dateError) {
+      showToast(amountError || dateError || "Проверьте данные формы", "error");
+      return;
+    }
+
     await paymentsApi.create({
       client_id: client.id,
       payment_schedule_id: paymentForm.payment_schedule_id || null,
@@ -492,6 +514,11 @@ export default function ClientDetailPage() {
 
   async function handleSavePhone() {
     if (!client) return;
+    const phoneError = validatePhone(phoneValue);
+    if (phoneError) {
+      showToast(phoneError, "error");
+      return;
+    }
     setPhoneSaving(true);
     try {
       await clientsApi.update(client.id, { phone: phoneValue.trim() });
@@ -510,9 +537,14 @@ export default function ClientDetailPage() {
 
   async function handleSaveName() {
     if (!client) return;
+    const nameError = validateFullName(nameValue);
+    if (nameError) {
+      showToast(nameError, "error");
+      return;
+    }
     setNameSaving(true);
     try {
-      await clientsApi.update(client.id, { full_name: nameValue.trim() });
+      await clientsApi.update(client.id, { full_name: nameValue.trim().replace(/\s+/g, " ") });
       setEditingName(false);
       await refreshClient();
       showToast("ФИО сохранено");
@@ -528,6 +560,11 @@ export default function ClientDetailPage() {
 
   async function handleSaveContractAmount() {
     if (!client || !isDetail(client) || !client.installment_plan) return;
+    const amountError = validatePositiveAmount(contractAmountValue, { label: "Сумма договора" });
+    if (amountError) {
+      showToast(amountError, "error");
+      return;
+    }
     setContractAmountSaving(true);
     try {
       await installmentApi.update(client.id, client.installment_plan.id, {
@@ -844,6 +881,11 @@ export default function ClientDetailPage() {
   async function handleConvertToBankruptcy(event: React.FormEvent) {
     event.preventDefault();
     if (!client) return;
+    const debtError = validatePositiveAmount(convertForm.debt_amount, { label: "Сумма долга" });
+    if (debtError) {
+      setConvertError(debtError);
+      return;
+    }
     setConvertSaving(true);
     setConvertError(null);
     try {
@@ -959,7 +1001,7 @@ export default function ClientDetailPage() {
                 <FormField label="Полное ФИО">
                   <Input
                     value={nameValue}
-                    onChange={(e) => setNameValue(e.target.value)}
+                    onChange={(e) => setNameValue(filterPersonName(e.target.value))}
                     placeholder="Фамилия Имя Отчество"
                   />
                 </FormField>
@@ -1291,12 +1333,11 @@ export default function ClientDetailPage() {
               <div className="grid gap-2 md:grid-cols-2">
                 <FormField label="Сумма для подбора тарифа (от 300 000 ₽)">
                   <Input
-                    type="number"
-                    min={300000}
-                    step={1000}
+                    inputMode="decimal"
+                    placeholder="300000"
                     value={convertForm.debt_amount}
                     onChange={(e) =>
-                      setConvertForm({ ...convertForm, debt_amount: e.target.value })
+                      setConvertForm({ ...convertForm, debt_amount: filterDecimalInput(e.target.value) })
                     }
                     required
                   />
@@ -1949,12 +1990,17 @@ export default function ClientDetailPage() {
                       required
                     />
                   </FormField>
-                  <Input
-                    placeholder="Сумма"
-                    value={paymentForm.amount}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                    required
-                  />
+                  <FormField label="Сумма">
+                    <Input
+                      inputMode="decimal"
+                      placeholder="Сумма"
+                      value={paymentForm.amount}
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, amount: filterDecimalInput(e.target.value) })
+                      }
+                      required
+                    />
+                  </FormField>
                   <Input
                     placeholder="Комментарий"
                     value={paymentForm.comment}
@@ -1999,12 +2045,17 @@ export default function ClientDetailPage() {
                       required
                     />
                   </FormField>
-                  <Input
-                    placeholder="Сумма возврата"
-                    value={refundForm.amount}
-                    onChange={(e) => setRefundForm({ ...refundForm, amount: e.target.value })}
-                    required
-                  />
+                  <FormField label="Сумма возврата">
+                    <Input
+                      inputMode="decimal"
+                      placeholder="Сумма возврата"
+                      value={refundForm.amount}
+                      onChange={(e) =>
+                        setRefundForm({ ...refundForm, amount: filterDecimalInput(e.target.value) })
+                      }
+                      required
+                    />
+                  </FormField>
                   <Input
                     placeholder="Причина возврата"
                     value={refundForm.comment}

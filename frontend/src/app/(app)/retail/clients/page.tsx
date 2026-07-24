@@ -2,9 +2,24 @@
 
 import { useEffect, useState } from "react";
 
-import { Button, Card, EmptyState, FormField, Input, LoadingState, PageHeader, SectionTitle } from "@/components/ui";
+import { Button, Card, EmptyState, FormField, Input, LoadingState, PageHeader, PhoneInput, SectionTitle } from "@/components/ui";
+import { PdfDocumentField } from "@/components/PdfDocumentField";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatMoney, formatShortName } from "@/lib/format";
+import { PHONE_PREFIX } from "@/lib/phone";
+import {
+  collectErrors,
+  filterDecimalInput,
+  filterPassportInput,
+  filterPersonName,
+  hasErrors,
+  validateAddress,
+  validateFullName,
+  validatePassport,
+  validatePhone,
+  validatePositiveAmount,
+  validateRequiredDate,
+} from "@/lib/validation";
 import type { RetailClient, RetailTermRate, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -18,14 +33,17 @@ export default function RetailClientsPage() {
   const [showClientForm, setShowClientForm] = useState(false);
   const [showContractForm, setShowContractForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientFormErrors, setClientFormErrors] = useState<Record<string, string>>({});
+  const [contractFormErrors, setContractFormErrors] = useState<Record<string, string>>({});
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [uploadingPassportId, setUploadingPassportId] = useState<string | null>(null);
   const [clientForm, setClientForm] = useState({
     full_name: "",
-    phone: "",
+    phone: PHONE_PREFIX,
     passport: "",
     address: "",
     guarantor_full_name: "",
-    guarantor_phone: "",
+    guarantor_phone: PHONE_PREFIX,
     guarantor_passport: "",
   });
   const [contractForm, setContractForm] = useState({
@@ -64,8 +82,28 @@ export default function RetailClientsPage() {
   async function handleCreateClient(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    const errors = collectErrors({
+      full_name: validateFullName(clientForm.full_name),
+      phone: validatePhone(clientForm.phone),
+      passport: validatePassport(clientForm.passport),
+      address: validateAddress(clientForm.address),
+      guarantor_full_name: validateFullName(clientForm.guarantor_full_name),
+      guarantor_phone: validatePhone(clientForm.guarantor_phone),
+      guarantor_passport: validatePassport(clientForm.guarantor_passport),
+    });
+    if (hasErrors(errors)) {
+      setClientFormErrors(errors);
+      return;
+    }
+    setClientFormErrors({});
     try {
-      const created = await retailApi.createClient(clientForm);
+      const created = await retailApi.createClient({
+        ...clientForm,
+        full_name: clientForm.full_name.trim().replace(/\s+/g, " "),
+        guarantor_full_name: clientForm.guarantor_full_name.trim().replace(/\s+/g, " "),
+        phone: clientForm.phone.trim(),
+        guarantor_phone: clientForm.guarantor_phone.trim(),
+      });
       setClients((current) => [...current, created]);
       setContractForm({ ...contractForm, retail_client_id: created.id });
       setShowClientForm(false);
@@ -78,11 +116,66 @@ export default function RetailClientsPage() {
   async function handleCreateContract(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    const errors = collectErrors({
+      retail_client_id: contractForm.retail_client_id ? null : "Выберите клиента",
+      investor_id: contractForm.investor_id ? null : "Выберите инвестора",
+      product_name: contractForm.product_name.trim() ? null : "Укажите название товара",
+      product_price: validatePositiveAmount(contractForm.product_price, { label: "Цена товара" }),
+      down_payment: validatePositiveAmount(contractForm.down_payment, {
+        allowZero: true,
+        label: "Первоначальный взнос",
+      }),
+      contract_date: validateRequiredDate(contractForm.contract_date),
+    });
+    if (hasErrors(errors)) {
+      setContractFormErrors(errors);
+      return;
+    }
+    setContractFormErrors({});
     try {
       const created = await retailApi.createContract(contractForm);
       window.location.href = `/retail/contracts/${created.id}`;
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось создать договор");
+    }
+  }
+
+  async function handleUploadPassport(client: RetailClient, file: File) {
+    setUploadingPassportId(client.id);
+    setError(null);
+    try {
+      const updated = await retailApi.uploadClientPassportPdf(client.id, file);
+      setClients((current) => current.map((item) => (item.id === client.id ? updated : item)));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить PDF паспорта");
+    } finally {
+      setUploadingPassportId(null);
+    }
+  }
+
+  async function handleDownloadPassport(client: RetailClient) {
+    setError(null);
+    try {
+      await retailApi.downloadClientPassportPdf(
+        client.id,
+        client.passport_pdf_filename || `passport-${client.full_name}.pdf`,
+      );
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось скачать PDF паспорта");
+    }
+  }
+
+  async function handleDeletePassport(client: RetailClient) {
+    if (!window.confirm("Удалить PDF паспорта клиента?")) return;
+    setUploadingPassportId(client.id);
+    setError(null);
+    try {
+      const updated = await retailApi.deleteClientPassportPdf(client.id);
+      setClients((current) => current.map((item) => (item.id === client.id ? updated : item)));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить PDF паспорта");
+    } finally {
+      setUploadingPassportId(null);
     }
   }
 
@@ -148,13 +241,29 @@ export default function RetailClientsPage() {
         <Card>
           <SectionTitle title="Создать клиента" />
           <form onSubmit={handleCreateClient} className="grid gap-2 md:grid-cols-2">
-            <Input placeholder="ФИО" value={clientForm.full_name} onChange={(e) => setClientForm({ ...clientForm, full_name: e.target.value })} required />
-            <Input placeholder="Телефон" value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} required />
-            <Input placeholder="Паспорт" value={clientForm.passport} onChange={(e) => setClientForm({ ...clientForm, passport: e.target.value })} required />
-            <Input placeholder="Адрес" value={clientForm.address} onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })} required />
-            <Input placeholder="Поручитель ФИО" value={clientForm.guarantor_full_name} onChange={(e) => setClientForm({ ...clientForm, guarantor_full_name: e.target.value })} required />
-            <Input placeholder="Поручитель телефон" value={clientForm.guarantor_phone} onChange={(e) => setClientForm({ ...clientForm, guarantor_phone: e.target.value })} required />
-            <Input placeholder="Поручитель паспорт" value={clientForm.guarantor_passport} onChange={(e) => setClientForm({ ...clientForm, guarantor_passport: e.target.value })} required className="md:col-span-2" />
+            <FormField label="ФИО" error={clientFormErrors.full_name}>
+              <Input placeholder="Иванов Иван" value={clientForm.full_name} onChange={(e) => setClientForm({ ...clientForm, full_name: filterPersonName(e.target.value) })} required />
+            </FormField>
+            <FormField label="Телефон" error={clientFormErrors.phone}>
+              <PhoneInput value={clientForm.phone} onValueChange={(phone) => setClientForm({ ...clientForm, phone })} required />
+            </FormField>
+            <FormField label="Паспорт" error={clientFormErrors.passport}>
+              <Input placeholder="1234567890" inputMode="numeric" value={clientForm.passport} onChange={(e) => setClientForm({ ...clientForm, passport: filterPassportInput(e.target.value) })} required />
+            </FormField>
+            <FormField label="Адрес" error={clientFormErrors.address}>
+              <Input placeholder="г. Москва, ул. Ленина, 10" value={clientForm.address} onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })} required />
+            </FormField>
+            <FormField label="Поручитель ФИО" error={clientFormErrors.guarantor_full_name}>
+              <Input placeholder="Петров Пётр" value={clientForm.guarantor_full_name} onChange={(e) => setClientForm({ ...clientForm, guarantor_full_name: filterPersonName(e.target.value) })} required />
+            </FormField>
+            <FormField label="Поручитель телефон" error={clientFormErrors.guarantor_phone}>
+              <PhoneInput value={clientForm.guarantor_phone} onValueChange={(guarantor_phone) => setClientForm({ ...clientForm, guarantor_phone })} required />
+            </FormField>
+            <div className="md:col-span-2">
+              <FormField label="Поручитель паспорт" error={clientFormErrors.guarantor_passport}>
+                <Input placeholder="1234567890" inputMode="numeric" value={clientForm.guarantor_passport} onChange={(e) => setClientForm({ ...clientForm, guarantor_passport: filterPassportInput(e.target.value) })} required />
+              </FormField>
+            </div>
             <Button type="submit" className="md:col-span-2">Создать клиента</Button>
           </form>
         </Card>
@@ -164,7 +273,7 @@ export default function RetailClientsPage() {
         <Card>
           <SectionTitle title="Создать договор" description="Назначьте инвестора — взнос пойдёт в его кассу" />
           <form onSubmit={handleCreateContract} className="grid gap-2 md:grid-cols-2">
-            <FormField label="Клиент">
+            <FormField label="Клиент" error={contractFormErrors.retail_client_id}>
               <select
                 value={contractForm.retail_client_id}
                 onChange={(e) => setContractForm({ ...contractForm, retail_client_id: e.target.value })}
@@ -177,7 +286,7 @@ export default function RetailClientsPage() {
                 ))}
               </select>
             </FormField>
-            <FormField label="Инвестор">
+            <FormField label="Инвестор" error={contractFormErrors.investor_id}>
               <select
                 value={contractForm.investor_id}
                 onChange={(e) => setContractForm({ ...contractForm, investor_id: e.target.value })}
@@ -192,8 +301,12 @@ export default function RetailClientsPage() {
                 ))}
               </select>
             </FormField>
-            <Input placeholder="Название товара" value={contractForm.product_name} onChange={(e) => setContractForm({ ...contractForm, product_name: e.target.value })} required />
-            <Input type="number" placeholder="Цена товара" value={contractForm.product_price} onChange={(e) => setContractForm({ ...contractForm, product_price: e.target.value })} required />
+            <FormField label="Название товара" error={contractFormErrors.product_name}>
+              <Input placeholder="Название товара" value={contractForm.product_name} onChange={(e) => setContractForm({ ...contractForm, product_name: e.target.value })} required />
+            </FormField>
+            <FormField label="Цена товара" error={contractFormErrors.product_price}>
+              <Input inputMode="decimal" placeholder="50000" value={contractForm.product_price} onChange={(e) => setContractForm({ ...contractForm, product_price: filterDecimalInput(e.target.value) })} required />
+            </FormField>
             <FormField label="Срок">
               <select
                 value={contractForm.term_months}
@@ -207,8 +320,12 @@ export default function RetailClientsPage() {
                 ))}
               </select>
             </FormField>
-            <Input type="number" placeholder="Первоначальный взнос" value={contractForm.down_payment} onChange={(e) => setContractForm({ ...contractForm, down_payment: e.target.value })} required />
-            <Input type="date" value={contractForm.contract_date} onChange={(e) => setContractForm({ ...contractForm, contract_date: e.target.value })} required />
+            <FormField label="Первоначальный взнос" error={contractFormErrors.down_payment}>
+              <Input inputMode="decimal" placeholder="0" value={contractForm.down_payment} onChange={(e) => setContractForm({ ...contractForm, down_payment: filterDecimalInput(e.target.value) })} required />
+            </FormField>
+            <FormField label="Дата договора" error={contractFormErrors.contract_date}>
+              <Input type="date" value={contractForm.contract_date} onChange={(e) => setContractForm({ ...contractForm, contract_date: e.target.value })} required />
+            </FormField>
             <Button type="submit" className="md:col-span-2">Создать договор</Button>
           </form>
         </Card>
@@ -231,6 +348,7 @@ export default function RetailClientsPage() {
                   <th>ФИО</th>
                   <th>Телефон</th>
                   <th>Паспорт</th>
+                  <th>Паспорт PDF</th>
                   <th>Поручитель</th>
                   <th>Договоров</th>
                   {isOwner && <th>Действие</th>}
@@ -242,6 +360,19 @@ export default function RetailClientsPage() {
                     <td className="font-medium text-slate-900">{formatShortName(client.full_name)}</td>
                     <td>{client.phone}</td>
                     <td>{client.passport}</td>
+                    <td className="min-w-[220px]">
+                      <PdfDocumentField
+                        label=""
+                        hasFile={client.has_passport_pdf}
+                        filename={client.passport_pdf_filename}
+                        uploading={uploadingPassportId === client.id}
+                        canUpload={isOwner}
+                        canDelete={isOwner}
+                        onUpload={(file) => handleUploadPassport(client, file)}
+                        onDownload={() => handleDownloadPassport(client)}
+                        onDelete={() => handleDeletePassport(client)}
+                      />
+                    </td>
                     <td>{formatShortName(client.guarantor_full_name)}</td>
                     <td>{client.contracts_count}</td>
                     {isOwner && (
