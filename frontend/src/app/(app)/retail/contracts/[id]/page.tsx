@@ -20,6 +20,13 @@ import {
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { RetailContractDetail } from "@/lib/types";
+import {
+  collectErrors,
+  filterDecimalInput,
+  hasErrors,
+  validatePositiveAmount,
+  validateRequiredDate,
+} from "@/lib/validation";
 import { PdfDocumentField } from "@/components/PdfDocumentField";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -50,6 +57,8 @@ export default function RetailContractDetailPage() {
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [uploadingContractPdf, setUploadingContractPdf] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentFormErrors, setPaymentFormErrors] = useState<Record<string, string>>({});
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     payment_date: new Date().toISOString().slice(0, 10),
@@ -81,11 +90,29 @@ export default function RetailContractDetailPage() {
   async function handlePayment(event: React.FormEvent) {
     event.preventDefault();
     if (!contract) return;
+    setPaymentError(null);
+    const errors = collectErrors({
+      amount: validatePositiveAmount(paymentForm.amount, { label: "Сумма" }),
+      payment_date: validateRequiredDate(paymentForm.payment_date),
+      payment_schedule_id:
+        paymentForm.payment_type === "monthly" && !paymentForm.payment_schedule_id
+          ? "Выберите месяц графика"
+          : null,
+    });
+    if (hasErrors(errors)) {
+      setPaymentFormErrors(errors);
+      return;
+    }
+    setPaymentFormErrors({});
     setSaving(true);
     try {
       await retailApi.recordPayment(contract.id, {
-        ...paymentForm,
-        payment_schedule_id: paymentForm.payment_schedule_id || undefined,
+        amount: paymentForm.amount.trim().replace(",", "."),
+        payment_date: paymentForm.payment_date,
+        payment_type: paymentForm.payment_type,
+        payment_schedule_id:
+          paymentForm.payment_type === "monthly" ? paymentForm.payment_schedule_id : undefined,
+        comment: paymentForm.comment.trim() || undefined,
       });
       setPaymentForm({
         amount: "",
@@ -96,7 +123,7 @@ export default function RetailContractDetailPage() {
       });
       await load();
     } catch (error) {
-      alert(error instanceof ApiRequestError ? error.message : "Не удалось сохранить платёж");
+      setPaymentError(error instanceof ApiRequestError ? error.message : "Не удалось сохранить платёж");
     } finally {
       setSaving(false);
     }
@@ -298,11 +325,19 @@ export default function RetailContractDetailPage() {
 
       <Card>
         <SectionTitle title="Внести платёж" description="Первоначальный взнос идёт в кассу инвестора" />
+        {paymentError ? <p className="mb-2 text-sm text-rose-600">{paymentError}</p> : null}
         <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
           <FormField label="Тип платежа">
             <Select
               value={paymentForm.payment_type}
-              onChange={(e) => setPaymentForm({ ...paymentForm, payment_type: e.target.value })}
+              onChange={(e) =>
+                setPaymentForm({
+                  ...paymentForm,
+                  payment_type: e.target.value,
+                  payment_schedule_id: "",
+                  amount: "",
+                })
+              }
             >
               <option value="down_payment">Первоначальный взнос</option>
               <option value="monthly">Ежемесячный</option>
@@ -310,12 +345,20 @@ export default function RetailContractDetailPage() {
             </Select>
           </FormField>
           {paymentForm.payment_type === "monthly" && (
-            <FormField label="Месяц графика">
+            <FormField label="Месяц графика" error={paymentFormErrors.payment_schedule_id}>
               <Select
                 value={paymentForm.payment_schedule_id}
-                onChange={(e) =>
-                  setPaymentForm({ ...paymentForm, payment_schedule_id: e.target.value })
-                }
+                onChange={(e) => {
+                  const scheduleItem = contract.payment_schedule.find((item) => item.id === e.target.value);
+                  const remainder = scheduleItem
+                    ? Math.max(Number(scheduleItem.planned_amount) - Number(scheduleItem.paid_amount), 0)
+                    : 0;
+                  setPaymentForm({
+                    ...paymentForm,
+                    payment_schedule_id: e.target.value,
+                    amount: remainder > 0 ? String(remainder) : paymentForm.amount,
+                  });
+                }}
                 required
               >
                 <option value="">Выберите месяц</option>
@@ -327,18 +370,25 @@ export default function RetailContractDetailPage() {
               </Select>
             </FormField>
           )}
-          <Input
-            type="date"
-            value={paymentForm.payment_date}
-            onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Сумма"
-            value={paymentForm.amount}
-            onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-            required
-          />
+          <FormField label="Дата платежа" error={paymentFormErrors.payment_date}>
+            <Input
+              type="date"
+              value={paymentForm.payment_date}
+              onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Сумма" error={paymentFormErrors.amount}>
+            <Input
+              inputMode="decimal"
+              placeholder="Сумма"
+              value={paymentForm.amount}
+              onChange={(e) =>
+                setPaymentForm({ ...paymentForm, amount: filterDecimalInput(e.target.value) })
+              }
+              required
+            />
+          </FormField>
           <Input
             placeholder="Комментарий"
             value={paymentForm.comment}

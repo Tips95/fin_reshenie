@@ -2,8 +2,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.enums import OrganizationType, PaymentScheduleStatus, RetailContractStatus, UserRole
 from app.models.organization import Organization
@@ -51,9 +51,9 @@ def get_retail_contract(
         .options(
             joinedload(RetailContract.client),
             joinedload(RetailContract.investor),
-            joinedload(RetailContract.payment_schedule),
-            joinedload(RetailContract.payments),
-            joinedload(RetailContract.overdue_logs),
+            selectinload(RetailContract.payment_schedule),
+            selectinload(RetailContract.payments),
+            selectinload(RetailContract.overdue_logs),
         )
         .where(
             RetailContract.id == contract_id,

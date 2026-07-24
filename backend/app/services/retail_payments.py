@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.enums import PaymentScheduleStatus, RetailContractStatus, RetailPaymentType, UserRole
@@ -52,11 +53,14 @@ def record_retail_payment(
 
     schedule = None
     if payment_type == RetailPaymentType.DOWN_PAYMENT:
-        existing_down = sum(
-            payment.amount
-            for payment in contract.payments
-            if not payment.is_deleted and payment.payment_type == RetailPaymentType.DOWN_PAYMENT
-        )
+        existing_down = db.scalar(
+            select(func.coalesce(func.sum(RetailPayment.amount), 0)).where(
+                RetailPayment.retail_contract_id == contract.id,
+                RetailPayment.is_deleted.is_(False),
+                RetailPayment.payment_type == RetailPaymentType.DOWN_PAYMENT,
+            )
+        ) or Decimal("0.00")
+        existing_down = money(existing_down)
         if existing_down >= contract.down_payment:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -74,22 +78,31 @@ def record_retail_payment(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Укажите месяц графика",
             )
-        schedule = next(
-            (item for item in contract.payment_schedule if item.id == payment_schedule_id),
-            None,
+        schedule = db.scalar(
+            select(RetailPaymentSchedule).where(
+                RetailPaymentSchedule.id == payment_schedule_id,
+                RetailPaymentSchedule.retail_contract_id == contract.id,
+            )
         )
         if schedule is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Месяц графика не найден")
         apply_payment_to_schedule(schedule, amount, payment_date)
     elif payment_type == RetailPaymentType.EARLY_REPAYMENT:
-        financed_paid = sum(
-            payment.amount
-            for payment in contract.payments
-            if not payment.is_deleted
-            and payment.payment_type in (RetailPaymentType.MONTHLY, RetailPaymentType.EARLY_REPAYMENT)
-        )
-        schedule_paid = sum(item.paid_amount for item in contract.payment_schedule)
-        outstanding = money(contract.financed_amount - max(financed_paid, schedule_paid))
+        financed_paid = db.scalar(
+            select(func.coalesce(func.sum(RetailPayment.amount), 0)).where(
+                RetailPayment.retail_contract_id == contract.id,
+                RetailPayment.is_deleted.is_(False),
+                RetailPayment.payment_type.in_(
+                    (RetailPaymentType.MONTHLY, RetailPaymentType.EARLY_REPAYMENT)
+                ),
+            )
+        ) or Decimal("0.00")
+        schedule_paid = db.scalar(
+            select(func.coalesce(func.sum(RetailPaymentSchedule.paid_amount), 0)).where(
+                RetailPaymentSchedule.retail_contract_id == contract.id,
+            )
+        ) or Decimal("0.00")
+        outstanding = money(contract.financed_amount - max(money(financed_paid), money(schedule_paid)))
         if amount > outstanding:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -107,10 +120,18 @@ def record_retail_payment(
         created_by_id=user.id,
     )
     db.add(payment)
+    db.flush()
 
     if payment_type == RetailPaymentType.EARLY_REPAYMENT:
         remaining = amount
-        for item in sorted(contract.payment_schedule, key=lambda row: row.month_number):
+        schedule_rows = list(
+            db.scalars(
+                select(RetailPaymentSchedule)
+                .where(RetailPaymentSchedule.retail_contract_id == contract.id)
+                .order_by(RetailPaymentSchedule.month_number)
+            )
+        )
+        for item in schedule_rows:
             if remaining <= Decimal("0.00"):
                 break
             item_remainder = money(item.planned_amount - item.paid_amount)
@@ -120,6 +141,7 @@ def record_retail_payment(
             apply_payment_to_schedule(item, applied, payment_date)
             remaining = money(remaining - applied)
 
+    db.refresh(contract, attribute_names=["payment_schedule", "payments"])
     sync_contract_status(contract)
     return payment
 

@@ -47,6 +47,18 @@ class TestRetailContractCreation:
         assert exc.value.status_code == 403
 
 
+class TestRetailPaymentCreate:
+    def test_amount_normalizes_spaces_and_comma(self):
+        from app.schemas.retail import RetailPaymentCreate
+
+        payload = RetailPaymentCreate(
+            amount="10 000,50",
+            payment_date=date.today(),
+            payment_type="monthly",
+        )
+        assert payload.amount == Decimal("10000.50")
+
+
 def test_empty_dashboard_returns_zeros():
     from app.core.database import SessionLocal
     from app.models.user import User

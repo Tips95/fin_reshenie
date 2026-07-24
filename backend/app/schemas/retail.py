@@ -202,6 +202,24 @@ class RetailPaymentCreate(BaseModel):
     payment_schedule_id: UUID | None = None
     comment: str | None = None
 
+    @field_validator("amount", mode="before")
+    @classmethod
+    def normalize_amount(cls, value: object) -> object:
+        if isinstance(value, str):
+            cleaned = value.strip().replace(" ", "").replace(",", ".")
+            if not cleaned:
+                raise ValueError("Укажите сумму")
+            return cleaned
+        return value
+
+    @field_validator("comment")
+    @classmethod
+    def normalize_comment(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
 
 class InvestorSummaryItem(BaseModel):
     investor_id: UUID
