@@ -110,9 +110,6 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [overdueFilter, setOverdueFilter] = useState(
     searchParams.get("overdue") === "true",
   );
-  const [procedureFilter, setProcedureFilter] = useState(
-    searchParams.get("procedure_stage") ?? "",
-  );
   const [managerFilter, setManagerFilter] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
   const [nameSearch, setNameSearch] = useState("");
@@ -146,9 +143,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     setLoading(true);
     try {
       const data = await clientsApi.list({
-        status: statusFilter || undefined,
+        status: isCollectionView ? statusFilter || undefined : undefined,
         overdue: overdueFilter || undefined,
-        procedure_stage: procedureFilter || undefined,
         engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
         collection_view: isCollectionView ? collectionView : undefined,
         manager_id: managerFilter || undefined,
@@ -167,13 +163,12 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, procedureFilter, workspaceConfig.engagementStage, isCollectionView, collectionView, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir, page]);
+  }, [statusFilter, workspaceConfig.engagementStage, isCollectionView, collectionView, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir, page]);
 
   useEffect(() => {
     setPage(1);
   }, [
     statusFilter,
-    procedureFilter,
     workspaceConfig.engagementStage,
     isCollectionView,
     collectionView,
@@ -303,9 +298,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     setExportError(null);
     try {
       await exportsApi.clients({
-        status: statusFilter || undefined,
+        status: isCollectionView ? statusFilter || undefined : undefined,
         overdue: overdueFilter || undefined,
-        procedure_stage: procedureFilter || undefined,
         engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
         collection_view: isCollectionView ? collectionView : undefined,
         manager_id: managerFilter || undefined,
@@ -392,73 +386,62 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       {updateError && <p className="alert-danger">{updateError}</p>}
 
       <Card>
-        <div className="filter-grid">
-          <div className="min-w-0 w-full flex-1 sm:min-w-[180px]">
-            <label className="mb-1 block text-sm text-muted">Поиск по ФИО</label>
-            <Input
-              placeholder="Иванов Иван"
-              value={nameSearch}
-              onChange={(e) => setNameSearch(e.target.value)}
-            />
-          </div>
-          <div className="min-w-0 w-full flex-1 sm:min-w-[180px]">
-            <label className="mb-1 block text-sm text-muted">Поиск по телефону</label>
-            <Input
-              placeholder="+7 928 000-00-00"
-              value={phoneSearch}
-              onChange={(e) => setPhoneSearch(e.target.value)}
-            />
-          </div>
-          <div className="min-w-0 w-full sm:min-w-[180px]">
-            <label className="mb-1 block text-sm text-muted">Статус</label>
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">Все</option>
-              <option value="active">Активен</option>
-              <option value="completed">Завершён</option>
-              <option value="defaulted">Просрочен</option>
-              <option value="cancelled">Отменён</option>
-            </Select>
-          </div>
-          {!isCollectionView && (
-            <div className="min-w-0 w-full sm:min-w-[180px]">
-              <label className="mb-1 block text-sm text-muted">Этап процедуры</label>
-              <Select
-                value={procedureFilter}
-                onChange={(e) => setProcedureFilter(e.target.value)}
-              >
-                <option value="">Все</option>
-                {PROCEDURE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
-          <div className="min-w-0 w-full sm:min-w-[180px]">
-            <label className="mb-1 block text-sm text-muted">Месяц договора</label>
-            <Input
-              type="month"
-              value={contractMonth}
-              onChange={(e) => setContractMonth(e.target.value)}
-            />
-          </div>
-          {!isCollectionView && (
-            <div className="min-w-0 w-full sm:min-w-[180px]">
-              <label className="mb-1 block text-sm text-muted">Платёж в месяце</label>
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="min-w-0">
+              <label className="mb-0.5 block text-xs text-muted">Поиск по ФИО</label>
               <Input
-                type="month"
-                value={dueMonth}
-                onChange={(e) => setDueMonth(e.target.value)}
+                placeholder="Иванов Иван"
+                value={nameSearch}
+                onChange={(e) => setNameSearch(e.target.value)}
               />
             </div>
-          )}
-          {!isCollectionView && (
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm text-foreground">
+            <div className="min-w-0">
+              <label className="mb-0.5 block text-xs text-muted">Поиск по телефону</label>
+              <Input
+                placeholder="+7 928 000-00-00"
+                value={phoneSearch}
+                onChange={(e) => setPhoneSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            {isCollectionView && (
+              <div className="min-w-[140px] flex-1 sm:w-[160px] sm:flex-none">
+                <label className="mb-0.5 block text-xs text-muted">Статус</label>
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="">Все</option>
+                  <option value="active">Активен</option>
+                  <option value="completed">Завершён</option>
+                  <option value="defaulted">Просрочен</option>
+                  <option value="cancelled">Отменён</option>
+                </Select>
+              </div>
+            )}
+            <div className="min-w-[140px] flex-1 sm:w-[160px] sm:flex-none">
+              <label className="mb-0.5 block text-xs text-muted">Месяц договора</label>
+              <Input
+                type="month"
+                value={contractMonth}
+                onChange={(e) => setContractMonth(e.target.value)}
+              />
+            </div>
+            {!isCollectionView && (
+              <div className="min-w-[140px] flex-1 sm:w-[160px] sm:flex-none">
+                <label className="mb-0.5 block text-xs text-muted">Платёж в месяце</label>
+                <Input
+                  type="month"
+                  value={dueMonth}
+                  onChange={(e) => setDueMonth(e.target.value)}
+                />
+              </div>
+            )}
+            {!isCollectionView && (
+              <label className="flex h-[30px] items-center gap-2 px-1 text-xs text-foreground">
                 <input
                   type="checkbox"
                   checked={overdueFilter}
@@ -466,24 +449,24 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                 />
                 Только с просрочкой
               </label>
-            </div>
-          )}
-          {user?.role === "owner" && managers.length > 0 && (
-            <div className="min-w-0 w-full sm:min-w-[180px]">
-              <label className="mb-1 block text-sm text-muted">Менеджер</label>
-              <Select
-                value={managerFilter}
-                onChange={(e) => setManagerFilter(e.target.value)}
-              >
-                <option value="">Все</option>
-                {managers.map((manager) => (
-                  <option key={manager.id} value={manager.id}>
-                    {manager.full_name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
+            )}
+            {user?.role === "owner" && managers.length > 0 && (
+              <div className="min-w-[140px] flex-1 sm:w-[180px] sm:flex-none">
+                <label className="mb-0.5 block text-xs text-muted">Менеджер</label>
+                <Select
+                  value={managerFilter}
+                  onChange={(e) => setManagerFilter(e.target.value)}
+                >
+                  <option value="">Все</option>
+                  {managers.map((manager) => (
+                    <option key={manager.id} value={manager.id}>
+                      {manager.full_name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
 

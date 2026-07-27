@@ -250,6 +250,22 @@ body {
     @apply mt-0.5 shrink-0 text-[10px] text-muted transition-transform duration-150;
   }
 
+  .client-section-anchor {
+    scroll-margin-top: 7.5rem;
+  }
+
+  .client-section-nav {
+    @apply flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none];
+  }
+
+  .client-section-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .client-section-nav-btn {
+    @apply interactive shrink-0 rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-foreground shadow-soft transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-700;
+  }
+
   .mobile-shell-main {
     @apply pb-[calc(var(--mobile-nav-height)+var(--safe-area-bottom))] lg:pb-0;
   }

@@ -186,10 +186,12 @@ export function Select({
 }
 
 export function Card({
+  id,
   className,
   children,
   variant = "default",
 }: {
+  id?: string;
   className?: string;
   children: React.ReactNode;
   variant?: "default" | "glass" | "accent";
@@ -200,7 +202,11 @@ export function Card({
     accent: "interactive rounded-lg border border-brand-200 bg-brand-50 p-card shadow-soft hover:shadow-card",
   };
 
-  return <div className={cn(variants[variant], className)}>{children}</div>;
+  return (
+    <div id={id} className={cn(variants[variant], className)}>
+      {children}
+    </div>
+  );
 }
 
 export function Badge({
@@ -427,6 +433,7 @@ export function Pagination({
 }
 
 export function CollapsibleCard({
+  id,
   title,
   description,
   badge,
@@ -436,6 +443,7 @@ export function CollapsibleCard({
   children,
   className,
 }: {
+  id?: string;
   title: string;
   description?: string;
   badge?: React.ReactNode;
@@ -457,7 +465,7 @@ export function CollapsibleCard({
   }
 
   return (
-    <Card className={cn("overflow-hidden p-0", className)}>
+    <Card id={id} className={cn("overflow-hidden p-0", className)}>
       <button
         type="button"
         className="collapsible-summary w-full text-left"

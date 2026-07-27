@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import {
@@ -33,6 +33,14 @@ import {
 } from "@/lib/validation";
 import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
+import { cn } from "@/lib/cn";
+
+type ClientNavSection = {
+  id: string;
+  label: string;
+};
+
+const CLIENT_SECTION_CLASS = "client-section-anchor";
 
 type PendingScheduleAdd = {
   tempId: string;
@@ -852,6 +860,56 @@ export default function ClientDetailPage() {
     { value: "completed", label: "Завершение" },
   ];
 
+  const jumpToSection = useCallback((sectionId: string) => {
+    if (sectionId === "section-schedule") {
+      setScheduleOpen(true);
+    }
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(sectionId);
+      if (!target) {
+        return;
+      }
+      const summary = target.querySelector<HTMLButtonElement>("button.collapsible-summary");
+      if (summary?.getAttribute("aria-expanded") === "false") {
+        summary.click();
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const clientNavSections = useMemo(() => {
+    if (!client || !isDetail(client)) {
+      return [] as ClientNavSection[];
+    }
+
+    const detail = client;
+    const isBankruptcy = client.engagement_stage === "bankruptcy";
+    const docCollection = detail.document_collection ?? null;
+    const sections: ClientNavSection[] = [];
+
+    if (canRecordSchedulePayment && isBankruptcy) {
+      sections.push({ id: "section-payment", label: "Платёж" });
+    }
+    if (canEditClient) {
+      sections.push({ id: "section-client", label: "Данные" });
+    }
+    if (canEditClient && docCollection) {
+      sections.push({ id: "section-doc", label: "Сбор документов" });
+    }
+    if (isBankruptcy && canEditClient && detail.installment_plan) {
+      sections.push({ id: "section-contract", label: "Сумма договора" });
+    }
+    if (isBankruptcy) {
+      if (isOwner) {
+        sections.push({ id: "section-mandatory", label: "Обязательные" });
+      }
+      sections.push({ id: "section-schedule", label: "График" });
+      sections.push({ id: "section-payments", label: "История" });
+    }
+
+    return sections;
+  }, [client, canEditClient, canRecordSchedulePayment, isOwner]);
+
   async function handleClaimClient() {
     if (!client || !user) return;
     setCardSaving("claim");
@@ -998,7 +1056,11 @@ export default function ClientDetailPage() {
     }
 
     return (
-      <Card>
+      <Card
+        id="section-payment"
+        variant="accent"
+        className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-emerald-500")}
+      >
         <SectionTitle
           title="Зафиксировать платёж"
           description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
@@ -1121,34 +1183,57 @@ export default function ClientDetailPage() {
         }
       />
 
-      {detail && isBankruptcy && (
+      {(detail && isBankruptcy) || clientNavSections.length > 0 ? (
         <div className="sticky top-0 z-10 -mx-page-x border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:-mx-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground">
-            <span>
-              <span className="text-muted">Договор:</span>{" "}
-              <strong>{formatMoney(contractTotal)}</strong>
-            </span>
-            <span>
-              <span className="text-muted">Остаток:</span>{" "}
-              <strong className={remainder > 0 ? "text-status-warning-text" : "text-status-success-text"}>
-                {formatMoney(remainder)}
-              </strong>
-            </span>
-            {nextDueItem ? (
+          {detail && isBankruptcy ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground">
               <span>
-                <span className="text-muted">След. платёж:</span>{" "}
-                <strong>
-                  {formatDate(effectiveDueDate(nextDueItem))} ·{" "}
-                  {formatMoney(remainingAmount(nextDueItem))}
+                <span className="text-muted">Договор:</span>{" "}
+                <strong>{formatMoney(contractTotal)}</strong>
+              </span>
+              <span>
+                <span className="text-muted">Остаток:</span>{" "}
+                <strong
+                  className={
+                    remainder > 0 ? "text-status-warning-text" : "text-status-success-text"
+                  }
+                >
+                  {formatMoney(remainder)}
                 </strong>
               </span>
-            ) : null}
-            {overdueScheduleItems.length > 0 ? (
-              <Badge tone="danger">Просрочка: {overdueScheduleItems.length} мес.</Badge>
-            ) : null}
-          </div>
+              {nextDueItem ? (
+                <span>
+                  <span className="text-muted">След. платёж:</span>{" "}
+                  <strong>
+                    {formatDate(effectiveDueDate(nextDueItem))} ·{" "}
+                    {formatMoney(remainingAmount(nextDueItem))}
+                  </strong>
+                </span>
+              ) : null}
+              {overdueScheduleItems.length > 0 ? (
+                <Badge tone="danger">Просрочка: {overdueScheduleItems.length} мес.</Badge>
+              ) : null}
+            </div>
+          ) : null}
+          {clientNavSections.length > 0 ? (
+            <nav
+              className={cn("client-section-nav", detail && isBankruptcy && "mt-2")}
+              aria-label="Разделы карточки клиента"
+            >
+              {clientNavSections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  className="client-section-nav-btn"
+                  onClick={() => jumpToSection(section.id)}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </nav>
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       {renderManualPaymentForm()}
 
@@ -1169,7 +1254,10 @@ export default function ClientDetailPage() {
       )}
 
       {canEditClient && (
-        <Card>
+        <Card
+          id="section-client"
+          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-brand-600")}
+        >
           <SectionTitle
             title="Данные клиента"
             description={client.phone}
@@ -1348,7 +1436,11 @@ export default function ClientDetailPage() {
       )}
 
       {canEditClient && isDetail(client) && docCollection && (
-        <Card variant="accent">
+        <Card
+          id="section-doc"
+          variant="accent"
+          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-amber-500")}
+        >
           <SectionTitle
             title="Сбор документов"
             description={
@@ -1548,7 +1640,7 @@ export default function ClientDetailPage() {
       )}
 
       {detail && isBankruptcy && isOwner && (
-        <Card variant="accent">
+        <Card className="border-t-4 border-t-slate-300 opacity-95">
           <SectionTitle
             title="Прибыль по клиенту"
             description="Получено по платежам минус обязательные расходы"
@@ -1575,7 +1667,10 @@ export default function ClientDetailPage() {
       )}
 
       {detail && isBankruptcy && canEditClient && detail.installment_plan && (
-        <Card>
+        <Card
+          id="section-contract"
+          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-violet-600")}
+        >
           <SectionTitle
             title="Сумма договора"
             description="Можно задать вручную — сумма синхронизируется с графиком платежей"
@@ -1633,6 +1728,8 @@ export default function ClientDetailPage() {
         <>
           {detail.matched_tier && (
             <CollapsibleCard
+              id="section-tariff"
+              className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-slate-300")}
               title="Подобранный тариф"
               description="Справочные данные тарифа — раскройте при необходимости"
               defaultOpen={false}
@@ -1672,6 +1769,8 @@ export default function ClientDetailPage() {
           )}
 
           <CollapsibleCard
+            id="section-mandatory"
+            className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-orange-500")}
             title="Обязательные платежи по процедуре"
             description="Депозит, финансовое управление и судебная пошлина — только для руководителя"
             defaultOpen={!allMandatoryPaid}
@@ -1796,6 +1895,8 @@ export default function ClientDetailPage() {
           </CollapsibleCard>
 
           <CollapsibleCard
+            id="section-schedule"
+            className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-brand-600")}
             title="График платежей"
             description={
               canEditSchedule
@@ -2268,7 +2369,10 @@ export default function ClientDetailPage() {
             </>
           )}
 
-          <Card>
+          <Card
+            id="section-payments"
+            className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-slate-400")}
+          >
             <SectionTitle
               title="История платежей"
               description={
