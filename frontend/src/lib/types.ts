@@ -140,6 +140,7 @@ export interface PaymentScheduleItem {
   status: PaymentScheduleStatus;
   deferred_until: string | null;
   deferral_comment: string | null;
+  manager_note: string | null;
   overdue_waived: boolean;
 }
 

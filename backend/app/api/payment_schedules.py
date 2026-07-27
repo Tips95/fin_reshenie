@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.payment_schedule import (
     PaymentScheduleCreate,
     PaymentScheduleDefer,
+    PaymentScheduleNoteUpdate,
     PaymentScheduleResponse,
     PaymentScheduleUpdate,
     PaymentScheduleWaiveOverdue,
@@ -170,6 +171,37 @@ def update_payment_schedule(
         )
 
     refresh_overdue_statuses(db, schedule.installment_plan_id)
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@router.patch("/{schedule_id}/note", response_model=PaymentScheduleResponse)
+def update_payment_schedule_note(
+    schedule_id: UUID,
+    payload: PaymentScheduleNoteUpdate,
+    current_user: User = Depends(require_owner_or_manager),
+    db: Session = Depends(get_db),
+) -> PaymentSchedule:
+    schedule = _get_schedule_or_404(db, schedule_id)
+    client_id = schedule.installment_plan.client_id
+    ensure_client_write_access(db, current_user, client_id)
+
+    old_note = schedule.manager_note
+    normalized = payload.manager_note.strip() if payload.manager_note else None
+    schedule.manager_note = normalized or None
+
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="payment_schedule",
+        entity_id=schedule.id,
+        action=AuditAction.UPDATE,
+        field_name="manager_note",
+        old_value=old_note,
+        new_value=schedule.manager_note,
+    )
+
     db.commit()
     db.refresh(schedule)
     return schedule

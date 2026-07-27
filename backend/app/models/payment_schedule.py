@@ -33,6 +33,7 @@ class PaymentSchedule(Base, UUIDPrimaryKeyMixin):
     )
     deferred_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     deferral_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    manager_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     overdue_waived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     installment_plan: Mapped["InstallmentPlan"] = relationship(back_populates="payment_schedules")

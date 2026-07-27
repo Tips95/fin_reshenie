@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import {
@@ -146,6 +146,9 @@ export default function ClientDetailPage() {
   const [contractAmountSaving, setContractAmountSaving] = useState(false);
   const [deferringId, setDeferringId] = useState<string | null>(null);
   const [deferForm, setDeferForm] = useState({ deferred_until: "", comment: "" });
+  const [notePanelId, setNotePanelId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSavingId, setNoteSavingId] = useState<string | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>(EMPTY_SCHEDULE_DRAFT);
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
@@ -616,6 +619,52 @@ export default function ClientDetailPage() {
     }
   }
 
+  function toggleNotePanel(item: PaymentScheduleItem) {
+    if (notePanelId === item.id) {
+      setNotePanelId(null);
+      setNoteDraft("");
+      return;
+    }
+    setNotePanelId(item.id);
+    setNoteDraft(item.manager_note ?? "");
+  }
+
+  async function handleSaveNote(item: PaymentScheduleItem) {
+    setNoteSavingId(item.id);
+    try {
+      await scheduleApi.updateNote(item.id, noteDraft.trim() || null);
+      setNotePanelId(null);
+      setNoteDraft("");
+      await refreshClient();
+      showToast("Примечание сохранено");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить примечание",
+        "error",
+      );
+    } finally {
+      setNoteSavingId(null);
+    }
+  }
+
+  async function handleClearNote(item: PaymentScheduleItem) {
+    setNoteSavingId(item.id);
+    try {
+      await scheduleApi.updateNote(item.id, null);
+      setNotePanelId(null);
+      setNoteDraft("");
+      await refreshClient();
+      showToast("Примечание удалено");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось удалить примечание",
+        "error",
+      );
+    } finally {
+      setNoteSavingId(null);
+    }
+  }
+
   function scheduleEditValues(item: PaymentScheduleItem) {
     return getScheduleEditValues(item, scheduleDraft.edits);
   }
@@ -939,6 +988,9 @@ export default function ClientDetailPage() {
   const nextDueItem = schedule
     .filter((item) => remainingAmount(item) > 0)
     .sort((a, b) => effectiveDueDate(a).localeCompare(effectiveDueDate(b)))[0];
+  const scheduleNotesCount = schedule.filter((item) => item.manager_note?.trim()).length;
+  const scheduleTableColSpan =
+    8 + (canRecordSchedulePayment ? 1 : 0) + (canEditSchedule ? 1 : 0);
 
   function renderManualPaymentForm() {
     if (!canRecordSchedulePayment || !detail || !isBankruptcy) {
@@ -1751,11 +1803,16 @@ export default function ClientDetailPage() {
                 : "Раскройте, чтобы посмотреть помесячный график"
             }
             badge={
-              schedule.length > 0 ? (
-                <Badge tone="default">{schedule.length} мес.</Badge>
-              ) : (
-                <Badge tone="warning">Не настроен</Badge>
-              )
+              <>
+                {schedule.length > 0 ? (
+                  <Badge tone="default">{schedule.length} мес.</Badge>
+                ) : (
+                  <Badge tone="warning">Не настроен</Badge>
+                )}
+                {scheduleNotesCount > 0 ? (
+                  <Badge tone="warning">{scheduleNotesCount} прим.</Badge>
+                ) : null}
+              </>
             }
             open={scheduleOpen}
             onOpenChange={setScheduleOpen}
@@ -1793,6 +1850,7 @@ export default function ClientDetailPage() {
                       <th>Оплачено</th>
                       <th>Остаток</th>
                       <th>Статус</th>
+                      <th className="w-10">📝</th>
                       <th>Отсрочка</th>
                       {canRecordSchedulePayment && <th>Действие</th>}
                       {canEditSchedule && <th>Управление</th>}
@@ -1809,8 +1867,8 @@ export default function ClientDetailPage() {
                         editValues.due_date !== item.due_date;
 
                       return (
+                        <Fragment key={item.id}>
                         <tr
-                          key={item.id}
                           className={markedForDelete ? "bg-slate-50 opacity-60" : undefined}
                         >
                           <td>
@@ -1884,6 +1942,21 @@ export default function ClientDetailPage() {
                                 {markedForWaive ? "Будет снята просрочка" : "Просрочка снята"}
                               </p>
                             )}
+                          </td>
+                          <td className="whitespace-nowrap">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className={
+                                item.manager_note?.trim()
+                                  ? "h-7 px-2 text-xs font-semibold text-brand-700"
+                                  : "h-7 px-2 text-xs text-muted"
+                              }
+                              title={item.manager_note?.trim() || "Примечание к месяцу"}
+                              onClick={() => toggleNotePanel(item)}
+                            >
+                              {item.manager_note?.trim() ? "●" : "…"}
+                            </Button>
                           </td>
                           <td>
                             {item.deferral_comment ? (
@@ -1986,6 +2059,62 @@ export default function ClientDetailPage() {
                             </td>
                           )}
                         </tr>
+                        {notePanelId === item.id && (
+                          <tr className="bg-slate-50">
+                            <td colSpan={scheduleTableColSpan}>
+                              <div className="space-y-2 py-2">
+                                <p className="text-xs font-medium text-slate-600">
+                                  Примечание к {item.month_number} месяцу
+                                </p>
+                                {canEditClient ? (
+                                  <>
+                                    <textarea
+                                      className="interactive w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
+                                      rows={3}
+                                      value={noteDraft}
+                                      onChange={(e) => setNoteDraft(e.target.value)}
+                                      placeholder="Обещал перезвонить, просит отсрочку, договорились на…"
+                                    />
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        onClick={() => handleSaveNote(item)}
+                                        disabled={noteSavingId === item.id}
+                                      >
+                                        {noteSavingId === item.id ? "Сохранение…" : "Сохранить"}
+                                      </Button>
+                                      {item.manager_note?.trim() && (
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          onClick={() => handleClearNote(item)}
+                                          disabled={noteSavingId === item.id}
+                                        >
+                                          Удалить
+                                        </Button>
+                                      )}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setNotePanelId(null);
+                                          setNoteDraft("");
+                                        }}
+                                      >
+                                        Закрыть
+                                      </Button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <p className="whitespace-pre-wrap text-sm text-slate-700">
+                                    {item.manager_note?.trim() || "—"}
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                     {scheduleDraft.pendingAdds.map((item, index) => (
@@ -2023,6 +2152,9 @@ export default function ClientDetailPage() {
                         <td>{formatMoney(item.planned_amount)}</td>
                         <td>
                           <Badge>Новый месяц</Badge>
+                        </td>
+                        <td>
+                          <span className="text-xs text-slate-400">—</span>
                         </td>
                         <td>
                           <span className="text-xs text-slate-400">—</span>

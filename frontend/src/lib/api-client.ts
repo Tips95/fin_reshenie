@@ -453,6 +453,11 @@ export const scheduleApi = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  updateNote: (scheduleId: string, managerNote: string | null) =>
+    apiFetch<PaymentScheduleItem>(`/payment-schedule/${scheduleId}/note`, {
+      method: "PATCH",
+      body: JSON.stringify({ manager_note: managerNote }),
+    }),
   delete: (scheduleId: string) =>
     apiFetch<void>(`/payment-schedule/${scheduleId}`, { method: "DELETE" }),
   addMonth: (

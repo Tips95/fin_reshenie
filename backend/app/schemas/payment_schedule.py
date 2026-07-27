@@ -20,7 +20,12 @@ class PaymentScheduleResponse(BaseModel):
     status: PaymentScheduleStatus
     deferred_until: date | None = None
     deferral_comment: str | None = None
+    manager_note: str | None = None
     overdue_waived: bool = False
+
+
+class PaymentScheduleNoteUpdate(BaseModel):
+    manager_note: str | None = Field(default=None, max_length=4000)
 
 
 class PaymentScheduleDefer(BaseModel):
