@@ -22,7 +22,7 @@ import {
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
-import { addOneMonth, ensurePhonePrefix } from "@/lib/phone";
+import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
 import {
   filterDecimalInput,
   filterPersonName,
@@ -930,6 +930,76 @@ export default function ClientDetailPage() {
     .reduce((sum, item) => sum + Number(item.paid_amount), 0);
   const clientProfit = collectedTotal - mandatoryPaidTotal;
   const scheduleDraftDirty = canEditSchedule && isScheduleDraftDirty(scheduleDraft, schedule);
+  const whatsappUrl = phoneToWhatsAppWebUrl(client.phone);
+  const applicableMandatory = mandatory.filter((item) => item.is_applicable);
+  const allMandatoryPaid =
+    applicableMandatory.length > 0 &&
+    applicableMandatory.every((item) => item.status === "paid");
+  const overdueScheduleItems = schedule.filter((item) => item.status === "overdue");
+  const nextDueItem = schedule
+    .filter((item) => remainingAmount(item) > 0)
+    .sort((a, b) => effectiveDueDate(a).localeCompare(effectiveDueDate(b)))[0];
+
+  function renderManualPaymentForm() {
+    if (!canRecordSchedulePayment || !detail || !isBankruptcy) {
+      return null;
+    }
+
+    return (
+      <Card>
+        <SectionTitle
+          title="Зафиксировать платёж"
+          description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
+        />
+        <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
+          <FormField label="Месяц графика">
+            <Select
+              value={paymentForm.payment_schedule_id}
+              onChange={(e) => handleMonthSelect(e.target.value)}
+            >
+              <option value="">Автораспределение по графику</option>
+              {schedule.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.month_number} — {formatDate(item.due_date)} (
+                  {formatMoney(item.planned_amount)}, остаток{" "}
+                  {formatMoney(remainingAmount(item))})
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Дата платежа">
+            <Input
+              type="date"
+              value={paymentForm.payment_date}
+              onChange={(e) =>
+                setPaymentForm({ ...paymentForm, payment_date: e.target.value })
+              }
+              required
+            />
+          </FormField>
+          <FormField label="Сумма">
+            <Input
+              inputMode="decimal"
+              placeholder="Сумма"
+              value={paymentForm.amount}
+              onChange={(e) =>
+                setPaymentForm({ ...paymentForm, amount: filterDecimalInput(e.target.value) })
+              }
+              required
+            />
+          </FormField>
+          <Input
+            placeholder="Комментарий"
+            value={paymentForm.comment}
+            onChange={(e) => setPaymentForm({ ...paymentForm, comment: e.target.value })}
+          />
+          <Button type="submit" className="md:col-span-2">
+            Сохранить платёж
+          </Button>
+        </form>
+      </Card>
+    );
+  }
 
   return (
     <div className="page-stack">
@@ -938,10 +1008,20 @@ export default function ClientDetailPage() {
       )}
       <PageHeader
         title={formatShortName(client.full_name)}
-        subtitle={client.phone}
+        subtitle={`${statusLabel(client.status)} · ${engagementStageLabel(client.engagement_stage)}`}
         back={<BackLink href="/clients">К списку клиентов</BackLink>}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {whatsappUrl ? (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="interactive inline-flex items-center justify-center rounded-md bg-[#25D366] px-3 py-1.5 text-xs font-semibold text-white shadow-soft hover:bg-[#20bd5a]"
+              >
+                WhatsApp
+              </a>
+            ) : null}
             {isOwner && (
               <Button
                 variant="danger"
@@ -989,99 +1069,36 @@ export default function ClientDetailPage() {
         }
       />
 
-      {isOwner && (
-        <Card>
-          <SectionTitle
-            title="ФИО клиента"
-            description="Редактирование доступно только руководителю"
-          />
-          {editingName ? (
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[280px] flex-1">
-                <FormField label="Полное ФИО">
-                  <Input
-                    value={nameValue}
-                    onChange={(e) => setNameValue(filterPersonName(e.target.value))}
-                    placeholder="Фамилия Имя Отчество"
-                  />
-                </FormField>
-              </div>
-              <Button type="button" disabled={nameSaving} onClick={handleSaveName}>
-                {nameSaving ? "Сохранение..." : "Сохранить"}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setEditingName(false);
-                  setNameValue(client.full_name);
-                }}
-              >
-                Отмена
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="field-value">{client.full_name}</p>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setNameValue(client.full_name);
-                  setEditingName(true);
-                }}
-              >
-                Изменить ФИО
-              </Button>
-            </div>
-          )}
-        </Card>
+      {detail && isBankruptcy && (
+        <div className="sticky top-0 z-10 -mx-page-x border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:-mx-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground">
+            <span>
+              <span className="text-muted">Договор:</span>{" "}
+              <strong>{formatMoney(contractTotal)}</strong>
+            </span>
+            <span>
+              <span className="text-muted">Остаток:</span>{" "}
+              <strong className={remainder > 0 ? "text-status-warning-text" : "text-status-success-text"}>
+                {formatMoney(remainder)}
+              </strong>
+            </span>
+            {nextDueItem ? (
+              <span>
+                <span className="text-muted">След. платёж:</span>{" "}
+                <strong>
+                  {formatDate(effectiveDueDate(nextDueItem))} ·{" "}
+                  {formatMoney(remainingAmount(nextDueItem))}
+                </strong>
+              </span>
+            ) : null}
+            {overdueScheduleItems.length > 0 ? (
+              <Badge tone="danger">Просрочка: {overdueScheduleItems.length} мес.</Badge>
+            ) : null}
+          </div>
+        </div>
       )}
 
-      {canEditClient && (
-        <Card>
-          <SectionTitle title="Контактные данные" />
-          {editingPhone ? (
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[220px] flex-1">
-                <FormField label="Телефон">
-                  <PhoneInput
-                    value={phoneValue}
-                    onValueChange={setPhoneValue}
-                  />
-                </FormField>
-              </div>
-              <Button type="button" disabled={phoneSaving} onClick={handleSavePhone}>
-                {phoneSaving ? "Сохранение..." : "Сохранить"}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setEditingPhone(false);
-                  setPhoneValue(client.phone);
-                }}
-              >
-                Отмена
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="field-value">{client.phone}</p>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setPhoneValue(ensurePhonePrefix(client.phone));
-                  setEditingPhone(true);
-                }}
-              >
-                Изменить номер
-              </Button>
-            </div>
-          )}
-        </Card>
-      )}
+      {renderManualPaymentForm()}
 
       {canClaimClient && (
         <Card variant="accent">
@@ -1099,75 +1116,180 @@ export default function ClientDetailPage() {
         </Card>
       )}
 
-      {canEditClient && isDetail(client) && (
+      {canEditClient && (
         <Card>
-          <SectionTitle title="Статус, этап и менеджер" />
-          <div className="mb-4">
-            <Badge tone={isBankruptcy ? "success" : "warning"}>
-              {engagementStageLabel(client.engagement_stage)}
-            </Badge>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            <FormField label="Дата договора (1-й месяц графика)">
-              <Input
-                type="date"
-                value={client.contract_date}
-                disabled={cardSaving === "contract_date"}
-                onChange={(e) =>
-                  handleCardUpdate({ contract_date: e.target.value }, "contract_date")
-                }
-              />
-            </FormField>
-            <FormField label="Статус клиента">
-              <Select
-                value={client.status}
-                disabled={cardSaving === "status"}
-                onChange={(e) => handleCardUpdate({ status: e.target.value }, "status")}
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            {isBankruptcy && isOwner && (
-              <FormField label="Этап процедуры">
-                <Select
-                  value={client.procedure_stage}
-                  disabled={cardSaving === "procedure_stage"}
-                  onChange={(e) =>
-                    handleCardUpdate({ procedure_stage: e.target.value }, "procedure_stage")
-                  }
-                >
-                  {PROCEDURE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
+          <SectionTitle
+            title="Данные клиента"
+            description={client.phone}
+          />
+          <div className="space-y-4">
+            {isOwner && (
+              <div>
+                <p className="mb-1 text-xs text-muted">ФИО</p>
+                {editingName ? (
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="min-w-[280px] flex-1">
+                      <Input
+                        value={nameValue}
+                        onChange={(e) => setNameValue(filterPersonName(e.target.value))}
+                        placeholder="Фамилия Имя Отчество"
+                      />
+                    </div>
+                    <Button type="button" disabled={nameSaving} onClick={handleSaveName}>
+                      {nameSaving ? "Сохранение..." : "Сохранить"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditingName(false);
+                        setNameValue(client.full_name);
+                      }}
+                    >
+                      Отмена
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="field-value">{client.full_name}</p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setNameValue(client.full_name);
+                        setEditingName(true);
+                      }}
+                    >
+                      Изменить ФИО
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
-            {canAssignManager && (
-              <FormField label="Ответственный менеджер">
-                <Select
-                  value={client.assigned_manager_id ?? ""}
-                  disabled={cardSaving === "manager"}
-                  onChange={(e) =>
-                    handleCardUpdate(
-                      { assigned_manager_id: e.target.value || null },
-                      "manager",
-                    )
-                  }
-                >
-                  <option value="">Не назначен</option>
-                  {managers.map((manager) => (
-                    <option key={manager.id} value={manager.id}>
-                      {manager.full_name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
+
+            {!isOwner && <p className="field-value">{client.full_name}</p>}
+
+            <div>
+              <p className="mb-1 text-xs text-muted">Телефон</p>
+              {editingPhone ? (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-[220px] flex-1">
+                    <PhoneInput value={phoneValue} onValueChange={setPhoneValue} />
+                  </div>
+                  <Button type="button" disabled={phoneSaving} onClick={handleSavePhone}>
+                    {phoneSaving ? "Сохранение..." : "Сохранить"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setEditingPhone(false);
+                      setPhoneValue(client.phone);
+                    }}
+                  >
+                    Отмена
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="field-value">{client.phone}</p>
+                    {whatsappUrl ? (
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-[#128C7E] hover:underline"
+                      >
+                        Открыть WhatsApp
+                      </a>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setPhoneValue(ensurePhonePrefix(client.phone));
+                      setEditingPhone(true);
+                    }}
+                  >
+                    Изменить номер
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {isDetail(client) && (
+              <>
+                <div>
+                  <Badge tone={isBankruptcy ? "success" : "warning"}>
+                    {engagementStageLabel(client.engagement_stage)}
+                  </Badge>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  <FormField label="Дата договора (1-й месяц графика)">
+                    <Input
+                      type="date"
+                      value={client.contract_date}
+                      disabled={cardSaving === "contract_date"}
+                      onChange={(e) =>
+                        handleCardUpdate({ contract_date: e.target.value }, "contract_date")
+                      }
+                    />
+                  </FormField>
+                  <FormField label="Статус клиента">
+                    <Select
+                      value={client.status}
+                      disabled={cardSaving === "status"}
+                      onChange={(e) => handleCardUpdate({ status: e.target.value }, "status")}
+                    >
+                      {STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                  {isBankruptcy && isOwner && (
+                    <FormField label="Этап процедуры">
+                      <Select
+                        value={client.procedure_stage}
+                        disabled={cardSaving === "procedure_stage"}
+                        onChange={(e) =>
+                          handleCardUpdate({ procedure_stage: e.target.value }, "procedure_stage")
+                        }
+                      >
+                        {PROCEDURE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormField>
+                  )}
+                  {canAssignManager && (
+                    <FormField label="Ответственный менеджер">
+                      <Select
+                        value={client.assigned_manager_id ?? ""}
+                        disabled={cardSaving === "manager"}
+                        onChange={(e) =>
+                          handleCardUpdate(
+                            { assigned_manager_id: e.target.value || null },
+                            "manager",
+                          )
+                        }
+                      >
+                        <option value="">Не назначен</option>
+                        {managers.map((manager) => (
+                          <option key={manager.id} value={manager.id}>
+                            {manager.full_name}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormField>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </Card>
@@ -1361,29 +1483,17 @@ export default function ClientDetailPage() {
         </Card>
       )}
 
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Дата договора" value={formatDate(client.contract_date)} tone="brand" />
-        {detail && isBankruptcy ? (
-          <>
-            <StatCard label="Сумма договора" value={formatMoney(contractTotal)} tone="brand" />
-            <StatCard label="Оплачено по графику" value={formatMoney(paidTotal)} tone="success" />
-            <StatCard
-              label="Остаток по договору"
-              value={formatMoney(remainder)}
-              tone={remainder > 0 ? "warning" : "success"}
-            />
-          </>
-        ) : (
+      {detail && !isBankruptcy && (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Дата договора" value={formatDate(client.contract_date)} tone="brand" />
           <StatCard label="Статус" value={statusLabel(client.status)} tone="default" />
-        )}
-        {detail && !isBankruptcy && (
           <StatCard
             label="Услуга"
             value={engagementStageLabel(client.engagement_stage)}
             tone="warning"
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {detail && isBankruptcy && isOwner && (
         <Card variant="accent">
@@ -1470,8 +1580,11 @@ export default function ClientDetailPage() {
       {detail && isBankruptcy && (
         <>
           {detail.matched_tier && (
-            <Card variant="accent">
-              <SectionTitle title="Подобранный тариф" />
+            <CollapsibleCard
+              title="Подобранный тариф"
+              description="Справочные данные тарифа — раскройте при необходимости"
+              defaultOpen={false}
+            >
               <div className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <p className="text-slate-500">Диапазон долга</p>
@@ -1503,14 +1616,21 @@ export default function ClientDetailPage() {
                   суммы месяцев можно менять вручную — тариф только отправная точка.
                 </p>
               )}
-            </Card>
+            </CollapsibleCard>
           )}
 
-          <Card>
-            <SectionTitle
-              title="Обязательные платежи по процедуре"
-              description="Депозит, финансовое управление и судебная пошлина — только для руководителя"
-            />
+          <CollapsibleCard
+            title="Обязательные платежи по процедуре"
+            description="Депозит, финансовое управление и судебная пошлина — только для руководителя"
+            defaultOpen={!allMandatoryPaid}
+            badge={
+              allMandatoryPaid ? (
+                <Badge tone="success">Все оплачены</Badge>
+              ) : (
+                <Badge tone="warning">{applicableMandatory.length} шт.</Badge>
+              )
+            }
+          >
             {mandatory.length === 0 ? (
               <EmptyState>Данные не сформированы</EmptyState>
             ) : (
@@ -1621,7 +1741,7 @@ export default function ClientDetailPage() {
                 </table>
               </div>
             )}
-          </Card>
+          </CollapsibleCard>
 
           <CollapsibleCard
             title="График платежей"
@@ -1959,59 +2079,6 @@ export default function ClientDetailPage() {
 
           {canRecordSchedulePayment && (
             <>
-              <Card>
-                <SectionTitle
-                  title="Зафиксировать платёж вручную"
-                  description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
-                />
-                <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
-                  <FormField label="Месяц графика">
-                    <Select
-                      value={paymentForm.payment_schedule_id}
-                      onChange={(e) => handleMonthSelect(e.target.value)}
-                    >
-                      <option value="">Автораспределение по графику</option>
-                      {schedule.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.month_number} — {formatDate(item.due_date)} (
-                          {formatMoney(item.planned_amount)}, остаток{" "}
-                          {formatMoney(remainingAmount(item))})
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  <FormField label="Дата платежа">
-                    <Input
-                      type="date"
-                      value={paymentForm.payment_date}
-                      onChange={(e) =>
-                        setPaymentForm({ ...paymentForm, payment_date: e.target.value })
-                      }
-                      required
-                    />
-                  </FormField>
-                  <FormField label="Сумма">
-                    <Input
-                      inputMode="decimal"
-                      placeholder="Сумма"
-                      value={paymentForm.amount}
-                      onChange={(e) =>
-                        setPaymentForm({ ...paymentForm, amount: filterDecimalInput(e.target.value) })
-                      }
-                      required
-                    />
-                  </FormField>
-                  <Input
-                    placeholder="Комментарий"
-                    value={paymentForm.comment}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, comment: e.target.value })}
-                  />
-                  <Button type="submit" className="md:col-span-2">
-                    Сохранить платёж
-                  </Button>
-                </form>
-              </Card>
-
               <CollapsibleCard
                 title="Оформить возврат"
                 description="Редкая операция — раскройте, если нужно уменьшить оплаченную сумму по месяцу графика"
@@ -2154,8 +2221,16 @@ export default function ClientDetailPage() {
           </Card>
 
           {canEditClient && (
-            <Card>
-              <SectionTitle title="История изменений карточки" />
+            <CollapsibleCard
+              title="История изменений карточки"
+              description="Служебный журнал правок — раскройте при необходимости"
+              defaultOpen={false}
+              badge={
+                auditEntries.length > 0 ? (
+                  <Badge tone="default">{auditEntries.length}</Badge>
+                ) : undefined
+              }
+            >
               {auditEntries.length === 0 ? (
                 <EmptyState>Изменений по карточке пока нет</EmptyState>
               ) : (
@@ -2202,7 +2277,7 @@ export default function ClientDetailPage() {
                   ))}
                 </div>
               )}
-            </Card>
+            </CollapsibleCard>
           )}
         </>
       )}

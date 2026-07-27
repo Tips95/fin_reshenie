@@ -49,3 +49,29 @@ export function addOneMonth(dateStr: string): string {
   date.setMonth(date.getMonth() + 1);
   return date.toISOString().slice(0, 10);
 }
+
+/** E.164 digits for WhatsApp Web (e.g. 79001234567). */
+export function phoneToWhatsAppDigits(phone: string): string | null {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 10) {
+    return null;
+  }
+  if (digits.length === 11 && digits.startsWith("8")) {
+    return `7${digits.slice(1)}`;
+  }
+  if (digits.length === 10) {
+    return `7${digits}`;
+  }
+  if (digits.length === 11 && digits.startsWith("7")) {
+    return digits;
+  }
+  return null;
+}
+
+export function phoneToWhatsAppWebUrl(phone: string): string | null {
+  const digits = phoneToWhatsAppDigits(phone);
+  if (!digits) {
+    return null;
+  }
+  return `https://web.whatsapp.com/send?phone=${digits}`;
+}
