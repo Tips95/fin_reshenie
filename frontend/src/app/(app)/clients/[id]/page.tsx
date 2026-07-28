@@ -309,8 +309,10 @@ export default function ClientDetailPage() {
     }
     const items = client.payment_schedule ?? [];
     const canEdit = user?.role === "owner" || user?.role === "manager";
+    // Only when switching clients: auto-open empty schedule for editing.
+    // Do not collapse on refresh after payments or notes.
     setScheduleOpen(items.length === 0 && canEdit);
-  }, [client?.id, client, user?.role]);
+  }, [client?.id, user?.role]);
 
   useEffect(() => {
     if (!client || !isDetail(client)) return;
@@ -690,10 +692,10 @@ export default function ClientDetailPage() {
 
   async function handleSaveNote(item: PaymentScheduleItem) {
     setNoteSavingId(item.id);
+    const savedNote = noteDraft.trim() || null;
     try {
-      await scheduleApi.updateNote(item.id, noteDraft.trim() || null);
-      setNotePanelId(null);
-      setNoteDraft("");
+      await scheduleApi.updateNote(item.id, savedNote);
+      setNoteDraft(savedNote ?? "");
       await refreshClient();
       showToast("Примечание сохранено");
     } catch (error) {
@@ -1154,8 +1156,8 @@ export default function ClientDetailPage() {
     .filter((item) => remainingAmount(item) > 0)
     .sort((a, b) => effectiveDueDate(a).localeCompare(effectiveDueDate(b)))[0];
   const scheduleNotesCount = schedule.filter((item) => item.manager_note?.trim()).length;
-  const scheduleTableColSpan =
-    8 + (canRecordSchedulePayment ? 1 : 0) + (canEditSchedule ? 1 : 0);
+  const scheduleHasActions = canRecordSchedulePayment || canEditSchedule;
+  const scheduleTableColSpan = 6 + (scheduleHasActions ? 1 : 0);
   const planContractTotal = detail?.installment_plan ? Number(detail.installment_plan.total_amount) : 0;
   const isManualInstallment = detail?.installment_plan?.pricing_tier_id == null;
   const draftPlannedTotal = computeScheduleDraftPlannedTotal(schedule, scheduleDraft);
@@ -2149,19 +2151,16 @@ export default function ClientDetailPage() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                <table className="data-table">
+                <table className="data-table text-xs">
                   <thead>
                     <tr>
-                      <th>Месяц</th>
+                      <th className="w-8">#</th>
                       <th>Дата</th>
-                      <th>План</th>
-                      <th>Оплачено</th>
-                      <th>Остаток</th>
-                      <th>Статус</th>
-                      <th className="w-10">📝</th>
-                      <th>Отсрочка</th>
-                      {canRecordSchedulePayment && <th>Действие</th>}
-                      {canEditSchedule && <th>Управление</th>}
+                      <th className="w-24">План</th>
+                      <th className="w-28">Опл./ост.</th>
+                      <th className="w-24">Статус</th>
+                      <th className="min-w-[140px]">Примечание</th>
+                      {scheduleHasActions && <th className="w-32">Действия</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -2173,22 +2172,24 @@ export default function ClientDetailPage() {
                       const rowChanged =
                         editValues.planned_amount !== item.planned_amount ||
                         editValues.due_date !== item.due_date;
+                      const noteText = item.manager_note?.trim() ?? "";
 
                       return (
                         <Fragment key={item.id}>
                         <tr
                           className={markedForDelete ? "bg-slate-50 opacity-60" : undefined}
                         >
-                          <td>
+                          <td className="tabular-nums text-muted">
                             {item.month_number}
                             {rowChanged && (
-                              <p className="text-xs text-brand-600">изменён</p>
+                              <span className="ml-0.5 text-brand-600" title="Изменён">*</span>
                             )}
                           </td>
                           <td>
                             {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="date"
+                                className="max-w-[118px] py-0.5"
                                 value={editValues.due_date}
                                 onChange={(e) =>
                                   setScheduleDraft((current) => ({
@@ -2204,14 +2205,19 @@ export default function ClientDetailPage() {
                                 }
                               />
                             ) : (
-                              <>
+                              <div className="leading-tight">
                                 <p>{formatDate(effectiveDueDate(item))}</p>
                                 {item.deferred_until && (
-                                  <p className="text-xs text-amber-600">
+                                  <p className="text-[10px] text-amber-600">
                                     было {formatDate(item.due_date)}
                                   </p>
                                 )}
-                              </>
+                                {item.deferral_comment && (
+                                  <p className="mt-0.5 line-clamp-2 text-[10px] text-amber-700" title={item.deferral_comment}>
+                                    {item.deferral_comment}
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td>
@@ -2220,7 +2226,7 @@ export default function ClientDetailPage() {
                                 type="number"
                                 min={Number(item.paid_amount) || 0.01}
                                 step={0.01}
-                                className="max-w-[120px]"
+                                className="max-w-[88px] py-0.5"
                                 value={editValues.planned_amount}
                                 onChange={(e) =>
                                   setScheduleDraft((current) => ({
@@ -2236,131 +2242,144 @@ export default function ClientDetailPage() {
                                 }
                               />
                             ) : (
-                              formatMoney(item.planned_amount)
+                              <span className="tabular-nums">{formatMoney(item.planned_amount)}</span>
                             )}
                           </td>
-                          <td>{formatMoney(item.paid_amount)}</td>
-                          <td>{formatMoney(rest)}</td>
+                          <td className="tabular-nums leading-tight">
+                            <p>{formatMoney(item.paid_amount)}</p>
+                            <p className={rest > 0 ? "text-muted" : "text-status-success-text"}>
+                              {formatMoney(rest)}
+                            </p>
+                          </td>
                           <td>
                             <Badge tone={scheduleTone(item.status)}>
                               {statusLabel(item.status)}
                             </Badge>
                             {(item.overdue_waived || markedForWaive) && (
-                              <p className="mt-1 text-xs text-slate-500">
-                                {markedForWaive ? "Будет снята просрочка" : "Просрочка снята"}
+                              <p className="mt-0.5 text-[10px] text-muted">
+                                {markedForWaive ? "Снятие проср." : "Проср. снята"}
+                              </p>
+                            )}
+                            {item.deferred_until && !item.deferral_comment && (
+                              <p className="mt-0.5 text-[10px] text-amber-600">
+                                до {formatDate(item.deferred_until)}
                               </p>
                             )}
                           </td>
-                          <td className="whitespace-nowrap">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className={
-                                item.manager_note?.trim()
-                                  ? "h-7 px-2 text-xs font-semibold text-brand-700"
-                                  : "h-7 px-2 text-xs text-muted"
-                              }
-                              title={item.manager_note?.trim() || "Примечание к месяцу"}
-                              onClick={() => toggleNotePanel(item)}
-                            >
-                              {item.manager_note?.trim() ? "●" : "…"}
-                            </Button>
-                          </td>
                           <td>
-                            {item.deferral_comment ? (
-                              <div className="max-w-[220px] text-xs text-slate-600">
-                                <p className="font-medium text-amber-700">
-                                  до {formatDate(item.deferred_until!)}
-                                </p>
-                                <p className="mt-1">{item.deferral_comment}</p>
-                              </div>
+                            {canEditClient ? (
+                              <button
+                                type="button"
+                                className={cn(
+                                  "interactive w-full rounded px-1 py-0.5 text-left leading-snug",
+                                  noteText
+                                    ? "text-slate-700 hover:bg-surface-muted"
+                                    : "text-muted hover:bg-surface-muted hover:text-foreground",
+                                  notePanelId === item.id && "bg-brand-50 ring-1 ring-brand-200",
+                                )}
+                                title={noteText || "Добавить примечание"}
+                                onClick={() => toggleNotePanel(item)}
+                              >
+                                {noteText ? (
+                                  <span className="line-clamp-2 whitespace-pre-wrap">{noteText}</span>
+                                ) : (
+                                  <span className="italic">+ примечание</span>
+                                )}
+                              </button>
+                            ) : noteText ? (
+                              <p className="line-clamp-2 whitespace-pre-wrap leading-snug text-slate-700" title={noteText}>
+                                {noteText}
+                              </p>
                             ) : (
-                              <span className="text-xs text-slate-400">—</span>
+                              <span className="text-muted">—</span>
                             )}
                           </td>
-                          {canRecordSchedulePayment && (
+                          {scheduleHasActions && (
                             <td>
-                              <div className="flex flex-col gap-2">
-                                {rest > 0 && !markedForDelete ? (
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    disabled={payingId === item.id}
-                                    onClick={() => handleQuickPay(item)}
-                                  >
-                                    {payingId === item.id ? "Сохранение..." : "Внести платёж"}
-                                  </Button>
-                                ) : (
-                                  <span className="text-xs text-slate-400">
-                                    {markedForDelete ? "К удалению" : "Оплачено"}
-                                  </span>
-                                )}
-                                {rest > 0 && !markedForDelete && deferringId === item.id ? (
-                                  <div className="space-y-1.5 rounded border border-slate-300 bg-slate-50 p-2">
-                                    <Input
-                                      type="date"
-                                      value={deferForm.deferred_until}
-                                      onChange={(e) =>
-                                        setDeferForm({
-                                          ...deferForm,
-                                          deferred_until: e.target.value,
-                                        })
-                                      }
-                                    />
-                                    <Input
-                                      placeholder="Причина невозможности оплаты"
-                                      value={deferForm.comment}
-                                      onChange={(e) =>
-                                        setDeferForm({ ...deferForm, comment: e.target.value })
-                                      }
-                                    />
-                                    <div className="flex gap-2">
-                                      <Button type="button" onClick={() => handleDefer(item)}>
-                                        Сохранить
-                                      </Button>
+                              <div className="flex flex-wrap items-center gap-1">
+                                {canRecordSchedulePayment && rest > 0 && !markedForDelete ? (
+                                  deferringId === item.id ? (
+                                    <div className="w-full space-y-1 rounded border border-border bg-surface-muted p-1.5">
+                                      <Input
+                                        type="date"
+                                        className="py-0.5"
+                                        value={deferForm.deferred_until}
+                                        onChange={(e) =>
+                                          setDeferForm({
+                                            ...deferForm,
+                                            deferred_until: e.target.value,
+                                          })
+                                        }
+                                      />
+                                      <Input
+                                        placeholder="Причина"
+                                        className="py-0.5"
+                                        value={deferForm.comment}
+                                        onChange={(e) =>
+                                          setDeferForm({ ...deferForm, comment: e.target.value })
+                                        }
+                                      />
+                                      <div className="flex gap-1">
+                                        <Button type="button" className="px-1.5 py-0.5" onClick={() => handleDefer(item)}>
+                                          OK
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          className="px-1.5 py-0.5"
+                                          onClick={() => setDeferringId(null)}
+                                        >
+                                          ×
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
                                       <Button
                                         type="button"
                                         variant="secondary"
-                                        onClick={() => setDeferringId(null)}
+                                        className="px-1.5 py-0.5"
+                                        disabled={payingId === item.id}
+                                        onClick={() => handleQuickPay(item)}
                                       >
-                                        Отмена
+                                        {payingId === item.id ? "…" : "Оплатить"}
                                       </Button>
-                                    </div>
-                                  </div>
-                                ) : rest > 0 && !markedForDelete ? (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => startDefer(item)}
-                                  >
-                                    Отсрочка
-                                  </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="px-1 py-0.5"
+                                        onClick={() => startDefer(item)}
+                                      >
+                                        Отср.
+                                      </Button>
+                                    </>
+                                  )
+                                ) : canRecordSchedulePayment ? (
+                                  <span className="text-[10px] text-muted">
+                                    {markedForDelete ? "К удалению" : "Оплачено"}
+                                  </span>
                                 ) : null}
-                              </div>
-                            </td>
-                          )}
-                          {canEditSchedule && (
-                            <td>
-                              <div className="flex flex-col gap-2">
-                                {isOwner &&
+                                {canEditSchedule && isOwner &&
                                   item.status === "overdue" &&
                                   !item.overdue_waived &&
                                   !markedForDelete && (
                                     <Button
                                       type="button"
                                       variant={markedForWaive ? "secondary" : "ghost"}
+                                      className="px-1 py-0.5 text-[10px]"
                                       onClick={() => handleToggleScheduleWaive(item.id)}
                                     >
-                                      {markedForWaive ? "Отменить снятие" : "Снять просрочку"}
+                                      {markedForWaive ? "Отмена" : "Снять пр."}
                                     </Button>
                                   )}
-                                {Number(item.paid_amount) <= 0 && (
+                                {canEditSchedule && Number(item.paid_amount) <= 0 && (
                                   <Button
                                     type="button"
                                     variant={markedForDelete ? "secondary" : "danger"}
+                                    className="px-1.5 py-0.5"
                                     onClick={() => handleToggleScheduleDelete(item.id)}
                                   >
-                                    {markedForDelete ? "Вернуть" : "Удалить"}
+                                    {markedForDelete ? "Вернуть" : "Удал."}
                                   </Button>
                                 )}
                               </div>
@@ -2370,31 +2389,33 @@ export default function ClientDetailPage() {
                         {notePanelId === item.id && (
                           <tr className="bg-slate-50">
                             <td colSpan={scheduleTableColSpan}>
-                              <div className="space-y-2 py-2">
-                                <p className="text-xs font-medium text-slate-600">
-                                  Примечание к {item.month_number} месяцу
+                              <div className="space-y-1.5 py-1">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                  Примечание · {item.month_number} мес.
                                 </p>
                                 {canEditClient ? (
                                   <>
                                     <textarea
-                                      className="interactive w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
-                                      rows={3}
+                                      className="interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
+                                      rows={2}
                                       value={noteDraft}
                                       onChange={(e) => setNoteDraft(e.target.value)}
                                       placeholder="Обещал перезвонить, просит отсрочку, договорились на…"
                                     />
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="flex flex-wrap gap-1">
                                       <Button
                                         type="button"
+                                        className="px-2 py-0.5"
                                         onClick={() => handleSaveNote(item)}
                                         disabled={noteSavingId === item.id}
                                       >
-                                        {noteSavingId === item.id ? "Сохранение…" : "Сохранить"}
+                                        {noteSavingId === item.id ? "…" : "Сохранить"}
                                       </Button>
-                                      {item.manager_note?.trim() && (
+                                      {noteText && (
                                         <Button
                                           type="button"
                                           variant="secondary"
+                                          className="px-2 py-0.5"
                                           onClick={() => handleClearNote(item)}
                                           disabled={noteSavingId === item.id}
                                         >
@@ -2404,18 +2425,19 @@ export default function ClientDetailPage() {
                                       <Button
                                         type="button"
                                         variant="ghost"
+                                        className="px-2 py-0.5"
                                         onClick={() => {
                                           setNotePanelId(null);
                                           setNoteDraft("");
                                         }}
                                       >
-                                        Закрыть
+                                        Свернуть
                                       </Button>
                                     </div>
                                   </>
                                 ) : (
-                                  <p className="whitespace-pre-wrap text-sm text-slate-700">
-                                    {item.manager_note?.trim() || "—"}
+                                  <p className="whitespace-pre-wrap text-xs text-slate-700">
+                                    {noteText || "—"}
                                   </p>
                                 )}
                               </div>
@@ -2427,17 +2449,16 @@ export default function ClientDetailPage() {
                     })}
                     {scheduleDraft.pendingAdds.map((item, index) => (
                       <tr key={item.tempId} className="bg-brand-50/40">
-                        <td>
-                          <Badge tone="warning">Новый</Badge>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {schedule.filter((row) => !scheduleDraft.pendingDeletes.includes(row.id)).length +
-                              index +
-                              1}
-                          </p>
+                        <td className="text-muted">
+                          {schedule.filter((row) => !scheduleDraft.pendingDeletes.includes(row.id)).length +
+                            index +
+                            1}
+                          <Badge tone="warning">+</Badge>
                         </td>
                         <td>
                           <Input
                             type="date"
+                            className="max-w-[118px] py-0.5"
                             value={item.due_date}
                             onChange={(e) =>
                               updatePendingAdd(item.tempId, "due_date", e.target.value)
@@ -2449,38 +2470,37 @@ export default function ClientDetailPage() {
                             type="number"
                             min={0.01}
                             step={0.01}
-                            className="max-w-[120px]"
+                            className="max-w-[88px] py-0.5"
                             value={item.planned_amount}
                             onChange={(e) =>
                               updatePendingAdd(item.tempId, "planned_amount", e.target.value)
                             }
                           />
                         </td>
-                        <td>{formatMoney(0)}</td>
-                        <td>{formatMoney(item.planned_amount)}</td>
-                        <td>
-                          <Badge>Новый месяц</Badge>
+                        <td className="tabular-nums leading-tight text-muted">
+                          <p>{formatMoney(0)}</p>
+                          <p>{formatMoney(item.planned_amount)}</p>
                         </td>
                         <td>
-                          <span className="text-xs text-slate-400">—</span>
+                          <Badge tone="warning">Новый</Badge>
                         </td>
                         <td>
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-muted">—</span>
                         </td>
-                        {canRecordSchedulePayment && (
+                        {scheduleHasActions && (
                           <td>
-                            <span className="text-xs text-slate-400">После сохранения</span>
-                          </td>
-                        )}
-                        {canEditSchedule && (
-                          <td>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => handleRemovePendingAdd(item.tempId)}
-                            >
-                              Убрать
-                            </Button>
+                            {canEditSchedule ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="px-1.5 py-0.5"
+                                onClick={() => handleRemovePendingAdd(item.tempId)}
+                              >
+                                Убрать
+                              </Button>
+                            ) : (
+                              <span className="text-[10px] text-muted">После сохр.</span>
+                            )}
                           </td>
                         )}
                       </tr>
