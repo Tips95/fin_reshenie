@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -56,6 +57,7 @@ from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.payment_status import refresh_overdue_statuses
 from app.services.payment_dates import realign_client_legacy_finances
 from app.services.client_finances import get_client_contract_total
+from app.services.client_month_stats import compute_due_month_stats
 from app.services.payment_sync import sync_client_payment_schedules
 
 router = APIRouter()
@@ -148,6 +150,20 @@ def _to_client_response(client: Client, db: Session) -> ClientResponse:
     return data
 
 
+def _apply_month_stats(
+    response: ClientResponse,
+    month_stats: dict,
+) -> ClientResponse:
+    stats = month_stats.get(response.id)
+    if stats is None:
+        return response
+    response.month_planned = stats.planned_amount
+    response.month_paid = stats.paid_amount
+    response.month_remainder = stats.remainder
+    response.payments_remaining = stats.payments_remaining
+    return response
+
+
 def _create_installment_for_client(
     db: Session,
     *,
@@ -187,6 +203,25 @@ def _create_installment_for_client(
         installment_plan_id=plan.id,
     )
     db.add_all(schedules)
+    return plan
+
+
+def _create_manual_installment_for_client(
+    db: Session,
+    *,
+    client: Client,
+    contract_total: Decimal | None = None,
+) -> InstallmentPlan:
+    total = contract_total if contract_total is not None else Decimal("0.00")
+    plan = InstallmentPlan(
+        client_id=client.id,
+        pricing_tier_id=None,
+        total_amount=total,
+        start_date=client.contract_date,
+        total_months=0,
+    )
+    db.add(plan)
+    db.flush()
     return plan
 
 
@@ -231,10 +266,22 @@ def list_clients(
     page_clients, total = paginate_clients(clients, page=page, page_size=page_size)
     total_pages = max(1, (total + page_size - 1) // page_size) if total else 1
 
+    due_month_summary = None
+    month_stats_by_client: dict = {}
+    if due_month:
+        due_month_summary, month_stats_by_client = compute_due_month_stats(
+            db,
+            [client.id for client in clients],
+            due_month,
+        )
+
     if current_user.role == UserRole.CALL_CENTER:
         items = [ClientBriefResponse.model_validate(client) for client in page_clients]
     else:
-        items = [_to_client_response(client, db) for client in page_clients]
+        items = [
+            _apply_month_stats(_to_client_response(client, db), month_stats_by_client)
+            for client in page_clients
+        ]
 
     return ClientListResponse(
         items=items,
@@ -242,6 +289,7 @@ def list_clients(
         page=page,
         page_size=page_size,
         total_pages=total_pages,
+        due_month_summary=due_month_summary,
     )
 
 

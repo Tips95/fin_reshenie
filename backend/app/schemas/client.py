@@ -74,6 +74,28 @@ class ClientResponse(BaseModel):
     document_collection_status: DocumentCollectionStatus | None = None
     document_collection_paid_date: date | None = None
     contract_total: Decimal | None = None
+    month_planned: Decimal | None = None
+    month_paid: Decimal | None = None
+    month_remainder: Decimal | None = None
+    payments_remaining: int | None = None
+
+
+class ClientDueMonthSummary(BaseModel):
+    month: str
+    clients_count: int
+    planned_total: Decimal
+    remainder_total: Decimal
+    collected_total: Decimal
+    paid_due_count: int
+    unpaid_due_count: int
+    payments_remaining_total: int
+
+
+class ClientMonthDueStats(BaseModel):
+    planned_amount: Decimal
+    paid_amount: Decimal
+    remainder: Decimal
+    payments_remaining: int
 
 
 class ClientBriefResponse(BaseModel):
@@ -95,6 +117,7 @@ class ClientListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+    due_month_summary: ClientDueMonthSummary | None = None
 
 
 class PricingTierSummary(BaseModel):

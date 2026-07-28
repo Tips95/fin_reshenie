@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -93,21 +94,33 @@ def convert_to_bankruptcy(
     current_user: User = Depends(require_owner_or_manager),
     db: Session = Depends(get_db),
 ) -> ClientDetailResponse:
-    from app.api.clients import _build_client_detail, _create_installment_for_client
+    from app.api.clients import (
+        _build_client_detail,
+        _create_installment_for_client,
+        _create_manual_installment_for_client,
+    )
 
     client = ensure_client_write_access(db, current_user, client_id)
     try:
+        debt_amount = payload.debt_amount if payload.auto_installment else Decimal("0.00")
         convert_client_to_bankruptcy(
             db,
             client,
-            debt_amount=payload.debt_amount,
+            debt_amount=debt_amount,
             contract_date=payload.contract_date,
         )
-        _create_installment_for_client(
-            db,
-            client=client,
-            organization_id=current_user.organization_id,
-        )
+        if payload.auto_installment:
+            _create_installment_for_client(
+                db,
+                client=client,
+                organization_id=current_user.organization_id,
+            )
+        else:
+            _create_manual_installment_for_client(
+                db,
+                client=client,
+                contract_total=payload.contract_total,
+            )
         log_audit(
             db,
             user=current_user,

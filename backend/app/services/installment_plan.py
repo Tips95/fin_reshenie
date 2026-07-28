@@ -14,6 +14,43 @@ def _schedule_planned_total(schedules: list[PaymentSchedule]) -> Decimal:
     return sum((item.planned_amount for item in schedules), Decimal("0.00"))
 
 
+def schedule_contract_mismatch(
+    plan: InstallmentPlan,
+    schedules: list[PaymentSchedule],
+) -> Decimal | None:
+    if plan.total_amount <= Decimal("0.00") or not schedules:
+        return None
+    return _schedule_planned_total(schedules) - plan.total_amount
+
+
+def assert_manual_schedule_matches_contract(
+    plan: InstallmentPlan,
+    schedules: list[PaymentSchedule],
+) -> None:
+    if plan.pricing_tier_id is not None:
+        return
+    mismatch = schedule_contract_mismatch(plan, schedules)
+    if mismatch is None:
+        return
+    if mismatch == Decimal("0.00"):
+        return
+    planned_total = _schedule_planned_total(schedules)
+    if mismatch > Decimal("0.00"):
+        detail = (
+            f"Сумма по графику ({planned_total}) превышает сумму договора ({plan.total_amount}) "
+            f"на {mismatch}"
+        )
+    else:
+        detail = (
+            f"Сумма по графику ({planned_total}) меньше суммы договора ({plan.total_amount}) "
+            f"на {abs(mismatch)}"
+        )
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=detail,
+    )
+
+
 def update_installment_plan_total_amount(
     db: Session,
     plan: InstallmentPlan,
@@ -35,6 +72,11 @@ def update_installment_plan_total_amount(
     )
     if not schedules:
         plan.total_amount = new_total
+        return plan
+
+    if plan.pricing_tier_id is None:
+        plan.total_amount = new_total
+        assert_manual_schedule_matches_contract(plan, schedules)
         return plan
 
     planned_total = _schedule_planned_total(schedules)

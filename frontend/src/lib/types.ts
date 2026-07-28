@@ -83,6 +83,21 @@ export interface Client {
   document_collection_status?: DocumentCollectionStatus | null;
   document_collection_paid_date?: string | null;
   contract_total?: string | null;
+  month_planned?: string | null;
+  month_paid?: string | null;
+  month_remainder?: string | null;
+  payments_remaining?: number | null;
+}
+
+export interface ClientDueMonthSummary {
+  month: string;
+  clients_count: number;
+  planned_total: string;
+  remainder_total: string;
+  collected_total: string;
+  paid_due_count: number;
+  unpaid_due_count: number;
+  payments_remaining_total: number;
 }
 
 export interface ClientBrief {
@@ -102,6 +117,7 @@ export interface ClientListResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  due_month_summary?: ClientDueMonthSummary | null;
 }
 
 export interface PricingTier {

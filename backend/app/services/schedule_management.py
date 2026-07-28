@@ -31,8 +31,9 @@ def _sync_plan_totals(db: Session, plan: InstallmentPlan) -> None:
             .order_by(PaymentSchedule.month_number)
         )
     )
-    plan.total_amount = sum((item.planned_amount for item in schedules), Decimal("0.00"))
     plan.total_months = len(schedules)
+    if plan.pricing_tier_id is not None:
+        plan.total_amount = sum((item.planned_amount for item in schedules), Decimal("0.00"))
 
 
 def _renumber_schedules(schedules: list[PaymentSchedule]) -> None:

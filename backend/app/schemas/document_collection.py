@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import DocumentCollectionStatus
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
@@ -32,8 +32,19 @@ class RecordDocumentCollectionPayment(BaseModel):
 
 
 class ConvertToBankruptcyRequest(BaseModel):
-    debt_amount: Decimal = Field(ge=MIN_DEBT_AMOUNT, decimal_places=2)
+    auto_installment: bool = False
+    debt_amount: Decimal | None = Field(default=None, decimal_places=2)
+    contract_total: Decimal | None = Field(default=None, gt=0, decimal_places=2)
     contract_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_installment_mode(self) -> "ConvertToBankruptcyRequest":
+        if self.auto_installment:
+            if self.debt_amount is None or self.debt_amount < MIN_DEBT_AMOUNT:
+                raise ValueError(
+                    f"Для автоматической рассрочки укажите сумму долга от {MIN_DEBT_AMOUNT} ₽"
+                )
+        return self
 
 
 class ManagerCommissionItem(BaseModel):

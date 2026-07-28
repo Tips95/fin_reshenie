@@ -98,6 +98,40 @@ function isScheduleDraftDirty(draft: ScheduleDraft, schedule: PaymentScheduleIte
   );
 }
 
+function computeScheduleDraftPlannedTotal(
+  schedule: PaymentScheduleItem[],
+  draft: ScheduleDraft,
+): number {
+  let total = 0;
+  for (const item of schedule) {
+    if (draft.pendingDeletes.includes(item.id)) {
+      continue;
+    }
+    const values = getScheduleEditValues(item, draft.edits);
+    total += Number(values.planned_amount) || 0;
+  }
+  for (const add of draft.pendingAdds) {
+    total += Number(add.planned_amount) || 0;
+  }
+  return total;
+}
+
+function formatScheduleMismatchMessage(
+  contractTotal: number,
+  plannedTotal: number,
+): string {
+  const diff = plannedTotal - contractTotal;
+  const formattedContract = contractTotal.toLocaleString("ru-RU");
+  const formattedPlanned = plannedTotal.toLocaleString("ru-RU");
+  if (diff > 0) {
+    return `Сумма по графику (${formattedPlanned} ₽) превышает сумму договора (${formattedContract} ₽) на ${diff.toLocaleString("ru-RU")} ₽`;
+  }
+  if (diff < 0) {
+    return `Не хватает ${Math.abs(diff).toLocaleString("ru-RU")} ₽: по графику ${formattedPlanned} ₽, договор ${formattedContract} ₽`;
+  }
+  return "";
+}
+
 function scheduleTone(status: string): "default" | "success" | "warning" | "danger" {
   if (status === "paid") return "success";
   if (status === "partial") return "warning";
@@ -177,7 +211,12 @@ export default function ClientDetailPage() {
   const [docCollectionAmountsSaving, setDocCollectionAmountsSaving] = useState(false);
   const [convertSaving, setConvertSaving] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
-  const [convertForm, setConvertForm] = useState({ debt_amount: "", contract_date: "" });
+  const [convertForm, setConvertForm] = useState({
+    auto_installment: false,
+    debt_amount: "",
+    contract_total: "",
+    contract_date: "",
+  });
   const [docCollectionPaymentDate, setDocCollectionPaymentDate] = useState("");
   const [aligningDates, setAligningDates] = useState(false);
   const [paymentDateEdits, setPaymentDateEdits] = useState<Record<string, string>>({});
@@ -576,6 +615,18 @@ export default function ClientDetailPage() {
       showToast(amountError, "error");
       return;
     }
+    const newTotal = Number(contractAmountValue);
+    const schedulePlanned = client.payment_schedule.reduce(
+      (sum, item) => sum + Number(item.planned_amount),
+      0,
+    );
+    if (schedulePlanned > 0) {
+      const mismatch = formatScheduleMismatchMessage(newTotal, schedulePlanned);
+      if (mismatch) {
+        showToast(mismatch, "error");
+        return;
+      }
+    }
     setContractAmountSaving(true);
     try {
       await installmentApi.update(client.id, client.installment_plan.id, {
@@ -771,6 +822,31 @@ export default function ClientDetailPage() {
 
   async function handleSaveScheduleDraft() {
     if (!client || !isDetail(client) || !client.installment_plan) return;
+
+    const targetContractTotal = Number(client.installment_plan.total_amount);
+    const draftPlannedTotal = computeScheduleDraftPlannedTotal(
+      client.payment_schedule,
+      scheduleDraft,
+    );
+    const visibleMonths =
+      client.payment_schedule.filter((item) => !scheduleDraft.pendingDeletes.includes(item.id))
+        .length + scheduleDraft.pendingAdds.length;
+
+    if (targetContractTotal <= 0 && visibleMonths > 0) {
+      const message = "Сначала укажите сумму договора, затем распишите её по месяцам";
+      setScheduleError(message);
+      showToast(message, "error");
+      return;
+    }
+
+    if (targetContractTotal > 0 && visibleMonths > 0) {
+      const mismatch = formatScheduleMismatchMessage(targetContractTotal, draftPlannedTotal);
+      if (mismatch) {
+        setScheduleError(mismatch);
+        showToast(mismatch, "error");
+        return;
+      }
+    }
 
     setScheduleSaving(true);
     setScheduleError(null);
@@ -988,19 +1064,50 @@ export default function ClientDetailPage() {
   async function handleConvertToBankruptcy(event: React.FormEvent) {
     event.preventDefault();
     if (!client) return;
-    const debtError = validatePositiveAmount(convertForm.debt_amount, { label: "Сумма долга" });
-    if (debtError) {
-      setConvertError(debtError);
-      return;
+
+    if (convertForm.auto_installment) {
+      const debtError = validatePositiveAmount(convertForm.debt_amount, { label: "Сумма долга" });
+      if (debtError) {
+        setConvertError(debtError);
+        return;
+      }
+    } else if (convertForm.contract_total.trim()) {
+      const contractError = validatePositiveAmount(convertForm.contract_total, {
+        label: "Сумма договора",
+      });
+      if (contractError) {
+        setConvertError(contractError);
+        return;
+      }
     }
+
     setConvertSaving(true);
     setConvertError(null);
+    const wasAutoInstallment = convertForm.auto_installment;
     try {
       const updated = await documentCollectionApi.convertToBankruptcy(client.id, {
-        debt_amount: convertForm.debt_amount,
+        auto_installment: wasAutoInstallment,
+        debt_amount: wasAutoInstallment ? convertForm.debt_amount : undefined,
+        contract_total:
+          !wasAutoInstallment && convertForm.contract_total.trim()
+            ? convertForm.contract_total
+            : undefined,
         contract_date: convertForm.contract_date || undefined,
       });
       setClient(updated);
+      setConvertForm({
+        auto_installment: false,
+        debt_amount: "",
+        contract_total: "",
+        contract_date: "",
+      });
+      if (!wasAutoInstallment) {
+        setScheduleOpen(true);
+        showToast("Клиент переведён на банкротство. Составьте график вручную.", "info");
+        window.requestAnimationFrame(() => jumpToSection("section-schedule"));
+      } else {
+        showToast("Клиент переведён на банкротство, график создан по тарифу");
+      }
     } catch (error) {
       setConvertError(
         error instanceof ApiRequestError ? error.message : "Не удалось перевести на банкротство",
@@ -1049,6 +1156,18 @@ export default function ClientDetailPage() {
   const scheduleNotesCount = schedule.filter((item) => item.manager_note?.trim()).length;
   const scheduleTableColSpan =
     8 + (canRecordSchedulePayment ? 1 : 0) + (canEditSchedule ? 1 : 0);
+  const planContractTotal = detail?.installment_plan ? Number(detail.installment_plan.total_amount) : 0;
+  const isManualInstallment = detail?.installment_plan?.pricing_tier_id == null;
+  const draftPlannedTotal = computeScheduleDraftPlannedTotal(schedule, scheduleDraft);
+  const hasScheduleDraftRows =
+    schedule.some((item) => !scheduleDraft.pendingDeletes.includes(item.id)) ||
+    scheduleDraft.pendingAdds.length > 0;
+  const scheduleMismatchMessage =
+    planContractTotal > 0 && hasScheduleDraftRows
+      ? formatScheduleMismatchMessage(planContractTotal, draftPlannedTotal)
+      : planContractTotal <= 0 && hasScheduleDraftRows
+        ? "Укажите сумму договора — иначе нельзя сохранить график"
+        : "";
 
   function renderManualPaymentForm() {
     if (!canRecordSchedulePayment || !detail || !isBankruptcy) {
@@ -1591,33 +1710,81 @@ export default function ClientDetailPage() {
             </div>
           )}
           {!isBankruptcy && canRecordDocCollectionPayment && docCollection.status === "paid" && (
-            <form onSubmit={handleConvertToBankruptcy} className="mt-3 space-y-2 border-t border-border pt-3">
+            <form onSubmit={handleConvertToBankruptcy} className="mt-3 space-y-3 border-t border-border pt-3">
               <SectionTitle
                 title="Перевести на банкротство"
-                description="После успешного сбора документов укажите сумму долга — создастся график рассрочки"
+                description={
+                  convertForm.auto_installment
+                    ? "График создаётся автоматически по тарифу из суммы долга"
+                    : "Составьте индивидуальный график вручную: сумма договора и помесячные платежи"
+                }
               />
-              <div className="grid gap-2 md:grid-cols-2">
-                <FormField label="Сумма для подбора тарифа (от 300 000 ₽)">
-                  <Input
-                    inputMode="decimal"
-                    placeholder="300000"
-                    value={convertForm.debt_amount}
-                    onChange={(e) =>
-                      setConvertForm({ ...convertForm, debt_amount: filterDecimalInput(e.target.value) })
-                    }
-                    required
-                  />
-                </FormField>
-                <FormField label="Дата первого платежа / договора">
-                  <Input
-                    type="date"
-                    value={convertForm.contract_date}
-                    onChange={(e) =>
-                      setConvertForm({ ...convertForm, contract_date: e.target.value })
-                    }
-                  />
-                </FormField>
-              </div>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={convertForm.auto_installment}
+                  onChange={(e) =>
+                    setConvertForm({
+                      ...convertForm,
+                      auto_installment: e.target.checked,
+                    })
+                  }
+                />
+                Автоматическая рассрочка
+              </label>
+              {convertForm.auto_installment ? (
+                <div className="grid gap-2 md:grid-cols-2">
+                  <FormField label="Сумма долга для подбора тарифа (от 300 000 ₽)">
+                    <Input
+                      inputMode="decimal"
+                      placeholder="300000"
+                      value={convertForm.debt_amount}
+                      onChange={(e) =>
+                        setConvertForm({
+                          ...convertForm,
+                          debt_amount: filterDecimalInput(e.target.value),
+                        })
+                      }
+                      required
+                    />
+                  </FormField>
+                  <FormField label="Дата первого платежа / договора">
+                    <Input
+                      type="date"
+                      value={convertForm.contract_date}
+                      onChange={(e) =>
+                        setConvertForm({ ...convertForm, contract_date: e.target.value })
+                      }
+                    />
+                  </FormField>
+                </div>
+              ) : (
+                <div className="grid gap-2 md:grid-cols-2">
+                  <FormField label="Сумма договора (можно задать позже)">
+                    <Input
+                      inputMode="decimal"
+                      placeholder="350000"
+                      value={convertForm.contract_total}
+                      onChange={(e) =>
+                        setConvertForm({
+                          ...convertForm,
+                          contract_total: filterDecimalInput(e.target.value),
+                        })
+                      }
+                    />
+                  </FormField>
+                  <FormField label="Дата первого платежа / договора">
+                    <Input
+                      type="date"
+                      value={convertForm.contract_date}
+                      onChange={(e) =>
+                        setConvertForm({ ...convertForm, contract_date: e.target.value })
+                      }
+                      required
+                    />
+                  </FormField>
+                </div>
+              )}
               {convertError && <p className="text-sm text-rose-600">{convertError}</p>}
               <Button type="submit" disabled={convertSaving}>
                 {convertSaving ? "Перевод..." : "Перевести на банкротство"}
@@ -1673,8 +1840,24 @@ export default function ClientDetailPage() {
         >
           <SectionTitle
             title="Сумма договора"
-            description="Можно задать вручную — сумма синхронизируется с графиком платежей"
+            description={
+              isManualInstallment
+                ? "Задайте общую сумму, затем распишите её по месяцам в графике — суммы должны совпасть"
+                : "Можно задать вручную — сумма синхронизируется с графиком платежей"
+            }
           />
+          {isManualInstallment && planContractTotal > 0 && hasScheduleDraftRows ? (
+            <p
+              className={
+                scheduleMismatchMessage
+                  ? "mb-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2 text-xs text-status-danger-text"
+                  : "mb-3 rounded-md border border-status-success-border bg-status-success-bg px-3 py-2 text-xs text-status-success-text"
+              }
+            >
+              {scheduleMismatchMessage ||
+                `График совпадает с договором: ${formatMoney(planContractTotal)}`}
+            </p>
+          ) : null}
           {editingContractAmount ? (
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[220px]">
@@ -1900,7 +2083,9 @@ export default function ClientDetailPage() {
             title="График платежей"
             description={
               canEditSchedule
-                ? "1-й месяц = дата договора, дальше по месяцам. Раскройте, чтобы изменить суммы или добавить месяцы"
+                ? isManualInstallment
+                  ? "Индивидуальный график: добавьте месяцы и суммы, итог должен совпасть с суммой договора"
+                  : "1-й месяц = дата договора, дальше по месяцам. Раскройте, чтобы изменить суммы или добавить месяцы"
                 : "Раскройте, чтобы посмотреть помесячный график"
             }
             badge={
@@ -1933,6 +2118,28 @@ export default function ClientDetailPage() {
                 {scheduleError}
               </p>
             )}
+            {canEditSchedule && hasScheduleDraftRows ? (
+              <div
+                className={
+                  scheduleMismatchMessage
+                    ? "mb-2 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2 text-xs text-status-danger-text"
+                    : "mb-2 rounded-md border border-status-success-border bg-status-success-bg px-3 py-2 text-xs text-status-success-text"
+                }
+              >
+                <p>
+                  <span className="text-muted">Сумма договора:</span>{" "}
+                  <strong>{planContractTotal > 0 ? formatMoney(planContractTotal) : "не задана"}</strong>
+                  {" · "}
+                  <span className="text-muted">По графику:</span>{" "}
+                  <strong>{formatMoney(draftPlannedTotal)}</strong>
+                </p>
+                {scheduleMismatchMessage ? (
+                  <p className="mt-1 font-medium">{scheduleMismatchMessage}</p>
+                ) : planContractTotal > 0 ? (
+                  <p className="mt-1">Суммы совпадают — можно сохранить график</p>
+                ) : null}
+              </div>
+            ) : null}
             {schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
               <EmptyState>
                 {canEditSchedule

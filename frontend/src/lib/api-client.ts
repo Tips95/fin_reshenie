@@ -369,7 +369,12 @@ export const documentCollectionApi = {
     ),
   convertToBankruptcy: (
     clientId: string,
-    data: { debt_amount: string; contract_date?: string },
+    data: {
+      auto_installment?: boolean;
+      debt_amount?: string;
+      contract_total?: string;
+      contract_date?: string;
+    },
   ) =>
     apiFetch<ClientDetail>(`/clients/${clientId}/convert-to-bankruptcy`, {
       method: "POST",

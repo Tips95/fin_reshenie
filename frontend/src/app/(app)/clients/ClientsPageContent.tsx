@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Badge, Button, Card, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, Toast } from "@/components/ui";
+import { Badge, Button, Card, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, StatCard, Toast } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
-import { formatDate, formatMoney, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
+import { formatDate, formatMoney, formatMonthLabel, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
-import type { Client, ClientBrief, ClientStatus, ProcedureStage, User } from "@/lib/types";
+import type { Client, ClientBrief, ClientDueMonthSummary, ClientStatus, ProcedureStage, User } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 type SortField = "full_name" | "contract_date" | "debt_amount" | "status" | "overdue" | "created_at";
@@ -114,7 +114,14 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [phoneSearch, setPhoneSearch] = useState("");
   const [nameSearch, setNameSearch] = useState("");
   const [contractMonth, setContractMonth] = useState("");
-  const [dueMonth, setDueMonth] = useState("");
+  const [dueMonth, setDueMonth] = useState(() => {
+    if (workspace === "contracts") {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+    return "";
+  });
+  const [dueMonthSummary, setDueMonthSummary] = useState<ClientDueMonthSummary | null>(null);
   const [managers, setManagers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -160,6 +167,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       setClients(data.items);
       setTotalClients(data.total);
       setTotalPages(data.total_pages);
+      setDueMonthSummary(data.due_month_summary ?? null);
     } finally {
       setLoading(false);
     }
@@ -470,6 +478,49 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         </div>
       </Card>
 
+      {!isCollectionView && dueMonth && dueMonthSummary ? (
+        <Card variant="accent">
+          <SectionTitle
+            title={`Рассрочка за ${formatMonthLabel(dueMonthSummary.month)}`}
+            description="Сводка по выбранному месяцу платежа и текущим фильтрам"
+          />
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Клиентов с платежом"
+              value={dueMonthSummary.clients_count}
+              tone="brand"
+            />
+            <StatCard
+              label="План на месяц"
+              value={formatMoney(dueMonthSummary.planned_total)}
+              tone="default"
+            />
+            <StatCard
+              label="Осталось получить"
+              value={formatMoney(dueMonthSummary.remainder_total)}
+              tone={Number(dueMonthSummary.remainder_total) > 0 ? "warning" : "success"}
+            />
+            <StatCard
+              label="Получено в месяце"
+              value={formatMoney(dueMonthSummary.collected_total)}
+              tone="success"
+            />
+            <StatCard
+              label="Оплачено / не оплачено"
+              value={`${dueMonthSummary.paid_due_count} / ${dueMonthSummary.unpaid_due_count}`}
+              tone="default"
+              hint="платежей в этом месяце"
+            />
+            <StatCard
+              label="Платежей осталось"
+              value={dueMonthSummary.payments_remaining_total}
+              tone="warning"
+              hint="по всем клиентам в списке"
+            />
+          </div>
+        </Card>
+      ) : null}
+
       {showForm && isCollectionView && (
         <Card variant="accent">
           <SectionTitle
@@ -570,7 +621,29 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                         <span>Договор: {formatDate(client.contract_date)}</span>
-                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && client.contract_total ? (
+                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && dueMonth ? (
+                          <>
+                            <span className="font-medium text-foreground">
+                              План: {client.month_planned ? formatMoney(client.month_planned) : "—"}
+                            </span>
+                            <span>
+                              Остаток:{" "}
+                              <span
+                                className={
+                                  client.month_remainder && Number(client.month_remainder) > 0
+                                    ? "font-medium text-status-warning-text"
+                                    : "text-status-success-text"
+                                }
+                              >
+                                {client.month_remainder != null
+                                  ? formatMoney(client.month_remainder)
+                                  : "—"}
+                              </span>
+                            </span>
+                            <span>Платежей ост.: {client.payments_remaining ?? "—"}</span>
+                          </>
+                        ) : null}
+                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && !dueMonth && client.contract_total ? (
                           <span className="font-medium text-foreground">
                             {formatMoney(client.contract_total)}
                           </span>
@@ -636,7 +709,15 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     sortDir={sortDir}
                     onSort={handleSort}
                   />
-                  {canSeeClientAmounts && !isCollectionView && (
+                  {canSeeClientAmounts && !isCollectionView && dueMonth && (
+                    <>
+                      <th className="font-semibold text-slate-700">План месяца</th>
+                      <th className="font-semibold text-slate-700">Оплачено</th>
+                      <th className="font-semibold text-slate-700">Остаток</th>
+                      <th className="font-semibold text-slate-700">Платежей ост.</th>
+                    </>
+                  )}
+                  {canSeeClientAmounts && !isCollectionView && !dueMonth && (
                     <th className="font-semibold text-slate-700">Сумма договора</th>
                   )}
                   {canAssignManager && <th>Менеджер</th>}
@@ -701,7 +782,29 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         formatDate(client.contract_date)
                       )}
                     </td>
-                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && (
+                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && dueMonth && (
+                      <>
+                        <td className="font-medium text-foreground">
+                          {client.month_planned ? formatMoney(client.month_planned) : "—"}
+                        </td>
+                        <td className="text-muted">
+                          {client.month_paid ? formatMoney(client.month_paid) : "—"}
+                        </td>
+                        <td
+                          className={
+                            client.month_remainder && Number(client.month_remainder) > 0
+                              ? "font-medium text-status-warning-text"
+                              : "text-status-success-text"
+                          }
+                        >
+                          {client.month_remainder != null ? formatMoney(client.month_remainder) : "—"}
+                        </td>
+                        <td className="text-muted">
+                          {client.payments_remaining ?? "—"}
+                        </td>
+                      </>
+                    )}
+                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && !dueMonth && (
                       <td className="font-medium text-foreground">
                         {client.contract_total
                           ? formatMoney(client.contract_total)
