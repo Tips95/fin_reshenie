@@ -105,6 +105,15 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up --build -d
 - **nginx** — первый сервис (на него вешается домен), порт `9000`
 - **PostgreSQL** — Managed DB в Timeweb (не в compose, т.к. volumes запрещены)
 - миграции и seed — при старте backend
+- имена контейнеров не фиксируются (`container_name` не используется), чтобы redeploy на App Platform не падал с `Conflict`
+
+Если деплой всё же упал с `container name is already in use`, один раз удалите старые контейнеры на ноде (SSH или консоль Timeweb):
+
+```bash
+docker rm -f rassrochka-backend rassrochka-frontend rassrochka-nginx
+```
+
+После этого перезапустите деплой.
 
 Остановка локального стека:
 

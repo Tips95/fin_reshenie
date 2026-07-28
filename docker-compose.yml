@@ -8,7 +8,6 @@ services:
     build:
       context: ./nginx
       dockerfile: Dockerfile
-    container_name: rassrochka-nginx
     restart: unless-stopped
     ports:
       - "${NGINX_PORT:-9000}:80"
@@ -26,7 +25,6 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
-    container_name: rassrochka-frontend
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
@@ -40,7 +38,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: rassrochka-backend
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
