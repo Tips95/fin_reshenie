@@ -51,14 +51,25 @@ export function Button({
 
 export function Input({
   className,
+  type,
+  onWheel,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
+      type={type}
       className={cn(
         "interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20",
+        type === "number" &&
+          "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
         className,
       )}
+      onWheel={(event) => {
+        if (type === "number") {
+          event.currentTarget.blur();
+        }
+        onWheel?.(event);
+      }}
       {...props}
     />
   );

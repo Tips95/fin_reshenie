@@ -7,6 +7,33 @@ export function formatMoney(value: string | number): string {
   }).format(amount);
 }
 
+/** Whole rubles without trailing ",00" — for dense tables. */
+export function formatMoneyCompact(value: string | number): string {
+  const amount = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(amount)) return "—";
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+/** Strip ".00" for number inputs showing whole ruble amounts. */
+export function formatAmountInput(value: string | number): string {
+  if (typeof value === "string" && value.trim() === "") {
+    return "";
+  }
+  const amount = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(amount)) {
+    return typeof value === "string" ? value : "";
+  }
+  if (Number.isInteger(amount)) {
+    return String(amount);
+  }
+  return amount.toFixed(2).replace(/\.?0+$/, "");
+}
+
 export function formatShortName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 2) return fullName.trim();

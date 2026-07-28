@@ -21,7 +21,7 @@ import {
   Toast,
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
-import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
+import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatMoneyCompact, formatShortName, statusLabel } from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
 import {
   filterDecimalInput,
@@ -2156,8 +2156,8 @@ export default function ClientDetailPage() {
                     <tr>
                       <th className="w-8">#</th>
                       <th>Дата</th>
-                      <th className="w-24">План</th>
-                      <th className="w-28">Опл./ост.</th>
+                      <th className="w-[76px] text-right">План</th>
+                      <th className="w-[76px] text-right">Опл./ост.</th>
                       <th className="w-24">Статус</th>
                       <th className="min-w-[140px]">Примечание</th>
                       {scheduleHasActions && <th className="w-32">Действия</th>}
@@ -2220,14 +2220,14 @@ export default function ClientDetailPage() {
                               </div>
                             )}
                           </td>
-                          <td>
+                          <td className="text-right">
                             {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="number"
                                 min={Number(item.paid_amount) || 0.01}
-                                step={0.01}
-                                className="max-w-[88px] py-0.5"
-                                value={editValues.planned_amount}
+                                step={1}
+                                className="w-[72px] py-0.5 text-right tabular-nums"
+                                value={formatAmountInput(editValues.planned_amount)}
                                 onChange={(e) =>
                                   setScheduleDraft((current) => ({
                                     ...current,
@@ -2242,13 +2242,15 @@ export default function ClientDetailPage() {
                                 }
                               />
                             ) : (
-                              <span className="tabular-nums">{formatMoney(item.planned_amount)}</span>
+                              <span className="whitespace-nowrap tabular-nums">
+                                {formatMoneyCompact(item.planned_amount)}
+                              </span>
                             )}
                           </td>
-                          <td className="tabular-nums leading-tight">
-                            <p>{formatMoney(item.paid_amount)}</p>
-                            <p className={rest > 0 ? "text-muted" : "text-status-success-text"}>
-                              {formatMoney(rest)}
+                          <td className="text-right tabular-nums leading-tight">
+                            <p className="whitespace-nowrap">{formatMoneyCompact(item.paid_amount)}</p>
+                            <p className={cn("whitespace-nowrap", rest > 0 ? "text-muted" : "text-status-success-text")}>
+                              {formatMoneyCompact(rest)}
                             </p>
                           </td>
                           <td>
@@ -2469,17 +2471,17 @@ export default function ClientDetailPage() {
                           <Input
                             type="number"
                             min={0.01}
-                            step={0.01}
-                            className="max-w-[88px] py-0.5"
-                            value={item.planned_amount}
+                            step={1}
+                            className="w-[72px] py-0.5 text-right tabular-nums"
+                            value={formatAmountInput(item.planned_amount)}
                             onChange={(e) =>
                               updatePendingAdd(item.tempId, "planned_amount", e.target.value)
                             }
                           />
                         </td>
-                        <td className="tabular-nums leading-tight text-muted">
-                          <p>{formatMoney(0)}</p>
-                          <p>{formatMoney(item.planned_amount)}</p>
+                        <td className="text-right tabular-nums leading-tight text-muted">
+                          <p className="whitespace-nowrap">{formatMoneyCompact(0)}</p>
+                          <p className="whitespace-nowrap">{formatMoneyCompact(item.planned_amount)}</p>
                         </td>
                         <td>
                           <Badge tone="warning">Новый</Badge>
