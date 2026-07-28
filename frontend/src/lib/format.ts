@@ -1,25 +1,24 @@
-export function formatMoney(value: string | number): string {
+function normalizeRubles(value: string | number): number {
   const amount = typeof value === "string" ? Number(value) : value;
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 2,
-  }).format(amount);
+  if (!Number.isFinite(amount)) return NaN;
+  return Math.round(amount);
 }
 
-/** Whole rubles without trailing ",00" — for dense tables. */
-export function formatMoneyCompact(value: string | number): string {
-  const amount = typeof value === "string" ? Number(value) : value;
+export function formatMoney(value: string | number): string {
+  const amount = normalizeRubles(value);
   if (!Number.isFinite(amount)) return "—";
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
     currency: "RUB",
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 
-/** Strip ".00" for number inputs showing whole ruble amounts. */
+/** @deprecated Use formatMoney — kept for call-site compatibility. */
+export const formatMoneyCompact = formatMoney;
+
+/** Whole rubles for number inputs. */
 export function formatAmountInput(value: string | number): string {
   if (typeof value === "string" && value.trim() === "") {
     return "";
@@ -28,10 +27,7 @@ export function formatAmountInput(value: string | number): string {
   if (!Number.isFinite(amount)) {
     return typeof value === "string" ? value : "";
   }
-  if (Number.isInteger(amount)) {
-    return String(amount);
-  }
-  return amount.toFixed(2).replace(/\.?0+$/, "");
+  return String(Math.round(amount));
 }
 
 export function formatShortName(fullName: string): string {

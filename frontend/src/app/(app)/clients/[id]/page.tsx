@@ -21,7 +21,7 @@ import {
   Toast,
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
-import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatMoneyCompact, formatShortName, statusLabel } from "@/lib/format";
+import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
 import {
   filterDecimalInput,
@@ -120,9 +120,9 @@ function formatScheduleMismatchMessage(
   contractTotal: number,
   plannedTotal: number,
 ): string {
-  const diff = plannedTotal - contractTotal;
-  const formattedContract = contractTotal.toLocaleString("ru-RU");
-  const formattedPlanned = plannedTotal.toLocaleString("ru-RU");
+  const diff = Math.round(plannedTotal - contractTotal);
+  const formattedContract = Math.round(contractTotal).toLocaleString("ru-RU");
+  const formattedPlanned = Math.round(plannedTotal).toLocaleString("ru-RU");
   if (diff > 0) {
     return `Сумма по графику (${formattedPlanned} ₽) превышает сумму договора (${formattedContract} ₽) на ${diff.toLocaleString("ru-RU")} ₽`;
   }
@@ -2008,8 +2008,8 @@ export default function ClientDetailPage() {
                               <div className="flex items-center gap-2">
                                 <Input
                                   type="number"
-                                  min={0.01}
-                                  step={0.01}
+                                  min={1}
+                                  step={1}
                                   className="max-w-[120px]"
                                   value={plannedValue}
                                   onChange={(e) =>
@@ -2224,7 +2224,7 @@ export default function ClientDetailPage() {
                             {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="number"
-                                min={Number(item.paid_amount) || 0.01}
+                                min={Math.max(1, Math.round(Number(item.paid_amount) || 0))}
                                 step={1}
                                 className="w-[72px] py-0.5 text-right tabular-nums"
                                 value={formatAmountInput(editValues.planned_amount)}
@@ -2243,14 +2243,14 @@ export default function ClientDetailPage() {
                               />
                             ) : (
                               <span className="whitespace-nowrap tabular-nums">
-                                {formatMoneyCompact(item.planned_amount)}
+                                {formatMoney(item.planned_amount)}
                               </span>
                             )}
                           </td>
                           <td className="text-right tabular-nums leading-tight">
-                            <p className="whitespace-nowrap">{formatMoneyCompact(item.paid_amount)}</p>
+                            <p className="whitespace-nowrap">{formatMoney(item.paid_amount)}</p>
                             <p className={cn("whitespace-nowrap", rest > 0 ? "text-muted" : "text-status-success-text")}>
-                              {formatMoneyCompact(rest)}
+                              {formatMoney(rest)}
                             </p>
                           </td>
                           <td>
@@ -2470,7 +2470,7 @@ export default function ClientDetailPage() {
                         <td>
                           <Input
                             type="number"
-                            min={0.01}
+                            min={1}
                             step={1}
                             className="w-[72px] py-0.5 text-right tabular-nums"
                             value={formatAmountInput(item.planned_amount)}
@@ -2480,8 +2480,8 @@ export default function ClientDetailPage() {
                           />
                         </td>
                         <td className="text-right tabular-nums leading-tight text-muted">
-                          <p className="whitespace-nowrap">{formatMoneyCompact(0)}</p>
-                          <p className="whitespace-nowrap">{formatMoneyCompact(item.planned_amount)}</p>
+                          <p className="whitespace-nowrap">{formatMoney(0)}</p>
+                          <p className="whitespace-nowrap">{formatMoney(item.planned_amount)}</p>
                         </td>
                         <td>
                           <Badge tone="warning">Новый</Badge>

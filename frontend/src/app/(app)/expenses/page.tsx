@@ -151,8 +151,8 @@ function ExpenseTable({
                   <td>
                     <Input
                       type="number"
-                      min={0.01}
-                      step={0.01}
+                      min={1}
+                      step={1}
                       value={editForm.amount}
                       onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
                     />
@@ -468,8 +468,8 @@ export default function ExpensesPage() {
           <Input
             placeholder="Сумма в месяц"
             type="number"
-            min={0.01}
-            step={0.01}
+            min={1}
+            step={1}
             value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })}
             required
