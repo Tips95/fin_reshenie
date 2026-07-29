@@ -28,7 +28,10 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     investment_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
-    assigned_clients: Mapped[list["Client"]] = relationship(back_populates="assigned_manager")
+    assigned_clients: Mapped[list["Client"]] = relationship(
+        back_populates="assigned_manager",
+        foreign_keys="Client.assigned_manager_id",
+    )
     payments_created: Mapped[list["Payment"]] = relationship(back_populates="created_by_user")
     audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="changed_by_user")
     assigned_tasks: Mapped[list["ManagerTask"]] = relationship(
