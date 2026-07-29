@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
 import type { Client, ClientBrief, ClientDueMonthSummary, ClientStatus, ProcedureStage, User } from "@/lib/types";
-import { useAuth } from "@/modules/auth/AuthProvider";
+import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
 type SortField = "full_name" | "contract_date" | "debt_amount" | "status" | "overdue" | "created_at";
 type SortDir = "asc" | "desc";
@@ -106,6 +106,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const searchParams = useSearchParams();
   const [clients, setClients] = useState<Array<Client | ClientBrief>>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [overdueFilter, setOverdueFilter] = useState(
     searchParams.get("overdue") === "true",
@@ -146,41 +148,97 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     assigned_manager_id: "",
   });
 
-  const loadClients = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await clientsApi.list({
-        status: isCollectionView ? statusFilter || undefined : undefined,
-        overdue: overdueFilter || undefined,
-        engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
-        collection_view: isCollectionView ? collectionView : undefined,
-        manager_id: managerFilter || undefined,
-        phone: phoneSearch.trim() || undefined,
-        name: nameSearch.trim() || undefined,
-        contract_month: contractMonth || undefined,
-        due_month: dueMonth || undefined,
-        sort_by: sortBy,
-        sort_dir: sortDir,
-        page,
-        page_size: CLIENTS_PAGE_SIZE,
-      });
-      setClients(data.items);
-      setTotalClients(data.total);
-      setTotalPages(data.total_pages);
-      setDueMonthSummary(data.due_month_summary ?? null);
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, workspaceConfig.engagementStage, isCollectionView, collectionView, overdueFilter, managerFilter, phoneSearch, nameSearch, contractMonth, dueMonth, sortBy, sortDir, page]);
+  const filterKey = useMemo(
+    () =>
+      JSON.stringify({
+        statusFilter,
+        overdueFilter,
+        managerFilter,
+        phoneSearch,
+        nameSearch,
+        contractMonth,
+        dueMonth,
+        sortBy,
+        sortDir,
+        collectionView,
+        engagementStage: workspaceConfig.engagementStage,
+      }),
+    [
+      statusFilter,
+      overdueFilter,
+      managerFilter,
+      phoneSearch,
+      nameSearch,
+      contractMonth,
+      dueMonth,
+      sortBy,
+      sortDir,
+      collectionView,
+      workspaceConfig.engagementStage,
+    ],
+  );
+  const prevFilterKey = useRef<string | null>(null);
 
   useEffect(() => {
-    setPage(1);
+    if (!user) return;
+
+    const filtersChanged =
+      prevFilterKey.current !== null && prevFilterKey.current !== filterKey;
+    prevFilterKey.current = filterKey;
+
+    if (filtersChanged && page !== 1) {
+      setPage(1);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function run() {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const data = await clientsApi.list({
+          status: isCollectionView ? statusFilter || undefined : undefined,
+          overdue: overdueFilter || undefined,
+          engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
+          collection_view: isCollectionView ? collectionView : undefined,
+          manager_id: managerFilter || undefined,
+          phone: phoneSearch.trim() || undefined,
+          name: nameSearch.trim() || undefined,
+          contract_month: contractMonth || undefined,
+          due_month: dueMonth || undefined,
+          sort_by: sortBy,
+          sort_dir: sortDir,
+          page,
+          page_size: CLIENTS_PAGE_SIZE,
+        });
+        if (cancelled) return;
+        setClients(data.items);
+        setTotalClients(data.total);
+        setTotalPages(data.total_pages);
+        setDueMonthSummary(data.due_month_summary ?? null);
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(getAuthErrorMessage(error));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [
-    statusFilter,
-    workspaceConfig.engagementStage,
+    user,
+    page,
+    filterKey,
+    reloadKey,
     isCollectionView,
-    collectionView,
+    statusFilter,
     overdueFilter,
+    workspaceConfig.engagementStage,
+    collectionView,
     managerFilter,
     phoneSearch,
     nameSearch,
@@ -190,9 +248,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     sortDir,
   ]);
 
-  useEffect(() => {
-    loadClients();
-  }, [loadClients]);
+  const reloadClients = useCallback(() => {
+    setReloadKey((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     if (user?.role === "owner") {
@@ -577,6 +635,13 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       <Card>
         {loading ? (
           <LoadingState text="Загрузка клиентов..." />
+        ) : loadError ? (
+          <div className="space-y-3 rounded-lg border border-status-danger-border bg-status-danger-bg px-3 py-4 text-center">
+            <p className="text-sm text-status-danger-text">{loadError}</p>
+            <Button type="button" variant="secondary" onClick={reloadClients}>
+              Повторить
+            </Button>
+          </div>
         ) : clients.length === 0 ? (
           <p className="rounded-lg bg-surface-muted px-3 py-4 text-center text-sm text-muted">
             {workspaceConfig.emptyText}

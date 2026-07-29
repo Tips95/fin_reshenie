@@ -32,7 +32,7 @@ import {
   validateRequiredDate,
 } from "@/lib/validation";
 import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
-import { useAuth } from "@/modules/auth/AuthProvider";
+import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 import { cn } from "@/lib/cn";
 
 type ClientNavSection = {
@@ -163,6 +163,9 @@ export default function ClientDetailPage() {
   const { user } = useAuth();
   const [client, setClient] = useState<ClientDetail | ClientBrief | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
@@ -237,33 +240,61 @@ export default function ClientDetailPage() {
     return clientsApi.getDetail(params.id);
   }, [params.id, user?.role]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setClient(await fetchClient());
-    } catch (error) {
-      setClient(null);
-      showToast(
-        error instanceof ApiRequestError ? error.message : "Не удалось загрузить карточку клиента",
-        "error",
-      );
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    async function run() {
+      setLoading(true);
+      setLoadError(null);
+      setNotFound(false);
+      try {
+        const data = await fetchClient();
+        if (cancelled) return;
+        setClient(data);
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof ApiRequestError && error.status === 404) {
+          setNotFound(true);
+          setClient(null);
+        } else {
+          setLoadError(getAuthErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }, [fetchClient, showToast]);
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, fetchClient, reloadKey]);
+
+  const reloadClient = useCallback(() => {
+    setReloadKey((value) => value + 1);
+  }, []);
 
   const refreshClient = useCallback(async () => {
     setRefreshing(true);
+    setLoadError(null);
     try {
       setClient(await fetchClient());
+      setNotFound(false);
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        setNotFound(true);
+        setClient(null);
+      } else {
+        const message = getAuthErrorMessage(error);
+        setLoadError(message);
+        showToast(message, "error");
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [fetchClient]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  }, [fetchClient, showToast]);
 
   useEffect(() => {
     if (!client || user?.role === "call_center") {
@@ -1162,8 +1193,30 @@ export default function ClientDetailPage() {
     }
   }
 
-  if (loading && !client) return <LoadingState text="Загрузка карточки..." />;
-  if (!client) return <EmptyState>Клиент не найден</EmptyState>;
+  if (loading && !client && !loadError) {
+    return <LoadingState text="Загрузка карточки..." />;
+  }
+
+  if (loadError && !client) {
+    return (
+      <div className="page-stack">
+        <PageHeader
+          title="Карточка клиента"
+          back={<BackLink href="/clients">К списку клиентов</BackLink>}
+        />
+        <Card>
+          <EmptyState>{loadError}</EmptyState>
+          <div className="mt-3 flex justify-center">
+            <Button type="button" onClick={reloadClient}>
+              Повторить
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (notFound || !client) return <EmptyState>Клиент не найден</EmptyState>;
 
   const detail = isDetail(client) ? client : null;
   const isBankruptcy = client.engagement_stage === "bankruptcy";
