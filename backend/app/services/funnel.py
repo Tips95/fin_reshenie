@@ -214,6 +214,19 @@ def count_open_manager_tasks(db: Session, user: User) -> int:
     return sum(1 for task in tasks if task.client_id in visible_client_ids)
 
 
+def try_ensure_first_payment_task_for_manager_client(
+    db: Session,
+    *,
+    client: Client,
+    actor: User,
+) -> None:
+    try:
+        ensure_first_payment_task_for_manager_client(db, client=client, actor=actor)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
 def sync_overdue_tasks(db: Session, user: User) -> None:
     if user.role == UserRole.CALL_CENTER:
         return

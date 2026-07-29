@@ -121,13 +121,8 @@ def convert_to_bankruptcy(
                 client=client,
                 contract_total=payload.contract_total,
             )
-        from app.services.funnel import ensure_first_payment_task_for_manager_client
+        from app.services.funnel import try_ensure_first_payment_task_for_manager_client
 
-        ensure_first_payment_task_for_manager_client(
-            db,
-            client=client,
-            actor=current_user,
-        )
         log_audit(
             db,
             user=current_user,
@@ -140,6 +135,11 @@ def convert_to_bankruptcy(
         )
         detail = _build_client_detail(db, client)
         db.commit()
+        try_ensure_first_payment_task_for_manager_client(
+            db,
+            client=client,
+            actor=current_user,
+        )
     except HTTPException:
         db.rollback()
         raise

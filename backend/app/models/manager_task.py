@@ -36,6 +36,7 @@ class ManagerTask(Base, UUIDPrimaryKeyMixin, TimestampMixin):
             TaskType,
             name="tasktype",
             native_enum=False,
+            length=32,
             values_callable=lambda enum: [item.value for item in enum],
         ),
         nullable=False,

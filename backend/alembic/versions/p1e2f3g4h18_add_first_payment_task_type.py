@@ -31,6 +31,7 @@ def _upgrade_postgresql() -> None:
     ).scalar()
     if is_native_enum:
         op.execute("ALTER TYPE tasktype ADD VALUE IF NOT EXISTS 'first_payment_record'")
+        op.execute("ALTER TABLE manager_tasks ALTER COLUMN task_type TYPE VARCHAR(32)")
         return
 
     op.execute(
@@ -61,6 +62,7 @@ def _upgrade_postgresql() -> None:
         CHECK (task_type IN ({values_sql}))
         """
     )
+    op.execute("ALTER TABLE manager_tasks ALTER COLUMN task_type TYPE VARCHAR(32)")
 
 
 def _downgrade_postgresql() -> None:
