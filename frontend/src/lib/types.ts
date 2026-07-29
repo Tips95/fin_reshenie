@@ -87,6 +87,10 @@ export interface Client {
   month_paid?: string | null;
   month_remainder?: string | null;
   payments_remaining?: number | null;
+  manager_first_commission_collected?: boolean;
+  manager_first_commission_collected_at?: string | null;
+  manager_first_commission_collected_by?: string | null;
+  manager_first_commission_collected_by_name?: string | null;
 }
 
 export interface ClientDueMonthSummary {

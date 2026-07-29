@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -23,6 +23,7 @@ from app.schemas.client import (
     ClientListResponse,
     ClientResponse,
     ClientUpdate,
+    ManagerFirstCommissionUpdate,
 )
 from app.services.access import (
     client_has_overdue_payments,
@@ -147,6 +148,10 @@ def _to_client_response(client: Client, db: Session) -> ClientResponse:
         data.document_collection_status = document_collection.status
         data.document_collection_paid_date = document_collection.paid_date
     data.contract_total = get_client_contract_total(db, client.id)
+    if client.manager_first_commission_collected_by is not None:
+        collector = db.get(User, client.manager_first_commission_collected_by)
+        if collector is not None:
+            data.manager_first_commission_collected_by_name = collector.full_name
     return data
 
 
@@ -510,6 +515,76 @@ def update_client(
     if "contract_date" in updates:
         realign_client_legacy_finances(db, client)
 
+    db.commit()
+    db.refresh(client)
+    return _to_client_response(client, db)
+
+
+@router.patch("/{client_id}/manager-first-commission", response_model=ClientResponse)
+def update_manager_first_commission(
+    client_id: UUID,
+    payload: ManagerFirstCommissionUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> ClientResponse:
+    client = get_organization_client(
+        db,
+        client_id=client_id,
+        organization_id=current_user.organization_id,
+    )
+    if client.engagement_stage != EngagementStage.BANKRUPTCY:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Менеджерские 10 000 ₽ относятся только к клиентам на этапе банкротства",
+        )
+
+    plan = db.scalar(
+        select(InstallmentPlan)
+        .where(InstallmentPlan.client_id == client.id)
+        .order_by(InstallmentPlan.created_at.desc())
+    )
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="У клиента нет графика рассрочки",
+        )
+
+    first_month = db.scalar(
+        select(PaymentSchedule)
+        .where(
+            PaymentSchedule.installment_plan_id == plan.id,
+            PaymentSchedule.month_number == 1,
+        )
+        .limit(1)
+    )
+    if first_month is None or first_month.paid_amount <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Сначала зафиксируйте первый платёж клиента",
+        )
+
+    if payload.collected == client.manager_first_commission_collected:
+        return _to_client_response(client, db)
+
+    old_value = client.manager_first_commission_collected
+    client.manager_first_commission_collected = payload.collected
+    if payload.collected:
+        client.manager_first_commission_collected_at = datetime.now(timezone.utc)
+        client.manager_first_commission_collected_by = current_user.id
+    else:
+        client.manager_first_commission_collected_at = None
+        client.manager_first_commission_collected_by = None
+
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="client",
+        entity_id=client.id,
+        action=AuditAction.UPDATE,
+        field_name="manager_first_commission_collected",
+        old_value=old_value,
+        new_value=payload.collected,
+    )
     db.commit()
     db.refresh(client)
     return _to_client_response(client, db)

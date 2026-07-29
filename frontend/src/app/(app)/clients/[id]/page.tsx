@@ -62,6 +62,8 @@ const EMPTY_SCHEDULE_DRAFT: ScheduleDraft = {
   pendingWaives: [],
 };
 
+const MANAGER_FIRST_COMMISSION = 10000;
+
 type ToastState = {
   message: string;
   tone: "success" | "error" | "info";
@@ -210,6 +212,7 @@ export default function ClientDetailPage() {
   });
   const [docCollectionAmountsSaving, setDocCollectionAmountsSaving] = useState(false);
   const [convertSaving, setConvertSaving] = useState(false);
+  const [commissionSaving, setCommissionSaving] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [convertForm, setConvertForm] = useState({
     auto_installment: false,
@@ -478,6 +481,26 @@ export default function ClientDetailPage() {
     }
   }
 
+  async function handleToggleManagerCommission(collected: boolean) {
+    if (!client) return;
+    setCommissionSaving(true);
+    try {
+      await clientsApi.setManagerFirstCommission(client.id, collected);
+      await refreshClient();
+      showToast(
+        collected ? "Менеджерские 10 000 ₽ отмечены как выданные" : "Отметка о выдаче снята",
+        "success",
+      );
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить отметку",
+        "error",
+      );
+    } finally {
+      setCommissionSaving(false);
+    }
+  }
+
   async function handlePayment(event: React.FormEvent) {
     event.preventDefault();
     if (!client) return;
@@ -497,13 +520,26 @@ export default function ClientDetailPage() {
       comment: paymentForm.comment || null,
     });
 
+    const paidFirstMonth =
+      isDetail(client) &&
+      paymentForm.payment_schedule_id &&
+      client.payment_schedule.find((item) => item.id === paymentForm.payment_schedule_id)
+        ?.month_number === 1;
+
     setPaymentForm({
       payment_schedule_id: "",
       amount: "",
       payment_date: client.contract_date,
       comment: "",
     });
-    refreshClient();
+    await refreshClient();
+    if (
+      paidFirstMonth &&
+      isDetail(client) &&
+      !client.manager_first_commission_collected
+    ) {
+      showToast("Отметьте менеджерские 10 000 ₽, если менеджер уже забрал", "info");
+    }
   }
 
   async function handleQuickPay(item: PaymentScheduleItem) {
@@ -522,6 +558,13 @@ export default function ClientDetailPage() {
         comment: `Оплата за ${item.month_number} месяц`,
       });
       await refreshClient();
+      if (
+        item.month_number === 1 &&
+        isDetail(client) &&
+        !client.manager_first_commission_collected
+      ) {
+        showToast("Отметьте менеджерские 10 000 ₽, если менеджер уже забрал", "info");
+      }
     } finally {
       setPayingId(null);
     }
@@ -1156,6 +1199,12 @@ export default function ClientDetailPage() {
     .filter((item) => remainingAmount(item) > 0)
     .sort((a, b) => effectiveDueDate(a).localeCompare(effectiveDueDate(b)))[0];
   const scheduleNotesCount = schedule.filter((item) => item.manager_note?.trim()).length;
+  const firstScheduleMonth = schedule.find((item) => item.month_number === 1);
+  const firstMonthPaid = Boolean(firstScheduleMonth && Number(firstScheduleMonth.paid_amount) > 0);
+  const managerCommissionCollected = Boolean(
+    isDetail(client) && client.manager_first_commission_collected,
+  );
+  const showManagerCommission = isBankruptcy && firstMonthPaid && canRecordSchedulePayment;
   const scheduleHasActions = canRecordSchedulePayment || canEditSchedule;
   const scheduleTableColSpan = 6 + (scheduleHasActions ? 1 : 0);
   const planContractTotal = detail?.installment_plan ? Number(detail.installment_plan.total_amount) : 0;
@@ -1170,6 +1219,49 @@ export default function ClientDetailPage() {
       : planContractTotal <= 0 && hasScheduleDraftRows
         ? "Укажите сумму договора — иначе нельзя сохранить график"
         : "";
+
+  function renderManagerCommissionCard() {
+    if (!showManagerCommission) return null;
+
+    return (
+      <div
+        className={cn(
+          "mt-3 rounded-md border px-3 py-2",
+          managerCommissionCollected
+            ? "border-status-success-border bg-status-success-bg"
+            : "border-status-warning-border bg-status-warning-bg",
+        )}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">
+              Менеджерские {formatMoney(MANAGER_FIRST_COMMISSION)}
+            </p>
+            <p className="text-xs text-muted">
+              С первого платежа клиента ({formatMoney(firstScheduleMonth?.planned_amount ?? 0)}).
+              {managerCommissionCollected
+                ? isDetail(client) && client.manager_first_commission_collected_by_name
+                  ? ` Отметил ${client.manager_first_commission_collected_by_name}.`
+                  : " Выдано."
+                : " Отметьте, если менеджер уже забрал."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={managerCommissionCollected ? "secondary" : "primary"}
+            disabled={commissionSaving}
+            onClick={() => handleToggleManagerCommission(!managerCommissionCollected)}
+          >
+            {commissionSaving
+              ? "Сохранение…"
+              : managerCommissionCollected
+                ? "Снять отметку"
+                : "Менеджер забрал 10 000 ₽"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   function renderManualPaymentForm() {
     if (!canRecordSchedulePayment || !detail || !isBankruptcy) {
@@ -1232,6 +1324,7 @@ export default function ClientDetailPage() {
             Сохранить платёж
           </Button>
         </form>
+        {renderManagerCommissionCard()}
       </Card>
     );
   }
@@ -1328,6 +1421,20 @@ export default function ClientDetailPage() {
                   <strong>
                     {formatDate(effectiveDueDate(nextDueItem))} ·{" "}
                     {formatMoney(remainingAmount(nextDueItem))}
+                  </strong>
+                </span>
+              ) : null}
+              {showManagerCommission ? (
+                <span>
+                  <span className="text-muted">Менеджерские:</span>{" "}
+                  <strong
+                    className={
+                      managerCommissionCollected
+                        ? "text-status-success-text"
+                        : "text-status-warning-text"
+                    }
+                  >
+                    {managerCommissionCollected ? "выдано" : "10 000 ₽ не отмечено"}
                   </strong>
                 </span>
               ) : null}
@@ -2177,7 +2284,14 @@ export default function ClientDetailPage() {
                       return (
                         <Fragment key={item.id}>
                         <tr
-                          className={markedForDelete ? "bg-slate-50 opacity-60" : undefined}
+                          className={cn(
+                            markedForDelete && "bg-slate-50 opacity-60",
+                            item.month_number === 1 &&
+                              firstMonthPaid &&
+                              (managerCommissionCollected
+                                ? "bg-status-success-bg/60 hover:bg-status-success-bg"
+                                : "bg-status-warning-bg/40 hover:bg-status-warning-bg/50"),
+                          )}
                         >
                           <td className="tabular-nums text-muted">
                             {item.month_number}
@@ -2265,6 +2379,20 @@ export default function ClientDetailPage() {
                             {item.deferred_until && !item.deferral_comment && (
                               <p className="mt-0.5 text-[10px] text-amber-600">
                                 до {formatDate(item.deferred_until)}
+                              </p>
+                            )}
+                            {item.month_number === 1 && firstMonthPaid && canRecordSchedulePayment && (
+                              <p
+                                className={cn(
+                                  "mt-0.5 text-[10px] font-medium",
+                                  managerCommissionCollected
+                                    ? "text-status-success-text"
+                                    : "text-status-warning-text",
+                                )}
+                              >
+                                {managerCommissionCollected
+                                  ? "10 000 ₽ менеджеру выдано"
+                                  : "10 000 ₽ менеджеру не отмечено"}
                               </p>
                             )}
                           </td>
@@ -2361,6 +2489,26 @@ export default function ClientDetailPage() {
                                     {markedForDelete ? "К удалению" : "Оплачено"}
                                   </span>
                                 ) : null}
+                                {item.month_number === 1 &&
+                                  firstMonthPaid &&
+                                  canRecordSchedulePayment &&
+                                  !deferringId && (
+                                    <Button
+                                      type="button"
+                                      variant={managerCommissionCollected ? "secondary" : "primary"}
+                                      className="px-1.5 py-0.5"
+                                      disabled={commissionSaving}
+                                      onClick={() =>
+                                        handleToggleManagerCommission(!managerCommissionCollected)
+                                      }
+                                    >
+                                      {commissionSaving
+                                        ? "…"
+                                        : managerCommissionCollected
+                                          ? "10k ✓"
+                                          : "10k менед."}
+                                    </Button>
+                                  )}
                                 {canEditSchedule && isOwner &&
                                   item.status === "overdue" &&
                                   !item.overdue_waived &&

@@ -351,6 +351,11 @@ export const clientsApi = {
       schedule_payments_updated: number;
       mandatory_records_updated: number;
     }>(`/clients/${id}/payments/align-schedule-dates`, { method: "POST" }),
+  setManagerFirstCommission: (id: string, collected: boolean) =>
+    apiFetch<Client>(`/clients/${id}/manager-first-commission`, {
+      method: "PATCH",
+      body: JSON.stringify({ collected }),
+    }),
 };
 
 export const documentCollectionApi = {

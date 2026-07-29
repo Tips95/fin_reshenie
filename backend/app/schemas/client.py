@@ -78,6 +78,10 @@ class ClientResponse(BaseModel):
     month_paid: Decimal | None = None
     month_remainder: Decimal | None = None
     payments_remaining: int | None = None
+    manager_first_commission_collected: bool = False
+    manager_first_commission_collected_at: datetime | None = None
+    manager_first_commission_collected_by: UUID | None = None
+    manager_first_commission_collected_by_name: str | None = None
 
 
 class ClientDueMonthSummary(BaseModel):
@@ -137,6 +141,10 @@ class ClientDetailResponse(ClientResponse):
     payments: list["PaymentResponse"] = []
     mandatory_payments: list["MandatoryPaymentResponse"] = []
     document_collection: "DocumentCollectionResponse | None" = None
+
+
+class ManagerFirstCommissionUpdate(BaseModel):
+    collected: bool
 
 
 from app.schemas.installment_plan import InstallmentPlanResponse  # noqa: E402

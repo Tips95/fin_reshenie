@@ -1,12 +1,14 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import ClientStatus, EngagementStage, ProcedureStage
+
+MANAGER_FIRST_PAYMENT_COMMISSION = Decimal("10000.00")
 
 
 class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -52,9 +54,28 @@ class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         default=ProcedureStage.CONTRACT_SIGNED,
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    manager_first_commission_collected: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+    manager_first_commission_collected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    manager_first_commission_collected_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     organization: Mapped["Organization"] = relationship(back_populates="clients")
-    assigned_manager: Mapped["User | None"] = relationship(back_populates="assigned_clients")
+    assigned_manager: Mapped["User | None"] = relationship(
+        back_populates="assigned_clients",
+        foreign_keys=[assigned_manager_id],
+    )
+    manager_first_commission_collector: Mapped["User | None"] = relationship(
+        foreign_keys=[manager_first_commission_collected_by],
+    )
     document_collection: Mapped["DocumentCollection | None"] = relationship(
         back_populates="client",
         uselist=False,
