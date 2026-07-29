@@ -6,7 +6,7 @@ import ClientsPageContent from "../ClientsPageContent";
 
 export default function ClientsContractsPage() {
   return (
-    <Suspense fallback={<p className="text-slate-500">Загрузка...</p>}>
+    <Suspense fallback={<p className="text-muted">Загрузка...</p>}>
       <ClientsPageContent workspace="contracts" />
     </Suspense>
   );

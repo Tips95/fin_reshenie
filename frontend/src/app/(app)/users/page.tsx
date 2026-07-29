@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
   FormField,
   Input,
   LoadingState,
@@ -14,6 +15,7 @@ import {
   PhoneInput,
   SectionTitle,
   Select,
+  StatCard,
 } from "@/components/ui";
 import { ApiRequestError, usersApi } from "@/lib/api-client";
 import { statusLabel } from "@/lib/format";
@@ -234,18 +236,9 @@ export default function UsersPage() {
       />
 
       <div className="grid gap-2 sm:grid-cols-3">
-        <Card>
-          <p className="text-sm text-slate-500">Всего в системе</p>
-          <p className="mt-1 text-lg font-bold text-slate-900">{users.length}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-slate-500">Активных</p>
-          <p className="mt-1 text-lg font-bold text-emerald-700">{activeCount}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-slate-500">Деактивированных</p>
-          <p className="mt-1 text-lg font-bold text-slate-700">{users.length - activeCount}</p>
-        </Card>
+        <StatCard label="Всего в системе" value={users.length} tone="brand" />
+        <StatCard label="Активных" value={activeCount} tone="success" />
+        <StatCard label="Деактивированных" value={users.length - activeCount} />
       </div>
 
       {error && (
@@ -302,7 +295,7 @@ export default function UsersPage() {
               <option value="call_center">Колл-центр</option>
               <option value="owner">Руководитель</option>
             </Select>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"
                 checked={form.is_active}
@@ -322,12 +315,18 @@ export default function UsersPage() {
         {loading ? (
           <LoadingState text="Загрузка пользователей..." />
         ) : users.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+          <EmptyState
+            action={
+              <Button type="button" onClick={() => setShowForm(true)}>
+                Добавить пользователя
+              </Button>
+            }
+          >
             Пользователи не найдены
-          </p>
+          </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table">
+            <table className="data-table table-cards">
               <thead>
                 <tr>
                   <th>ФИО</th>
@@ -435,24 +434,24 @@ export default function UsersPage() {
 
                   return (
                     <tr key={item.id} className={!item.is_active ? "opacity-70" : undefined}>
-                      <td className="font-semibold text-slate-800">
+                      <td data-label="ФИО" className="font-semibold text-foreground">
                         {item.full_name}
                         {isSelf && (
-                          <span className="ml-2 text-xs font-normal text-slate-500">(вы)</span>
+                          <span className="ml-2 text-xs font-normal text-muted">(вы)</span>
                         )}
                       </td>
-                      <td className="text-slate-600">{item.email || "—"}</td>
-                      <td className="text-slate-600">{item.phone || "—"}</td>
-                      <td>
+                      <td data-label="Email" className="text-muted">{item.email || "—"}</td>
+                      <td data-label="Телефон" className="text-muted">{item.phone || "—"}</td>
+                      <td data-label="Роль">
                         <Badge tone={roleTone(item.role)}>{statusLabel(item.role)}</Badge>
                       </td>
-                      <td>
+                      <td data-label="Статус">
                         <Badge tone={item.is_active ? "success" : "default"}>
                           {item.is_active ? "Активен" : "Деактивирован"}
                         </Badge>
                       </td>
-                      <td>
-                        <div className="flex flex-wrap gap-2">
+                      <td data-label="Действия">
+                        <div className="flex flex-wrap justify-end gap-1.5">
                           <Button variant="secondary" onClick={() => startEdit(item)}>
                             Изменить
                           </Button>

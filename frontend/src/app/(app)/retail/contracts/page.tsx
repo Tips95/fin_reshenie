@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { Badge, Button, Card, LoadingState, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, LoadingState, PageHeader, Select } from "@/components/ui";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatShortName } from "@/lib/format";
 import type { RetailContractBrief } from "@/lib/types";
@@ -54,22 +54,22 @@ export default function RetailContractsPage() {
         title="Договоры"
         subtitle="Каждый договор привязан к инвестору"
         action={
-          <select
+          <Select
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="w-auto"
           >
             <option value="">Все статусы</option>
             <option value="active">Активные</option>
             <option value="overdue">Просроченные</option>
             <option value="completed">Завершённые</option>
-          </select>
+          </Select>
         }
       />
 
       {error ? (
         <Card variant="accent">
-          <p className="text-sm text-rose-600">{error}</p>
+          <p className="text-sm text-status-danger-text">{error}</p>
           <Button type="button" className="mt-3" onClick={() => void load()}>
             Повторить
           </Button>
@@ -78,12 +78,10 @@ export default function RetailContractsPage() {
 
       <Card>
         {contracts.length === 0 ? (
-          <p className="py-4 text-center text-xs text-muted">
-            {error ? "Список недоступен" : "Договоров пока нет"}
-          </p>
+          <EmptyState>{error ? "Список недоступен" : "Договоров пока нет"}</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table">
+            <table className="data-table table-cards">
               <thead>
                 <tr>
                   <th>Клиент</th>
@@ -99,23 +97,28 @@ export default function RetailContractsPage() {
               <tbody>
                 {contracts.map((item) => (
                   <tr key={item.id}>
-                    <td>
-                      <Link href={`/retail/clients/${item.retail_client_id}`} className="link-brand font-medium">
-                        {formatShortName(item.client_name)}
-                      </Link>
-                      <p className="text-xs text-muted">{formatDate(item.contract_date)}</p>
+                    <td data-label="Клиент">
+                      <div>
+                        <Link
+                          href={`/retail/clients/${item.retail_client_id}`}
+                          className="link-brand font-medium"
+                        >
+                          {formatShortName(item.client_name)}
+                        </Link>
+                        <p className="text-xs text-muted">{formatDate(item.contract_date)}</p>
+                      </div>
                     </td>
-                    <td>
+                    <td data-label="Товар">
                       <Link href={`/retail/contracts/${item.id}`} className="link-brand">
                         {item.product_name}
                       </Link>
                     </td>
-                    <td>{item.investor_name}</td>
-                    <td>{item.term_months} мес.</td>
-                    <td>{formatMoney(item.total_amount)}</td>
-                    <td>{formatMoney(item.collected_total)}</td>
-                    <td>{formatMoney(item.remainder_total)}</td>
-                    <td>
+                    <td data-label="Инвестор">{item.investor_name}</td>
+                    <td data-label="Срок">{item.term_months} мес.</td>
+                    <td data-label="Итого">{formatMoney(item.total_amount)}</td>
+                    <td data-label="Получено">{formatMoney(item.collected_total)}</td>
+                    <td data-label="Остаток">{formatMoney(item.remainder_total)}</td>
+                    <td data-label="Статус">
                       <Badge tone={statusTone(item.status)}>{statusText(item.status)}</Badge>
                     </td>
                   </tr>

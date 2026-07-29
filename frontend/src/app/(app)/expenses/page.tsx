@@ -137,7 +137,7 @@ function ExpenseTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="data-table text-xs">
+      <table className="data-table table-cards text-xs">
         <thead>
           <tr>
             <th>Название</th>
@@ -237,15 +237,19 @@ function ExpenseTable({
                   trackMonthlyPayments && isPaid && "bg-status-success-bg/70 hover:bg-status-success-bg",
                 )}
               >
-                <td className="font-medium text-slate-900">{item.name}</td>
-                <td>
+                <td data-label="Название" className="font-medium text-foreground">{item.name}</td>
+                <td data-label="Категория">
                   <Badge tone={categoryTone(item.category)}>{statusLabel(item.category)}</Badge>
                 </td>
-                {showPayDay && <td>{item.pay_day ? `${item.pay_day}-е` : "—"}</td>}
-                <td className="text-right tabular-nums">{formatMoney(item.amount)}</td>
+                {showPayDay && (
+                  <td data-label="День">{item.pay_day ? `${item.pay_day}-е` : "—"}</td>
+                )}
+                <td data-label="План / мес." className="text-right tabular-nums">
+                  {formatMoney(item.amount)}
+                </td>
                 {trackMonthlyPayments && periodMonth && (
                   <>
-                    <td className="text-right">
+                    <td data-label="Выплачено" className="text-right">
                       {isEditingPayment ? (
                         <div className="flex flex-col gap-1">
                           <Input
@@ -275,13 +279,13 @@ function ExpenseTable({
                           <p className="whitespace-nowrap font-semibold text-status-success-text">
                             {formatMoney(payment!.amount)}
                           </p>
-                          <p className="text-[10px] text-muted">{formatDate(payment!.payment_date)}</p>
+                          <p className="text-[11px] text-muted">{formatDate(payment!.payment_date)}</p>
                         </div>
                       ) : (
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Статус">
                       {isPaid ? (
                         <Badge tone="success">Выплачено</Badge>
                       ) : (
@@ -290,8 +294,8 @@ function ExpenseTable({
                     </td>
                   </>
                 )}
-                <td>
-                  <div className="flex flex-wrap gap-1">
+                <td data-label="Действия">
+                  <div className="flex flex-wrap justify-end gap-1">
                     {trackMonthlyPayments && periodMonth && isEditingPayment && payment && (
                       <>
                         <Button
@@ -811,7 +815,7 @@ export default function ExpensesPage() {
           <EmptyState>Выплаты ещё не зафиксированы</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table text-xs">
+            <table className="data-table table-cards text-xs">
               <thead>
                 <tr>
                   <th>Месяц</th>
@@ -832,11 +836,13 @@ export default function ExpensesPage() {
                       key={payment.id}
                       className={cn(isCurrentMonth && "bg-status-success-bg/40")}
                     >
-                      <td className="capitalize">{formatMonthLabel(payment.period_month.slice(0, 7))}</td>
-                      <td className="font-medium text-slate-900">
+                      <td data-label="Месяц" className="capitalize">
+                        {formatMonthLabel(payment.period_month.slice(0, 7))}
+                      </td>
+                      <td data-label="Получатель" className="font-medium text-foreground">
                         {payment.expense_name ?? "Статья расхода"}
                       </td>
-                      <td className="text-right">
+                      <td data-label="Сумма" className="text-right">
                         {isEditing ? (
                           <Input
                             type="number"
@@ -854,7 +860,7 @@ export default function ExpensesPage() {
                           </span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Дата выплаты">
                         {isEditing ? (
                           <Input
                             type="date"
@@ -871,9 +877,11 @@ export default function ExpensesPage() {
                           formatDate(payment.payment_date)
                         )}
                       </td>
-                      <td className="text-muted">{payment.created_by_name ?? "—"}</td>
-                      <td>
-                        <div className="flex flex-wrap gap-1">
+                      <td data-label="Зафиксировал" className="text-muted">
+                        {payment.created_by_name ?? "—"}
+                      </td>
+                      <td data-label="">
+                        <div className="flex flex-wrap justify-end gap-1">
                           {isEditing ? (
                             <>
                               <Button

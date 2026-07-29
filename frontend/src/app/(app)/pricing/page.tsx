@@ -3,7 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Badge, Button, Card, Input, LoadingState, PageHeader, SectionTitle } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  FormField,
+  Input,
+  LoadingState,
+  PageHeader,
+  SectionTitle,
+} from "@/components/ui";
 import { pricingApi } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { PricingTier } from "@/lib/types";
@@ -84,65 +94,83 @@ export default function PricingPage() {
 
       <Card variant="accent">
         <SectionTitle title="Добавить тариф" />
-        <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          <Input
-            placeholder="Мин. сумма"
-            value={form.min_amount}
-            onChange={(e) => setForm({ ...form, min_amount: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Макс. сумма"
-            value={form.max_amount}
-            onChange={(e) => setForm({ ...form, max_amount: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Итого (total_cost)"
-            value={form.total_cost}
-            onChange={(e) => setForm({ ...form, total_cost: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="1-й месяц"
-            value={form.first_month_payment}
-            onChange={(e) => setForm({ ...form, first_month_payment: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="2-й месяц"
-            value={form.second_month_payment}
-            onChange={(e) => setForm({ ...form, second_month_payment: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Остальные месяцы (кол-во)"
-            value={form.remaining_months_count}
-            onChange={(e) => setForm({ ...form, remaining_months_count: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Платёж остальных месяцев"
-            value={form.remaining_month_payment}
-            onChange={(e) => setForm({ ...form, remaining_month_payment: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Всего месяцев"
-            value={form.total_months}
-            onChange={(e) => setForm({ ...form, total_months: e.target.value })}
-            required
-          />
-          <Input
-            type="date"
-            value={form.effective_from}
-            onChange={(e) => setForm({ ...form, effective_from: e.target.value })}
-            required
-          />
-          {error && <p className="text-sm text-red-600 md:col-span-2 xl:col-span-3">{error}</p>}
-          <Button type="submit" className="md:col-span-2 xl:col-span-3">
-            Сохранить тариф
-          </Button>
+        <form onSubmit={handleCreate} className="form-grid-3">
+          <FormField label="Минимальная сумма долга">
+            <Input
+              placeholder="300 000"
+              value={form.min_amount}
+              onChange={(e) => setForm({ ...form, min_amount: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Максимальная сумма долга">
+            <Input
+              placeholder="500 000"
+              value={form.max_amount}
+              onChange={(e) => setForm({ ...form, max_amount: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Стоимость по тарифу">
+            <Input
+              placeholder="180 000"
+              value={form.total_cost}
+              onChange={(e) => setForm({ ...form, total_cost: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Платёж 1-го месяца">
+            <Input
+              placeholder="40 000"
+              value={form.first_month_payment}
+              onChange={(e) => setForm({ ...form, first_month_payment: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Платёж 2-го месяца">
+            <Input
+              placeholder="20 000"
+              value={form.second_month_payment}
+              onChange={(e) => setForm({ ...form, second_month_payment: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Количество остальных месяцев">
+            <Input
+              placeholder="8"
+              value={form.remaining_months_count}
+              onChange={(e) => setForm({ ...form, remaining_months_count: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Платёж остальных месяцев">
+            <Input
+              placeholder="15 000"
+              value={form.remaining_month_payment}
+              onChange={(e) => setForm({ ...form, remaining_month_payment: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Всего месяцев">
+            <Input
+              placeholder="10"
+              value={form.total_months}
+              onChange={(e) => setForm({ ...form, total_months: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Действует с">
+            <Input
+              type="date"
+              value={form.effective_from}
+              onChange={(e) => setForm({ ...form, effective_from: e.target.value })}
+              required
+            />
+          </FormField>
+          {error && <p className="alert-danger md:col-span-2 xl:col-span-3">{error}</p>}
+          <div className="md:col-span-2 xl:col-span-3">
+            <Button type="submit">Сохранить тариф</Button>
+          </div>
         </form>
       </Card>
 
@@ -151,10 +179,10 @@ export default function PricingPage() {
         {loading ? (
           <LoadingState text="Загрузка тарифов..." />
         ) : tiers.length === 0 ? (
-          <p className="empty-state">Тарифы не заданы (от 300 000 ₽)</p>
+          <EmptyState>Тарифы не заданы (от 300 000 ₽)</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table">
+            <table className="data-table table-cards">
               <thead>
                 <tr>
                   <th>Диапазон</th>
@@ -168,19 +196,19 @@ export default function PricingPage() {
               <tbody>
                 {tiers.map((tier) => (
                   <tr key={tier.id}>
-                    <td className="font-medium text-slate-900">
+                    <td data-label="Диапазон" className="font-medium text-foreground">
                       {formatMoney(tier.min_amount)} — {formatMoney(tier.max_amount)}
                     </td>
-                    <td>{formatMoney(tier.total_cost)}</td>
-                    <td>
+                    <td data-label="Итого">{formatMoney(tier.total_cost)}</td>
+                    <td data-label="1/2 мес">
                       {formatMoney(tier.first_month_payment)} /{" "}
                       {formatMoney(tier.second_month_payment)}
                     </td>
-                    <td>
+                    <td data-label="Далее">
                       {tier.remaining_months_count} × {formatMoney(tier.remaining_month_payment)}
                     </td>
-                    <td>{formatDate(tier.effective_from)}</td>
-                    <td>
+                    <td data-label="С даты">{formatDate(tier.effective_from)}</td>
+                    <td data-label="Статус">
                       <Badge tone={tier.is_active ? "success" : "default"}>
                         {tier.is_active ? "Активен" : "Неактивен"}
                       </Badge>

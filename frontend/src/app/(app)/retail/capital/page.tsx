@@ -74,7 +74,7 @@ export default function RetailCapitalPage() {
               required
             />
           </FormField>
-          {error && <p className="text-sm text-rose-600">{error}</p>}
+          {error && <p className="text-sm text-status-danger-text">{error}</p>}
           <Button type="submit" disabled={saving}>
             {saving ? "Сохранение..." : "Сохранить"}
           </Button>

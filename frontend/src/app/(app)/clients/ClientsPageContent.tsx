@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Badge, Button, Card, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, StatCard, Toast } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, StatCard, Toast } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatMonthLabel, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -57,7 +57,7 @@ function SortableTh({
         }`}
       >
         {label}
-        <span className="text-xs text-slate-400">{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+        <span className="text-xs text-muted">{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
       </button>
     </th>
   );
@@ -126,6 +126,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [dueMonthSummary, setDueMonthSummary] = useState<ClientDueMonthSummary | null>(null);
   const [managers, setManagers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
@@ -643,11 +644,34 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             </Button>
           </div>
         ) : clients.length === 0 ? (
-          <p className="rounded-lg bg-surface-muted px-3 py-4 text-center text-sm text-muted">
+          <EmptyState
+            action={
+              canCreate && isCollectionView ? (
+                <Button type="button" onClick={() => setShowForm(true)}>
+                  Добавить клиента
+                </Button>
+              ) : undefined
+            }
+          >
             {workspaceConfig.emptyText}
-          </p>
+          </EmptyState>
         ) : (
           <>
+            {canEdit ? (
+              <div className="desktop-only mb-2 flex items-center justify-end gap-2">
+                {editMode ? (
+                  <span className="type-hint">Правки сохраняются сразу</span>
+                ) : null}
+                <Button
+                  type="button"
+                  variant={editMode ? "primary" : "secondary"}
+                  aria-pressed={editMode}
+                  onClick={() => setEditMode((value) => !value)}
+                >
+                  {editMode ? "Готово" : "Редактировать"}
+                </Button>
+              </div>
+            ) : null}
             <div className="mobile-only space-y-2">
               {clients.map((client) => {
                 const isOverdue = isFullClient(client) && client.has_overdue;
@@ -776,14 +800,14 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   />
                   {canSeeClientAmounts && !isCollectionView && dueMonth && (
                     <>
-                      <th className="font-semibold text-slate-700">План месяца</th>
-                      <th className="font-semibold text-slate-700">Оплачено</th>
-                      <th className="font-semibold text-slate-700">Остаток</th>
-                      <th className="font-semibold text-slate-700">Платежей ост.</th>
+                      <th className="font-semibold text-foreground">План месяца</th>
+                      <th className="font-semibold text-foreground">Оплачено</th>
+                      <th className="font-semibold text-foreground">Остаток</th>
+                      <th className="font-semibold text-foreground">Платежей ост.</th>
                     </>
                   )}
                   {canSeeClientAmounts && !isCollectionView && !dueMonth && (
-                    <th className="font-semibold text-slate-700">Сумма договора</th>
+                    <th className="font-semibold text-foreground">Сумма договора</th>
                   )}
                   {canAssignManager && <th>Менеджер</th>}
                   {isManager && isCollectionView && <th>Закрепление</th>}
@@ -829,7 +853,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     </td>
                     <td className="text-muted">{client.phone}</td>
                     <td className="text-muted">
-                      {canEdit ? (
+                      {canEdit && editMode ? (
                         <Input
                           type="date"
                           className="min-w-[140px]"
@@ -878,25 +902,32 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     )}
                     {canAssignManager && (
                       <td>
-                        <Select
-                          className="min-w-[160px]"
-                          value={client.assigned_manager_id ?? ""}
-                          disabled={managerSaving}
-                          onChange={(e) =>
-                            handleClientUpdate(
-                              client.id,
-                              { assigned_manager_id: e.target.value || null },
-                              "manager",
-                            )
-                          }
-                        >
-                          <option value="">Не назначен</option>
-                          {managers.map((manager) => (
-                            <option key={manager.id} value={manager.id}>
-                              {manager.full_name}
-                            </option>
-                          ))}
-                        </Select>
+                        {editMode ? (
+                          <Select
+                            className="min-w-[160px]"
+                            value={client.assigned_manager_id ?? ""}
+                            disabled={managerSaving}
+                            onChange={(e) =>
+                              handleClientUpdate(
+                                client.id,
+                                { assigned_manager_id: e.target.value || null },
+                                "manager",
+                              )
+                            }
+                          >
+                            <option value="">Не назначен</option>
+                            {managers.map((manager) => (
+                              <option key={manager.id} value={manager.id}>
+                                {manager.full_name}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <span className="text-muted">
+                            {managers.find((manager) => manager.id === client.assigned_manager_id)
+                              ?.full_name ?? "Не назначен"}
+                          </span>
+                        )}
                       </td>
                     )}
                     {isManager && isCollectionView && (
@@ -941,7 +972,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         )
                       ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
                         <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
-                      ) : canManageProcedure ? (
+                      ) : canManageProcedure && editMode ? (
                         <Select
                           className="min-w-[150px]"
                           value={client.procedure_stage}
@@ -965,7 +996,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       )}
                     </td>
                     <td>
-                      {canEdit && isFullClient(client) ? (
+                      {canEdit && editMode && isFullClient(client) ? (
                         <Select
                           className="min-w-[140px]"
                           value={client.status}

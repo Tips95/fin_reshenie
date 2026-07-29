@@ -15,6 +15,7 @@ import {
   PassportInput,
   PhoneInput,
   SectionTitle,
+  Select,
 } from "@/components/ui";
 import { PdfDocumentField } from "@/components/PdfDocumentField";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
@@ -235,7 +236,7 @@ export default function RetailClientsPage() {
 
       {!isOwner && (
         <Card variant="accent">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted">
             Как инвестор вы видите только клиентов по своим договорам. Новых клиентов и договоров
             создаёт администратор и назначает их вам.
           </p>
@@ -331,7 +332,7 @@ export default function RetailClientsPage() {
                 }}
               />
               {clientPassportFileError ? (
-                <p className="mt-1 text-xs text-rose-600">{clientPassportFileError}</p>
+                <p className="mt-1 text-xs text-status-danger-text">{clientPassportFileError}</p>
               ) : null}
             </div>
             <div>
@@ -361,7 +362,7 @@ export default function RetailClientsPage() {
                 }}
               />
               {guarantorPassportFileError ? (
-                <p className="mt-1 text-xs text-rose-600">{guarantorPassportFileError}</p>
+                <p className="mt-1 text-xs text-status-danger-text">{guarantorPassportFileError}</p>
               ) : null}
             </div>
             <Button type="submit" className="md:col-span-2" disabled={creatingClient}>
@@ -376,10 +377,9 @@ export default function RetailClientsPage() {
           <SectionTitle title="Создать договор" description="Назначьте инвестора — взнос пойдёт в его кассу" />
           <form onSubmit={handleCreateContract} className="grid gap-2 md:grid-cols-2">
             <FormField label="Клиент" error={contractFormErrors.retail_client_id}>
-              <select
+              <Select
                 value={contractForm.retail_client_id}
                 onChange={(e) => setContractForm({ ...contractForm, retail_client_id: e.target.value })}
-                className="w-full rounded-md border border-slate-200 px-3 py-2"
                 required
               >
                 <option value="">Выберите клиента</option>
@@ -388,13 +388,12 @@ export default function RetailClientsPage() {
                     {client.full_name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Инвестор" error={contractFormErrors.investor_id}>
-              <select
+              <Select
                 value={contractForm.investor_id}
                 onChange={(e) => setContractForm({ ...contractForm, investor_id: e.target.value })}
-                className="w-full rounded-md border border-slate-200 px-3 py-2"
                 required
               >
                 <option value="">Выберите инвестора</option>
@@ -403,7 +402,7 @@ export default function RetailClientsPage() {
                     {investor.full_name} (вклад {formatMoney(investor.investment_amount ?? "0")})
                   </option>
                 ))}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Название товара" error={contractFormErrors.product_name}>
               <Input
@@ -425,17 +424,16 @@ export default function RetailClientsPage() {
               />
             </FormField>
             <FormField label="Срок">
-              <select
+              <Select
                 value={contractForm.term_months}
                 onChange={(e) => setContractForm({ ...contractForm, term_months: e.target.value })}
-                className="w-full rounded-md border border-slate-200 px-3 py-2"
               >
                 {rates.map((rate) => (
                   <option key={rate.id} value={rate.term_months}>
                     {rate.term_months} мес. ({rate.markup_percent}%)
                   </option>
                 ))}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Первоначальный взнос" error={contractFormErrors.down_payment}>
               <Input
@@ -463,7 +461,7 @@ export default function RetailClientsPage() {
         </Card>
       )}
 
-      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {error && <p className="text-sm text-status-danger-text">{error}</p>}
 
       <Card>
         {clients.length === 0 ? (
@@ -474,7 +472,7 @@ export default function RetailClientsPage() {
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table">
+            <table className="data-table table-cards">
               <thead>
                 <tr>
                   <th>ФИО</th>
@@ -489,22 +487,22 @@ export default function RetailClientsPage() {
               <tbody>
                 {clients.map((client) => (
                   <tr key={client.id}>
-                    <td>
+                    <td data-label="ФИО">
                       <Link href={`/retail/clients/${client.id}`} className="link-brand font-medium">
                         {formatShortName(client.full_name)}
                       </Link>
                     </td>
-                    <td>{client.phone}</td>
-                    <td className="whitespace-nowrap">{client.passport}</td>
-                    <td>{formatShortName(client.guarantor_full_name)}</td>
-                    <td className="text-xs text-muted">
+                    <td data-label="Телефон">{client.phone}</td>
+                    <td data-label="Паспорт" className="whitespace-nowrap">{client.passport}</td>
+                    <td data-label="Поручитель">{formatShortName(client.guarantor_full_name)}</td>
+                    <td data-label="Документы" className="text-xs text-muted">
                       {client.has_passport_pdf ? "Клиент ✓" : "Клиент —"}
                       {" · "}
                       {client.has_guarantor_passport_pdf ? "Поруч. ✓" : "Поруч. —"}
                     </td>
-                    <td>{client.contracts_count}</td>
+                    <td data-label="Договоров">{client.contracts_count}</td>
                     {isOwner && (
-                      <td>
+                      <td data-label="Действие">
                         <Button
                           type="button"
                           variant="danger"

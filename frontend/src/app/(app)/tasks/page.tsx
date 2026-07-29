@@ -90,7 +90,7 @@ export default function TasksPage() {
           title="Воронка процедуры"
           description="Сколько клиентов на каждом этапе. Нажмите на этап, чтобы отфильтровать список клиентов."
         />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           {funnel?.stages.map((item) => {
             const active = stageFilter === item.stage;
             return (
@@ -98,35 +98,30 @@ export default function TasksPage() {
                 key={item.stage}
                 type="button"
                 onClick={() => setStageFilter(active ? "" : item.stage)}
-                className={`rounded border px-2 py-2 text-left ${
+                className={`interactive rounded-md border p-2.5 text-left shadow-soft ${
                   active
-                    ? "border-brand-600 bg-slate-50"
-                    : "border-slate-200 bg-white hover:bg-slate-50"
+                    ? "border-brand-600 bg-brand-50 ring-1 ring-brand-200"
+                    : "border-border bg-surface hover:bg-surface-muted"
                 }`}
               >
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                  {procedureStageLabel(item.stage)}
+                <p className="type-caption">{procedureStageLabel(item.stage)}</p>
+                <p className="mt-1 text-lg font-semibold leading-tight text-foreground">
+                  {item.count}
                 </p>
-                <p className="mt-0.5 text-base font-semibold text-slate-900">{item.count}</p>
               </button>
             );
           })}
         </div>
         {stageFilter && (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <p className="text-sm text-slate-600">
-              Фильтр: {procedureStageLabel(stageFilter)}
-            </p>
-            <Link
-              href={`/clients?procedure_stage=${stageFilter}`}
-              className="link-brand text-sm"
-            >
+          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2">
+            <p className="text-xs text-muted">Фильтр: {procedureStageLabel(stageFilter)}</p>
+            <Link href={`/clients?procedure_stage=${stageFilter}`} className="link-brand text-xs">
               Открыть клиентов →
             </Link>
             <button
               type="button"
               onClick={() => setStageFilter("")}
-              className="text-sm text-slate-500 hover:text-slate-700"
+              className="text-xs text-muted hover:text-foreground"
             >
               Сбросить
             </button>
@@ -145,15 +140,13 @@ export default function TasksPage() {
           }
         />
         {tasks.length === 0 ? (
-          <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-4 text-center text-xs text-emerald-800">
-            Открытых задач нет.
-          </p>
+          <p className="alert-success text-center">Открытых задач нет.</p>
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => (
               <div
                 key={task.id}
-                className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2"
+                className="rounded-md border border-border bg-surface-muted p-2.5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -166,8 +159,8 @@ export default function TasksPage() {
                         <Badge tone="warning">{statusLabel(task.task_type)}</Badge>
                       )}
                     </div>
-                    <p className="mt-2 font-semibold text-slate-900">{task.title}</p>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+                    <p className="mt-1.5 text-sm font-semibold text-foreground">{task.title}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                       {task.client_name && (
                         <Link
                           href={`/clients/${task.client_id}`}
@@ -182,7 +175,7 @@ export default function TasksPage() {
                         <span>Окно оплаты: {task.payment_window_label}</span>
                       )}
                       {task.remainder_amount && (
-                        <span className="font-medium text-rose-700">
+                        <span className="font-medium text-status-danger-text">
                           Долг: {formatMoney(task.remainder_amount)}
                         </span>
                       )}

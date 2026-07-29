@@ -15,6 +15,7 @@ import {
   LoadingState,
   PageHeader,
   SectionTitle,
+  Select,
 } from "@/components/ui";
 import { PdfDocumentField } from "@/components/PdfDocumentField";
 import { ApiRequestError, retailApi } from "@/lib/api-client";
@@ -236,12 +237,11 @@ export default function RetailClientDetailPage() {
           />
           <form onSubmit={handleCreateContract} className="grid gap-2 md:grid-cols-2">
             <FormField label="Инвестор" error={contractFormErrors.investor_id}>
-              <select
+              <Select
                 value={contractForm.investor_id}
                 onChange={(event) =>
                   setContractForm({ ...contractForm, investor_id: event.target.value })
                 }
-                className="w-full rounded-md border border-slate-200 px-3 py-2"
                 required
               >
                 <option value="">Выберите инвестора</option>
@@ -250,7 +250,7 @@ export default function RetailClientDetailPage() {
                     {investor.full_name} (вклад {formatMoney(investor.investment_amount ?? "0")})
                   </option>
                 ))}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Название товара" error={contractFormErrors.product_name}>
               <Input
@@ -277,19 +277,18 @@ export default function RetailClientDetailPage() {
               />
             </FormField>
             <FormField label="Срок">
-              <select
+              <Select
                 value={contractForm.term_months}
                 onChange={(event) =>
                   setContractForm({ ...contractForm, term_months: event.target.value })
                 }
-                className="w-full rounded-md border border-slate-200 px-3 py-2"
               >
                 {rates.map((rate) => (
                   <option key={rate.id} value={rate.term_months}>
                     {rate.term_months} мес. ({rate.markup_percent}%)
                   </option>
                 ))}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Первоначальный взнос" error={contractFormErrors.down_payment}>
               <Input

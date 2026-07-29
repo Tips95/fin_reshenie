@@ -216,13 +216,13 @@ export default function RetailInvestorsPage() {
               Создать инвестора
             </Button>
           </form>
-          {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+          {error && <p className="mt-3 text-sm text-status-danger-text">{error}</p>}
         </Card>
       )}
 
       <Card>
         <div className="overflow-x-auto">
-          <table className="data-table">
+          <table className="data-table table-cards">
             <thead>
               <tr>
                 <th>ФИО</th>
@@ -236,36 +236,40 @@ export default function RetailInvestorsPage() {
             <tbody>
               {investors.map((investor) => (
                 <tr key={investor.id}>
-                  <td className="font-medium text-slate-900">{investor.full_name}</td>
-                  <td>{investor.email || "—"}</td>
-                  <td>{investor.phone || "—"}</td>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1000}
-                        className="max-w-[160px]"
-                        value={amountEdits[investor.id] ?? investor.investment_amount ?? "0"}
-                        onChange={(e) =>
-                          setAmountEdits({ ...amountEdits, [investor.id]: e.target.value })
-                        }
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={savingId === investor.id}
-                        onClick={() => handleSaveAmount(investor)}
-                      >
-                        {savingId === investor.id ? "..." : "OK"}
-                      </Button>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Текущий вклад: {formatMoney(investor.investment_amount ?? "0")}
-                    </p>
+                  <td data-label="ФИО" className="font-medium text-foreground">
+                    {investor.full_name}
                   </td>
-                  <td>{investor.is_active ? "Активен" : "Отключён"}</td>
-                  <td>
+                  <td data-label="Email">{investor.email || "—"}</td>
+                  <td data-label="Телефон">{investor.phone || "—"}</td>
+                  <td data-label="Сумма вклада">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1000}
+                          className="max-w-[160px]"
+                          value={amountEdits[investor.id] ?? investor.investment_amount ?? "0"}
+                          onChange={(e) =>
+                            setAmountEdits({ ...amountEdits, [investor.id]: e.target.value })
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={savingId === investor.id}
+                          onClick={() => handleSaveAmount(investor)}
+                        >
+                          {savingId === investor.id ? "..." : "OK"}
+                        </Button>
+                      </div>
+                      <p className="mt-1 text-xs text-muted">
+                        Текущий вклад: {formatMoney(investor.investment_amount ?? "0")}
+                      </p>
+                    </div>
+                  </td>
+                  <td data-label="Статус">{investor.is_active ? "Активен" : "Отключён"}</td>
+                  <td data-label="Действие">
                     <Button
                       type="button"
                       variant="danger"
@@ -280,7 +284,7 @@ export default function RetailInvestorsPage() {
             </tbody>
           </table>
         </div>
-        {!showForm && error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+        {!showForm && error && <p className="mt-3 text-sm text-status-danger-text">{error}</p>}
       </Card>
     </div>
   );

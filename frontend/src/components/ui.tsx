@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { APP_NAME } from "@/lib/brand";
@@ -10,7 +10,7 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex h-7 w-7 items-center justify-center rounded-md border border-brand-600 bg-brand-700 text-[10px] font-bold text-white shadow-soft",
+        "flex h-7 w-7 items-center justify-center rounded-md border border-brand-600 bg-brand-700 text-[11px] font-bold text-white shadow-soft",
         className,
       )}
     >
@@ -22,9 +22,11 @@ export function LogoMark({ className }: { className?: string }) {
 export function Button({
   className,
   variant = "primary",
+  size = "md",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "danger" | "ghost";
+  size?: "sm" | "md" | "lg";
 }) {
   const variants = {
     primary:
@@ -37,13 +39,102 @@ export function Button({
       "border border-transparent bg-transparent text-muted hover:bg-surface-muted hover:text-foreground",
   };
 
+  // На телефоне минимальная высота поднимается до комфортной для пальца.
+  const sizes = {
+    sm: "px-2 py-1 text-[11px]",
+    md: "px-2.5 py-1 text-xs min-h-[32px] lg:min-h-0",
+    lg: "px-3.5 py-2 text-sm min-h-[40px]",
+  };
+
   return (
     <button
       className={cn(
-        "interactive inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50",
+        "interactive inline-flex items-center justify-center gap-1 rounded-md font-medium disabled:cursor-not-allowed disabled:opacity-50",
+        sizes[size],
         variants[variant],
         className,
       )}
+      {...props}
+    />
+  );
+}
+
+export function ActionMenu({
+  label = "Действия",
+  children,
+  align = "right",
+  className,
+}: {
+  label?: string;
+  children: React.ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className={cn("relative inline-block", className)}>
+      <Button
+        type="button"
+        variant="secondary"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => setOpen((value) => !value)}
+      >
+        •••
+      </Button>
+      {open ? (
+        <div
+          role="menu"
+          className={cn(
+            "absolute z-40 mt-1 min-w-[180px] rounded-md border border-border bg-surface p-1 shadow-hover",
+            align === "right" ? "right-0" : "left-0",
+          )}
+          onClick={() => setOpen(false)}
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function ActionMenuItem({
+  tone = "default",
+  className,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "default" | "danger" }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={cn(tone === "danger" ? "action-menu-item-danger" : "action-menu-item", className)}
       {...props}
     />
   );
@@ -205,11 +296,10 @@ export function Card({
   id?: string;
   className?: string;
   children: React.ReactNode;
-  variant?: "default" | "glass" | "accent";
+  variant?: "default" | "accent";
 }) {
   const variants = {
     default: "surface-card-hover p-card",
-    glass: "surface-card-hover p-card",
     accent: "interactive rounded-lg border border-brand-200 bg-brand-50 p-card shadow-soft hover:shadow-card",
   };
 
@@ -255,10 +345,10 @@ export function PageHeader({
   return (
     <div className="space-y-1">
       {back}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
         <div>
-          <h1 className="text-base font-semibold text-foreground">{title}</h1>
-          {subtitle && <p className="text-[11px] text-muted">{subtitle}</p>}
+          <h1 className="text-lg font-semibold leading-tight text-foreground">{title}</h1>
+          {subtitle && <p className="mt-0.5 type-hint">{subtitle}</p>}
         </div>
         {action}
       </div>
@@ -294,15 +384,26 @@ export function SectionTitle({
     <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2 border-b border-border pb-1.5">
       <div>
         <h2 className="section-title">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
+        {description && <p className="mt-0.5 type-hint">{description}</p>}
       </div>
       {action}
     </div>
   );
 }
 
-export function EmptyState({ children }: { children: React.ReactNode }) {
-  return <div className="empty-state">{children}</div>;
+export function EmptyState({
+  children,
+  action,
+}: {
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="empty-state">
+      <span>{children}</span>
+      {action}
+    </div>
+  );
 }
 
 export function ProgressBar({
@@ -355,7 +456,7 @@ export function StatCard({
 }: {
   label: string;
   value: React.ReactNode;
-  tone?: "default" | "success" | "warning" | "danger" | "brand" | "accent";
+  tone?: "default" | "success" | "warning" | "danger" | "brand";
   hint?: string;
 }) {
   const valueColors = {
@@ -364,14 +465,13 @@ export function StatCard({
     warning: "text-status-warning-text",
     danger: "text-status-danger-text",
     brand: "text-brand-700",
-    accent: "text-brand-700",
   };
 
   return (
-    <Card className="p-2">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className={cn("mt-0.5 text-base font-semibold leading-tight", valueColors[tone])}>{value}</p>
-      {hint && <p className="mt-0.5 text-[10px] text-muted">{hint}</p>}
+    <Card className="p-2.5">
+      <p className="type-caption">{label}</p>
+      <p className={cn("mt-1 text-lg font-semibold leading-tight", valueColors[tone])}>{value}</p>
+      {hint && <p className="mt-0.5 type-hint">{hint}</p>}
     </Card>
   );
 }
@@ -488,7 +588,7 @@ export function CollapsibleCard({
             <h2 className="section-title">{title}</h2>
             {badge}
           </div>
-          {description && <p className="mt-0.5 text-[11px] text-muted">{description}</p>}
+          {description && <p className="mt-0.5 type-hint">{description}</p>}
         </div>
         <span className={cn("collapsible-chevron", isOpen && "rotate-180")} aria-hidden>
           ▼

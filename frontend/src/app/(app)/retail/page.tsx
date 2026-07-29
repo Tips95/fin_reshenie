@@ -45,7 +45,7 @@ export default function RetailDashboardPage() {
           subtitle={user?.role === "owner" ? "Сводка по всем инвесторам" : "Мои договоры и касса"}
         />
         <Card variant="accent">
-          <p className="text-sm text-rose-600">{error || "Не удалось загрузить дашборд"}</p>
+          <p className="text-sm text-status-danger-text">{error || "Не удалось загрузить дашборд"}</p>
           <Button type="button" className="mt-3" onClick={() => void load()}>
             Повторить
           </Button>
@@ -64,13 +64,11 @@ export default function RetailDashboardPage() {
       />
 
       {isEmpty && (
-        <Card variant="accent">
-          <p className="text-sm text-slate-600">
-            {user?.role === "owner"
-              ? "Договоров пока нет. Перейдите в «Клиенты», создайте клиента и договор, назначьте инвестора."
-              : "У вас пока нет договоров. Администратор создаёт клиентов и назначает договоры инвесторам — после этого они появятся здесь."}
-          </p>
-        </Card>
+        <p className="alert-warning">
+          {user?.role === "owner"
+            ? "Договоров пока нет. Перейдите в «Клиенты», создайте клиента и договор, назначьте инвестора."
+            : "У вас пока нет договоров. Администратор создаёт клиентов и назначает договоры инвесторам — после этого они появятся здесь."}
+        </p>
       )}
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -89,14 +87,11 @@ export default function RetailDashboardPage() {
       {user?.role === "investor" && (
         <Card>
           <SectionTitle title="Мой вклад" description="Сумма, которую вы инвестируете в договоры" />
-          <p className="text-lg font-bold text-slate-900">
+          <p className="text-lg font-bold text-foreground">
             {formatMoney(user.investment_amount ?? "0")}
           </p>
-          <Link
-            href="/retail/capital"
-            className="mt-4 inline-block rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Изменить сумму вклада
+          <Link href="/retail/capital" className="mt-2 inline-block">
+            <Button type="button">Изменить сумму вклада</Button>
           </Link>
         </Card>
       )}
@@ -105,7 +100,7 @@ export default function RetailDashboardPage() {
         <Card>
           <SectionTitle title="Инвесторы" description="Каждый финансирует свои договоры" />
           <div className="overflow-x-auto">
-            <table className="data-table">
+            <table className="data-table table-cards">
               <thead>
                 <tr>
                   <th>Инвестор</th>
@@ -120,13 +115,15 @@ export default function RetailDashboardPage() {
               <tbody>
                 {data.investors.map((item) => (
                   <tr key={item.investor_id}>
-                    <td className="font-medium text-slate-900">{item.investor_name}</td>
-                    <td>{formatMoney(item.investment_amount)}</td>
-                    <td>{item.contracts_count}</td>
-                    <td>{formatMoney(item.total_amount)}</td>
-                    <td>{formatMoney(item.collected_total)}</td>
-                    <td>{formatMoney(item.remainder_total)}</td>
-                    <td>
+                    <td data-label="Инвестор" className="font-medium text-foreground">
+                      {item.investor_name}
+                    </td>
+                    <td data-label="Вклад">{formatMoney(item.investment_amount)}</td>
+                    <td data-label="Договоров">{item.contracts_count}</td>
+                    <td data-label="Сумма">{formatMoney(item.total_amount)}</td>
+                    <td data-label="Получено">{formatMoney(item.collected_total)}</td>
+                    <td data-label="Остаток">{formatMoney(item.remainder_total)}</td>
+                    <td data-label="Просрочка">
                       <Badge tone={item.overdue_count > 0 ? "danger" : "success"}>
                         {item.overdue_count}
                       </Badge>
@@ -141,27 +138,35 @@ export default function RetailDashboardPage() {
 
       <Card>
         <SectionTitle title="Быстрые действия" />
-        <div className="flex flex-wrap gap-3">
-          <Link href="/retail/contracts" className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">
-            Договоры
+        <div className="flex flex-wrap gap-2">
+          <Link href="/retail/contracts">
+            <Button type="button">Договоры</Button>
           </Link>
           {user?.role === "investor" && (
             <>
-              <Link href="/retail/clients" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">
-                Мои клиенты
+              <Link href="/retail/clients">
+                <Button type="button" variant="secondary">
+                  Мои клиенты
+                </Button>
               </Link>
-              <Link href="/retail/capital" className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-                Мой вклад
+              <Link href="/retail/capital">
+                <Button type="button" variant="secondary">
+                  Мой вклад
+                </Button>
               </Link>
             </>
           )}
           {user?.role === "owner" && (
             <>
-              <Link href="/retail/clients" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">
-                Клиенты
+              <Link href="/retail/clients">
+                <Button type="button" variant="secondary">
+                  Клиенты
+                </Button>
               </Link>
-              <Link href="/retail/investors" className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-                Инвесторы
+              <Link href="/retail/investors">
+                <Button type="button" variant="secondary">
+                  Инвесторы
+                </Button>
               </Link>
             </>
           )}

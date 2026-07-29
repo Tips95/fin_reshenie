@@ -70,7 +70,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
             <LogoMark />
             <div>
               <p className="text-sm font-semibold leading-tight">Товарная рассрочка</p>
-              <p className="text-[10px] leading-tight text-brand-300">Отдельный контур</p>
+              <p className="text-[11px] leading-tight text-brand-300">Отдельный контур</p>
             </div>
           </div>
 
@@ -103,16 +103,16 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
             {user && (
               <div className="rounded-md border border-brand-800 bg-brand-900/50 px-2 py-2">
                 <p className="text-xs font-medium">{user.full_name}</p>
-                <p className="text-[10px] text-brand-300">{statusLabel(user.role)}</p>
+                <p className="text-[11px] text-brand-300">{statusLabel(user.role)}</p>
                 <button
                   onClick={logout}
-                  className="interactive mt-1.5 text-[10px] text-brand-300 hover:text-white"
+                  className="interactive mt-1.5 text-[11px] text-brand-300 hover:text-white"
                 >
                   Выйти
                 </button>
               </div>
             )}
-            <div className="text-[10px] leading-relaxed text-brand-400">
+            <div className="text-[11px] leading-relaxed text-brand-400">
               <p>{APP_CREATOR.role}</p>
               <p>{APP_CREATOR.name}</p>
             </div>
@@ -123,7 +123,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
           <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:px-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                <LogoMark className="h-7 w-7 text-[10px] lg:hidden" />
+                <LogoMark className="h-7 w-7 text-[11px] lg:hidden" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-foreground lg:text-xs lg:font-medium lg:text-muted">
                     {pageTitle(pathname)}
@@ -138,7 +138,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
                   </p>
                   <button
                     onClick={logout}
-                    className="interactive text-[10px] text-muted hover:text-brand-700 lg:hidden"
+                    className="interactive text-[11px] text-muted hover:text-brand-700 lg:hidden"
                   >
                     Выйти
                   </button>

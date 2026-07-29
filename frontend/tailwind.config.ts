@@ -83,6 +83,7 @@ const config: Config = {
         card: "var(--space-card)",
         stack: "var(--space-stack)",
         section: "var(--space-section)",
+        group: "var(--space-group)",
       },
       transitionDuration: {
         DEFAULT: "150ms",

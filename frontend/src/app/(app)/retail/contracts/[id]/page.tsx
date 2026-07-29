@@ -298,7 +298,7 @@ export default function RetailContractDetailPage() {
       <Card>
         <SectionTitle title="График платежей" />
         <div className="overflow-x-auto">
-          <table className="data-table">
+          <table className="data-table table-cards">
             <thead>
               <tr>
                 <th>Месяц</th>
@@ -311,11 +311,11 @@ export default function RetailContractDetailPage() {
             <tbody>
               {contract.payment_schedule.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.month_number}</td>
-                  <td>{formatDate(item.due_date)}</td>
-                  <td>{formatMoney(item.planned_amount)}</td>
-                  <td>{formatMoney(item.paid_amount)}</td>
-                  <td>{item.status}</td>
+                  <td data-label="Месяц">{item.month_number}</td>
+                  <td data-label="Дата">{formatDate(item.due_date)}</td>
+                  <td data-label="План">{formatMoney(item.planned_amount)}</td>
+                  <td data-label="Оплачено">{formatMoney(item.paid_amount)}</td>
+                  <td data-label="Статус">{item.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -325,7 +325,7 @@ export default function RetailContractDetailPage() {
 
       <Card>
         <SectionTitle title="Внести платёж" description="Первоначальный взнос идёт в кассу инвестора" />
-        {paymentError ? <p className="mb-2 text-sm text-rose-600">{paymentError}</p> : null}
+        {paymentError ? <p className="mb-2 text-sm text-status-danger-text">{paymentError}</p> : null}
         <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
           <FormField label="Тип платежа">
             <Select
@@ -438,9 +438,9 @@ export default function RetailContractDetailPage() {
           </form>
           <div className="mt-6 space-y-3">
             {contract.overdue_logs.map((entry) => (
-              <div key={entry.id} className="rounded-md border border-slate-100 bg-slate-50 p-2.5 text-xs">
-                <p className="font-medium text-slate-900">{formatDate(entry.action_date)} · {entry.status}</p>
-                <p className="mt-1 text-slate-600">{entry.comment}</p>
+              <div key={entry.id} className="rounded-md border border-border bg-surface-muted p-2.5 text-xs">
+                <p className="font-medium text-foreground">{formatDate(entry.action_date)} · {entry.status}</p>
+                <p className="mt-1 text-muted">{entry.comment}</p>
               </div>
             ))}
           </div>
@@ -456,8 +456,8 @@ export default function RetailContractDetailPage() {
             {contract.payments.map((payment) => (
               <div key={payment.id} className="history-item">
                 <div>
-                  <p className="font-medium text-slate-900">{formatMoney(payment.amount)}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="font-medium text-foreground">{formatMoney(payment.amount)}</p>
+                  <p className="text-sm text-muted">
                     {payment.payment_type} · {formatDate(payment.payment_date)}
                     {payment.comment ? ` · ${payment.comment}` : ""}
                   </p>

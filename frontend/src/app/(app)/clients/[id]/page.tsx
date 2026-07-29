@@ -4,6 +4,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import {
+  ActionMenu,
+  ActionMenuItem,
   BackLink,
   Badge,
   Button,
@@ -1301,6 +1303,20 @@ export default function ClientDetailPage() {
   const showManagerCommission = isBankruptcy && firstMonthPaid && canRecordSchedulePayment;
   const scheduleHasActions = canRecordSchedulePayment || canEditSchedule;
   const scheduleTableColSpan = 6 + (scheduleHasActions ? 1 : 0);
+
+  function scheduleRowHasMenu(item: PaymentScheduleItem, rest: number, markedForDelete: boolean) {
+    const canDefer = canRecordSchedulePayment && rest > 0 && !markedForDelete;
+    const canToggleCommission =
+      item.month_number === 1 && firstMonthPaid && canRecordSchedulePayment;
+    const canWaive =
+      canEditSchedule &&
+      isOwner &&
+      item.status === "overdue" &&
+      !item.overdue_waived &&
+      !markedForDelete;
+    const canDelete = canEditSchedule && Number(item.paid_amount) <= 0;
+    return canDefer || canToggleCommission || canWaive || canDelete;
+  }
   const planContractTotal = detail?.installment_plan ? Number(detail.installment_plan.total_amount) : 0;
   const isManualInstallment = detail?.installment_plan?.pricing_tier_id == null;
   const draftPlannedTotal = computeScheduleDraftPlannedTotal(schedule, scheduleDraft);
@@ -1327,7 +1343,7 @@ export default function ClientDetailPage() {
       <Card
         id="section-payment"
         variant="accent"
-        className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-emerald-500")}
+        className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-status-success-solid")}
       >
         <SectionTitle
           title="Зафиксировать платёж"
@@ -1404,123 +1420,122 @@ export default function ClientDetailPage() {
                 WhatsApp
               </a>
             ) : null}
-            {isOwner && (
-              <Button
-                variant="danger"
-                disabled={deletingClient}
-                onClick={handleDeleteClient}
-              >
-                {deletingClient ? "Удаление..." : "Удалить клиента"}
-              </Button>
-            )}
-            {user?.role !== "call_center" && (
-              <Button
-                variant="secondary"
-                disabled={exporting}
-                onClick={async () => {
-                  setExporting(true);
-                  try {
-                    await exportsApi.clientDetail(params.id);
-                  } catch (error) {
-                    showToast(
-                      error instanceof ApiRequestError
-                        ? error.message
-                        : "Не удалось выгрузить Excel",
-                      "error",
-                    );
-                  } finally {
-                    setExporting(false);
-                  }
-                }}
-              >
-                {exporting ? "Выгрузка..." : "Excel"}
-              </Button>
-            )}
+            {isOwner || user?.role !== "call_center" ? (
+              <ActionMenu label="Действия с клиентом">
+                {user?.role !== "call_center" && (
+                  <ActionMenuItem
+                    disabled={exporting}
+                    onClick={async () => {
+                      setExporting(true);
+                      try {
+                        await exportsApi.clientDetail(params.id);
+                      } catch (error) {
+                        showToast(
+                          error instanceof ApiRequestError
+                            ? error.message
+                            : "Не удалось выгрузить Excel",
+                          "error",
+                        );
+                      } finally {
+                        setExporting(false);
+                      }
+                    }}
+                  >
+                    {exporting ? "Выгрузка..." : "Выгрузить в Excel"}
+                  </ActionMenuItem>
+                )}
+                {isOwner && (
+                  <ActionMenuItem
+                    tone="danger"
+                    disabled={deletingClient}
+                    onClick={handleDeleteClient}
+                  >
+                    {deletingClient ? "Удаление..." : "Удалить клиента"}
+                  </ActionMenuItem>
+                )}
+              </ActionMenu>
+            ) : null}
           </div>
         }
       />
 
-      {(detail && isBankruptcy) || clientNavSections.length > 0 ? (
-        <div className="sticky top-0 z-10 -mx-page-x border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:-mx-3">
-          {detail && isBankruptcy ? (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground">
-              <span>
-                <span className="text-muted">Договор:</span>{" "}
-                <strong>{formatMoney(contractTotal)}</strong>
-              </span>
-              <span>
-                <span className="text-muted">Остаток:</span>{" "}
-                <strong
-                  className={
-                    remainder > 0 ? "text-status-warning-text" : "text-status-success-text"
-                  }
-                >
-                  {formatMoney(remainder)}
-                </strong>
-              </span>
-              {nextDueItem ? (
-                <span>
-                  <span className="text-muted">След. платёж:</span>{" "}
-                  <strong>
-                    {formatDate(effectiveDueDate(nextDueItem))} ·{" "}
-                    {formatMoney(remainingAmount(nextDueItem))}
-                  </strong>
-                </span>
-              ) : null}
-              {showManagerCommission ? (
-                <span>
-                  <span className="text-muted">Менеджерские:</span>{" "}
-                  <strong
-                    className={
-                      managerCommissionCollected
-                        ? "text-status-success-text"
-                        : "text-status-warning-text"
-                    }
+      {detail && isBankruptcy ? (
+        <Card className="p-2.5">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 xl:grid-cols-5">
+            <div>
+              <p className="type-caption">Договор</p>
+              <p className="field-value">{formatMoney(contractTotal)}</p>
+            </div>
+            <div>
+              <p className="type-caption">Остаток</p>
+              <p
+                className={cn(
+                  "field-value",
+                  remainder > 0 ? "text-status-warning-text" : "text-status-success-text",
+                )}
+              >
+                {formatMoney(remainder)}
+              </p>
+            </div>
+            {nextDueItem ? (
+              <div>
+                <p className="type-caption">След. платёж</p>
+                <p className="field-value">
+                  {formatDate(effectiveDueDate(nextDueItem))} ·{" "}
+                  {formatMoney(remainingAmount(nextDueItem))}
+                </p>
+              </div>
+            ) : null}
+            {isOwner ? (
+              <>
+                <div>
+                  <p className="type-caption">Получено</p>
+                  <p className="field-value">{formatMoney(collectedTotal)}</p>
+                </div>
+                <div>
+                  <p className="type-caption">Прибыль</p>
+                  <p
+                    className={cn(
+                      "field-value",
+                      clientProfit >= 0 ? "text-status-success-text" : "text-status-danger-text",
+                    )}
                   >
-                    {managerCommissionCollected ? "выдано" : "10 000 ₽ не отмечено"}
-                  </strong>
-                </span>
-              ) : null}
+                    {formatMoney(clientProfit)}
+                  </p>
+                </div>
+              </>
+            ) : null}
+          </div>
+          {showManagerCommission || overdueScheduleItems.length > 0 ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
               {overdueScheduleItems.length > 0 ? (
                 <Badge tone="danger">Просрочка: {overdueScheduleItems.length} мес.</Badge>
               ) : null}
-              {isOwner ? (
-                <>
-                  <span>
-                    <span className="text-muted">Получено:</span>{" "}
-                    <strong>{formatMoney(collectedTotal)}</strong>
-                  </span>
-                  <span>
-                    <span className="text-muted">Прибыль:</span>{" "}
-                    <strong
-                      className={
-                        clientProfit >= 0 ? "text-status-success-text" : "text-status-danger-text"
-                      }
-                    >
-                      {formatMoney(clientProfit)}
-                    </strong>
-                  </span>
-                </>
+              {showManagerCommission ? (
+                <Badge tone={managerCommissionCollected ? "success" : "warning"}>
+                  Менеджерские:{" "}
+                  {managerCommissionCollected ? "выдано" : "10 000 ₽ не отмечено"}
+                </Badge>
               ) : null}
             </div>
           ) : null}
-          {clientNavSections.length > 0 ? (
-            <nav
-              className={cn("client-section-nav", detail && isBankruptcy && "mt-2")}
-              aria-label="Разделы карточки клиента"
-            >
-              {clientNavSections.map((section) => (
-                <button
-                  key={section.id}
-                  type="button"
-                  className="client-section-nav-btn"
-                  onClick={() => jumpToSection(section.id)}
-                >
-                  {section.label}
-                </button>
-              ))}
-            </nav>
-          ) : null}
+        </Card>
+      ) : null}
+
+      {clientNavSections.length > 0 ? (
+        <div className="sticky top-0 z-10 -mx-page-x border-b border-border bg-surface/95 px-page-x py-1.5 shadow-soft backdrop-blur lg:-mx-3">
+          <nav className="client-section-nav" aria-label="Разделы карточки клиента">
+            {clientNavSections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                className="client-section-nav-btn"
+                onClick={() => jumpToSection(section.id)}
+              >
+                {section.label}
+              </button>
+            ))}
+          </nav>
         </div>
       ) : null}
 
@@ -1721,7 +1736,7 @@ export default function ClientDetailPage() {
         <Card
           id="section-doc"
           variant="accent"
-          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-amber-500")}
+          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-status-warning-solid")}
         >
           <SectionTitle
             title="Сбор документов"
@@ -1777,7 +1792,7 @@ export default function ClientDetailPage() {
                   />
                 </FormField>
                 <FormField label="Итого к оплате">
-                  <p className="rounded-md border border-slate-200 bg-white px-3 py-2 field-value">
+                  <p className="rounded-md border border-border bg-surface px-3 py-2 field-value">
                     {formatMoney(
                       Number(docCollectionAmountForm.collection_fee || 0) +
                         Number(docCollectionAmountForm.notary_fee || 0) +
@@ -1849,7 +1864,7 @@ export default function ClientDetailPage() {
               {documentCollectionStatusLabel(docCollection.status)}
             </Badge>
             {docCollection.paid_date && (
-              <span className="text-sm text-slate-600">
+              <span className="text-sm text-muted">
                 Оплачено {formatDate(docCollection.paid_date)}
               </span>
             )}
@@ -1950,7 +1965,7 @@ export default function ClientDetailPage() {
                   </FormField>
                 </div>
               )}
-              {convertError && <p className="text-sm text-rose-600">{convertError}</p>}
+              {convertError && <p className="text-sm text-status-danger-text">{convertError}</p>}
               <Button type="submit" disabled={convertSaving}>
                 {convertSaving ? "Перевод..." : "Перевести на банкротство"}
               </Button>
@@ -1976,34 +1991,34 @@ export default function ClientDetailPage() {
           {detail.matched_tier && (
             <CollapsibleCard
               id="section-tariff"
-              className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-slate-300")}
+              className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-border-strong")}
               title="Подобранный тариф"
               description="Справочные данные тарифа — раскройте при необходимости"
               defaultOpen={false}
             >
               <div className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                  <p className="text-slate-500">Диапазон долга</p>
-                  <p className="mt-1 font-medium text-slate-900">
+                  <p className="text-muted">Диапазон долга</p>
+                  <p className="mt-1 font-medium text-foreground">
                     {formatMoney(detail.matched_tier.min_amount)} –{" "}
                     {formatMoney(detail.matched_tier.max_amount)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-slate-500">Стоимость по тарифу (справочно)</p>
-                  <p className="mt-1 font-medium text-slate-900">
+                  <p className="text-muted">Стоимость по тарифу (справочно)</p>
+                  <p className="mt-1 font-medium text-foreground">
                     {formatMoney(detail.matched_tier.total_cost)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-slate-500">Срок</p>
-                  <p className="mt-1 font-medium text-slate-900">
+                  <p className="text-muted">Срок</p>
+                  <p className="mt-1 font-medium text-foreground">
                     {detail.matched_tier.total_months} мес.
                   </p>
                 </div>
               </div>
               {detail.installment_plan && (
-                <p className="mt-3 text-xs text-slate-500">
+                <p className="mt-3 text-xs text-muted">
                   График с {formatDate(detail.installment_plan.start_date)}. Для старых клиентов
                   суммы месяцев можно менять вручную — тариф только отправная точка.
                 </p>
@@ -2013,7 +2028,7 @@ export default function ClientDetailPage() {
 
           <CollapsibleCard
             id="section-mandatory"
-            className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-orange-500")}
+            className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-status-warning-solid")}
             title="Обязательные платежи по процедуре"
             description="Депозит, финансовое управление и судебная пошлина — только для руководителя"
             defaultOpen={!allMandatoryPaid}
@@ -2029,7 +2044,7 @@ export default function ClientDetailPage() {
               <EmptyState>Данные не сформированы</EmptyState>
             ) : (
               <div className="overflow-x-auto">
-                <table className="data-table">
+                <table className="data-table table-cards">
                   <thead>
                     <tr>
                       <th>Платёж</th>
@@ -2051,17 +2066,19 @@ export default function ClientDetailPage() {
 
                       return (
                         <tr key={item.id}>
-                          <td>
-                            <p className="font-medium text-slate-900">
-                              {statusLabel(item.payment_type)}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {mandatoryTypeHint(item.payment_type)}
-                            </p>
+                          <td data-label="Платёж">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {statusLabel(item.payment_type)}
+                              </p>
+                              <p className="text-xs text-muted">
+                                {mandatoryTypeHint(item.payment_type)}
+                              </p>
+                            </div>
                           </td>
-                          <td>
+                          <td data-label="План">
                             {item.payment_type === "court_fee" && !item.is_applicable ? (
-                              <span className="text-slate-400">Не требуется</span>
+                              <span className="text-muted">Не требуется</span>
                             ) : needsAmount && canManageMandatory ? (
                               <div className="flex items-center gap-2">
                                 <Input
@@ -2089,19 +2106,19 @@ export default function ClientDetailPage() {
                               formatMoney(item.planned_amount)
                             )}
                           </td>
-                          <td>{formatMoney(item.paid_amount)}</td>
-                          <td>
+                          <td data-label="Оплачено">{formatMoney(item.paid_amount)}</td>
+                          <td data-label="Остаток">
                             {item.is_applicable ? formatMoney(rest) : "—"}
                           </td>
-                          <td>
+                          <td data-label="Статус">
                             <Badge tone={scheduleTone(item.status)}>
                               {statusLabel(item.status)}
                             </Badge>
                           </td>
                           {canManageMandatory && (
-                            <td>
+                            <td data-label="Действие">
                               {item.payment_type === "court_fee" && (
-                                <label className="mb-2 flex items-center gap-2 text-xs text-slate-600">
+                                <label className="mb-2 flex items-center gap-2 text-xs text-muted">
                                   <input
                                     type="checkbox"
                                     checked={item.is_applicable}
@@ -2124,7 +2141,7 @@ export default function ClientDetailPage() {
                                     : "Внести платёж"}
                                 </Button>
                               ) : item.is_applicable && item.status === "paid" ? (
-                                <span className="text-xs text-emerald-600">Оплачено</span>
+                                <span className="text-xs text-status-success-text">Оплачено</span>
                               ) : null}
                             </td>
                           )}
@@ -2178,7 +2195,7 @@ export default function ClientDetailPage() {
                 </div>
                 <div className="text-xs text-muted">
                   <p>
-                    По графику: <strong className="text-slate-900">{formatMoney(draftPlannedTotal)}</strong>
+                    По графику: <strong className="text-foreground">{formatMoney(draftPlannedTotal)}</strong>
                   </p>
                   {scheduleMismatchMessage ? (
                     <p className="mt-1 text-status-warning-text">{scheduleMismatchMessage}</p>
@@ -2222,7 +2239,7 @@ export default function ClientDetailPage() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                <table className="data-table text-xs">
+                <table className="data-table table-cards text-xs">
                   <thead>
                     <tr>
                       <th className="w-8">#</th>
@@ -2249,7 +2266,7 @@ export default function ClientDetailPage() {
                         <Fragment key={item.id}>
                         <tr
                           className={cn(
-                            markedForDelete && "bg-slate-50 opacity-60",
+                            markedForDelete && "bg-surface-muted opacity-60",
                             item.month_number === 1 &&
                               firstMonthPaid &&
                               (managerCommissionCollected
@@ -2257,13 +2274,13 @@ export default function ClientDetailPage() {
                                 : "bg-status-warning-bg/40 hover:bg-status-warning-bg/50"),
                           )}
                         >
-                          <td className="tabular-nums text-muted">
+                          <td data-label="Месяц" className="tabular-nums text-muted">
                             {item.month_number}
                             {rowChanged && (
                               <span className="ml-0.5 text-brand-600" title="Изменён">*</span>
                             )}
                           </td>
-                          <td>
+                          <td data-label="Дата">
                             {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="date"
@@ -2286,19 +2303,19 @@ export default function ClientDetailPage() {
                               <div className="leading-tight">
                                 <p>{formatDate(effectiveDueDate(item))}</p>
                                 {item.deferred_until && (
-                                  <p className="text-[10px] text-amber-600">
+                                  <p className="text-[11px] text-status-warning-text">
                                     было {formatDate(item.due_date)}
                                   </p>
                                 )}
                                 {item.deferral_comment && (
-                                  <p className="mt-0.5 line-clamp-2 text-[10px] text-amber-700" title={item.deferral_comment}>
+                                  <p className="mt-0.5 line-clamp-2 text-[11px] text-status-warning-text" title={item.deferral_comment}>
                                     {item.deferral_comment}
                                   </p>
                                 )}
                               </div>
                             )}
                           </td>
-                          <td className="text-right">
+                          <td data-label="План" className="text-right">
                             {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="number"
@@ -2325,35 +2342,35 @@ export default function ClientDetailPage() {
                               </span>
                             )}
                           </td>
-                          <td className="text-right tabular-nums leading-tight">
+                          <td data-label="Оплачено / остаток" className="text-right tabular-nums leading-tight">
                             <p className="whitespace-nowrap">{formatMoney(item.paid_amount)}</p>
                             <p className={cn("whitespace-nowrap", rest > 0 ? "text-muted" : "text-status-success-text")}>
                               {formatMoney(rest)}
                             </p>
                           </td>
-                          <td>
+                          <td data-label="Статус">
                             <Badge tone={scheduleTone(item.status)}>
                               {statusLabel(item.status)}
                             </Badge>
                             {(item.overdue_waived || markedForWaive) && (
-                              <p className="mt-0.5 text-[10px] text-muted">
+                              <p className="mt-0.5 text-[11px] text-muted">
                                 {markedForWaive ? "Снятие проср." : "Проср. снята"}
                               </p>
                             )}
                             {item.deferred_until && !item.deferral_comment && (
-                              <p className="mt-0.5 text-[10px] text-amber-600">
+                              <p className="mt-0.5 text-[11px] text-status-warning-text">
                                 до {formatDate(item.deferred_until)}
                               </p>
                             )}
                           </td>
-                          <td>
+                          <td data-label="Примечание">
                             {canEditClient ? (
                               <button
                                 type="button"
                                 className={cn(
                                   "interactive w-full rounded px-1 py-0.5 text-left leading-snug",
                                   noteText
-                                    ? "text-slate-700 hover:bg-surface-muted"
+                                    ? "text-foreground hover:bg-surface-muted"
                                     : "text-muted hover:bg-surface-muted hover:text-foreground",
                                   notePanelId === item.id && "bg-brand-50 ring-1 ring-brand-200",
                                 )}
@@ -2367,7 +2384,7 @@ export default function ClientDetailPage() {
                                 )}
                               </button>
                             ) : noteText ? (
-                              <p className="line-clamp-2 whitespace-pre-wrap leading-snug text-slate-700" title={noteText}>
+                              <p className="line-clamp-2 whitespace-pre-wrap leading-snug text-foreground" title={noteText}>
                                 {noteText}
                               </p>
                             ) : (
@@ -2375,122 +2392,111 @@ export default function ClientDetailPage() {
                             )}
                           </td>
                           {scheduleHasActions && (
-                            <td>
-                              <div className="flex flex-wrap items-center gap-1">
-                                {canRecordSchedulePayment && rest > 0 && !markedForDelete ? (
-                                  deferringId === item.id ? (
-                                    <div className="w-full space-y-1 rounded border border-border bg-surface-muted p-1.5">
-                                      <Input
-                                        type="date"
-                                        className="py-0.5"
-                                        value={deferForm.deferred_until}
-                                        onChange={(e) =>
-                                          setDeferForm({
-                                            ...deferForm,
-                                            deferred_until: e.target.value,
-                                          })
-                                        }
-                                      />
-                                      <Input
-                                        placeholder="Причина"
-                                        className="py-0.5"
-                                        value={deferForm.comment}
-                                        onChange={(e) =>
-                                          setDeferForm({ ...deferForm, comment: e.target.value })
-                                        }
-                                      />
-                                      <div className="flex gap-1">
-                                        <Button type="button" className="px-1.5 py-0.5" onClick={() => handleDefer(item)}>
-                                          OK
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          className="px-1.5 py-0.5"
-                                          onClick={() => setDeferringId(null)}
+                            <td data-label="Действия">
+                              {deferringId === item.id ? (
+                                <div className="w-full space-y-1 rounded border border-border bg-surface-muted p-1.5">
+                                  <Input
+                                    type="date"
+                                    className="py-0.5"
+                                    value={deferForm.deferred_until}
+                                    onChange={(e) =>
+                                      setDeferForm({
+                                        ...deferForm,
+                                        deferred_until: e.target.value,
+                                      })
+                                    }
+                                  />
+                                  <Input
+                                    placeholder="Причина"
+                                    className="py-0.5"
+                                    value={deferForm.comment}
+                                    onChange={(e) =>
+                                      setDeferForm({ ...deferForm, comment: e.target.value })
+                                    }
+                                  />
+                                  <div className="flex gap-1">
+                                    <Button type="button" size="sm" onClick={() => handleDefer(item)}>
+                                      OK
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => setDeferringId(null)}
+                                    >
+                                      ×
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap items-center justify-end gap-1">
+                                  {canRecordSchedulePayment && rest > 0 && !markedForDelete ? (
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      disabled={payingId === item.id}
+                                      onClick={() => handleQuickPay(item)}
+                                    >
+                                      {payingId === item.id ? "…" : "Оплатить"}
+                                    </Button>
+                                  ) : canRecordSchedulePayment ? (
+                                    <span className="text-[11px] text-muted">
+                                      {markedForDelete ? "К удалению" : "Оплачено"}
+                                    </span>
+                                  ) : null}
+                                  {scheduleRowHasMenu(item, rest, markedForDelete) ? (
+                                    <ActionMenu label={`Действия по ${item.month_number} месяцу`}>
+                                      {canRecordSchedulePayment && rest > 0 && !markedForDelete ? (
+                                        <ActionMenuItem onClick={() => startDefer(item)}>
+                                          Отсрочить платёж
+                                        </ActionMenuItem>
+                                      ) : null}
+                                      {item.month_number === 1 &&
+                                      firstMonthPaid &&
+                                      canRecordSchedulePayment ? (
+                                        <ActionMenuItem
+                                          disabled={commissionSaving}
+                                          onClick={() =>
+                                            handleToggleManagerCommission(!managerCommissionCollected)
+                                          }
                                         >
-                                          ×
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <Button
-                                        type="button"
-                                        variant="secondary"
-                                        className="px-1.5 py-0.5"
-                                        disabled={payingId === item.id}
-                                        onClick={() => handleQuickPay(item)}
-                                      >
-                                        {payingId === item.id ? "…" : "Оплатить"}
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="px-1 py-0.5"
-                                        onClick={() => startDefer(item)}
-                                      >
-                                        Отср.
-                                      </Button>
-                                    </>
-                                  )
-                                ) : canRecordSchedulePayment ? (
-                                  <span className="text-[10px] text-muted">
-                                    {markedForDelete ? "К удалению" : "Оплачено"}
-                                  </span>
-                                ) : null}
-                                {item.month_number === 1 &&
-                                  firstMonthPaid &&
-                                  canRecordSchedulePayment &&
-                                  !deferringId && (
-                                    <Button
-                                      type="button"
-                                      variant={managerCommissionCollected ? "secondary" : "primary"}
-                                      className="px-1.5 py-0.5"
-                                      disabled={commissionSaving}
-                                      onClick={() =>
-                                        handleToggleManagerCommission(!managerCommissionCollected)
-                                      }
-                                    >
-                                      {commissionSaving
-                                        ? "…"
-                                        : managerCommissionCollected
-                                          ? "10k ✓"
-                                          : "10k менед."}
-                                    </Button>
-                                  )}
-                                {canEditSchedule && isOwner &&
-                                  item.status === "overdue" &&
-                                  !item.overdue_waived &&
-                                  !markedForDelete && (
-                                    <Button
-                                      type="button"
-                                      variant={markedForWaive ? "secondary" : "ghost"}
-                                      className="px-1 py-0.5 text-[10px]"
-                                      onClick={() => handleToggleScheduleWaive(item.id)}
-                                    >
-                                      {markedForWaive ? "Отмена" : "Снять пр."}
-                                    </Button>
-                                  )}
-                                {canEditSchedule && Number(item.paid_amount) <= 0 && (
-                                  <Button
-                                    type="button"
-                                    variant={markedForDelete ? "secondary" : "danger"}
-                                    className="px-1.5 py-0.5"
-                                    onClick={() => handleToggleScheduleDelete(item.id)}
-                                  >
-                                    {markedForDelete ? "Вернуть" : "Удал."}
-                                  </Button>
-                                )}
-                              </div>
+                                          {managerCommissionCollected
+                                            ? "Отменить 10 000 ₽ менеджеру"
+                                            : "Отметить 10 000 ₽ менеджеру"}
+                                        </ActionMenuItem>
+                                      ) : null}
+                                      {canEditSchedule &&
+                                      isOwner &&
+                                      item.status === "overdue" &&
+                                      !item.overdue_waived &&
+                                      !markedForDelete ? (
+                                        <ActionMenuItem
+                                          onClick={() => handleToggleScheduleWaive(item.id)}
+                                        >
+                                          {markedForWaive ? "Не снимать просрочку" : "Снять просрочку"}
+                                        </ActionMenuItem>
+                                      ) : null}
+                                      {canEditSchedule && Number(item.paid_amount) <= 0 ? (
+                                        <ActionMenuItem
+                                          tone={markedForDelete ? "default" : "danger"}
+                                          onClick={() => handleToggleScheduleDelete(item.id)}
+                                        >
+                                          {markedForDelete ? "Вернуть месяц" : "Удалить месяц"}
+                                        </ActionMenuItem>
+                                      ) : null}
+                                    </ActionMenu>
+                                  ) : null}
+                                </div>
+                              )}
                             </td>
                           )}
                         </tr>
                         {notePanelId === item.id && (
-                          <tr className="bg-slate-50">
+                          <tr className="bg-surface-muted">
                             <td colSpan={scheduleTableColSpan}>
                               <div className="space-y-1.5 py-1">
-                                <p className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
                                   Примечание · {item.month_number} мес.
                                 </p>
                                 {canEditClient ? (
@@ -2536,7 +2542,7 @@ export default function ClientDetailPage() {
                                     </div>
                                   </>
                                 ) : (
-                                  <p className="whitespace-pre-wrap text-xs text-slate-700">
+                                  <p className="whitespace-pre-wrap text-xs text-foreground">
                                     {noteText || "—"}
                                   </p>
                                 )}
@@ -2549,13 +2555,13 @@ export default function ClientDetailPage() {
                     })}
                     {scheduleDraft.pendingAdds.map((item, index) => (
                       <tr key={item.tempId} className="bg-brand-50/40">
-                        <td className="text-muted">
+                        <td data-label="Месяц" className="text-muted">
                           {schedule.filter((row) => !scheduleDraft.pendingDeletes.includes(row.id)).length +
                             index +
                             1}
                           <Badge tone="warning">+</Badge>
                         </td>
-                        <td>
+                        <td data-label="Дата">
                           <Input
                             type="date"
                             className="max-w-[118px] py-0.5"
@@ -2565,7 +2571,7 @@ export default function ClientDetailPage() {
                             }
                           />
                         </td>
-                        <td>
+                        <td data-label="План">
                           <Input
                             type="number"
                             min={1}
@@ -2577,29 +2583,32 @@ export default function ClientDetailPage() {
                             }
                           />
                         </td>
-                        <td className="text-right tabular-nums leading-tight text-muted">
+                        <td
+                          data-label="Оплачено / остаток"
+                          className="text-right tabular-nums leading-tight text-muted"
+                        >
                           <p className="whitespace-nowrap">{formatMoney(0)}</p>
                           <p className="whitespace-nowrap">{formatMoney(item.planned_amount)}</p>
                         </td>
-                        <td>
+                        <td data-label="Статус">
                           <Badge tone="warning">Новый</Badge>
                         </td>
-                        <td>
+                        <td data-label="Примечание">
                           <span className="text-muted">—</span>
                         </td>
                         {scheduleHasActions && (
-                          <td>
+                          <td data-label="Действия">
                             {canEditSchedule ? (
                               <Button
                                 type="button"
                                 variant="ghost"
-                                className="px-1.5 py-0.5"
+                                size="sm"
                                 onClick={() => handleRemovePendingAdd(item.tempId)}
                               >
                                 Убрать
                               </Button>
                             ) : (
-                              <span className="text-[10px] text-muted">После сохр.</span>
+                              <span className="text-[11px] text-muted">После сохр.</span>
                             )}
                           </td>
                         )}
@@ -2610,8 +2619,8 @@ export default function ClientDetailPage() {
               </div>
 
               {canEditSchedule && contractScheduleDirty && (
-                <div className="sticky bottom-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 bg-white p-2">
-                  <p className="text-xs font-medium text-slate-700">
+                <div className="sticky bottom-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-border-strong bg-surface p-2">
+                  <p className="text-xs font-medium text-foreground">
                     {scheduleDraftDirty && contractDraftDirty
                       ? "Есть несохранённые изменения в договоре и графике"
                       : scheduleDraftDirty
@@ -2708,7 +2717,7 @@ export default function ClientDetailPage() {
 
           <Card
             id="section-payments"
-            className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-slate-400")}
+            className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-border-strong")}
           >
             <SectionTitle
               title="История платежей"
@@ -2740,7 +2749,7 @@ export default function ClientDetailPage() {
                       <div className="flex items-center gap-2">
                         <p
                           className={`font-medium ${
-                            payment.is_refund ? "text-red-600" : "text-slate-900"
+                            payment.is_refund ? "text-status-danger-text" : "text-foreground"
                           }`}
                         >
                           {payment.is_refund ? "−" : ""}
@@ -2748,7 +2757,7 @@ export default function ClientDetailPage() {
                         </p>
                         {payment.is_refund && <Badge tone="danger">Возврат</Badge>}
                       </div>
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-muted">
                         {payment.comment ? payment.comment : "Без комментария"}
                       </p>
                     </div>
@@ -2824,17 +2833,17 @@ export default function ClientDetailPage() {
                             {statusLabel(entry.action)}
                           </Badge>
                           {entry.field_name && (
-                            <span className="text-sm font-medium text-slate-700">
+                            <span className="text-sm font-medium text-foreground">
                               {entry.field_name}
                             </span>
                           )}
                         </div>
                         {entry.field_name && (
-                          <p className="mt-1 text-sm text-slate-600">
+                          <p className="mt-1 text-sm text-muted">
                             {entry.old_value ?? "—"} → {entry.new_value ?? "—"}
                           </p>
                         )}
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-muted">
                           {entry.changed_by_name ?? "Пользователь"} ·{" "}
                           {new Intl.DateTimeFormat("ru-RU", {
                             day: "2-digit",

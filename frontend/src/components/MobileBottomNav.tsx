@@ -49,7 +49,7 @@ export function MobileBottomNav({
     const count = badges?.[href] ?? 0;
     if (count <= 0) return null;
     return (
-      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-danger-solid px-1 text-[11px] font-semibold text-white">
         {count > 99 ? "99+" : count}
       </span>
     );
@@ -89,7 +89,7 @@ export function MobileBottomNav({
                     {item.label}
                   </span>
                   {count > 0 ? (
-                    <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="rounded-full bg-status-danger-solid px-1.5 py-0.5 text-[11px] font-semibold text-white">
                       {count > 99 ? "99+" : count}
                     </span>
                   ) : null}
