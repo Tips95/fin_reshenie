@@ -14,6 +14,13 @@ class ExpensePaymentCreate(BaseModel):
     comment: str | None = None
 
 
+class ExpensePaymentUpdate(BaseModel):
+    amount: Decimal | None = Field(default=None, gt=0, decimal_places=2)
+    payment_date: date | None = None
+    period_month: date | None = None
+    comment: str | None = None
+
+
 class ExpensePaymentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -25,3 +32,9 @@ class ExpensePaymentResponse(BaseModel):
     comment: str | None
     created_by: UUID
     created_at: datetime
+
+
+class ExpensePaymentListResponse(ExpensePaymentResponse):
+    expense_name: str
+    expense_group: ExpenseGroup
+    created_by_name: str

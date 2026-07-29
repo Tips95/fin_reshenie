@@ -10,7 +10,12 @@ from app.models.enums import AuditAction, ExpenseCategory, ExpenseGroup
 from app.models.expense_payment import ExpensePayment
 from app.models.operating_expense import OperatingExpense
 from app.models.user import User
-from app.schemas.expense_payment import ExpensePaymentCreate, ExpensePaymentResponse
+from app.schemas.expense_payment import (
+    ExpensePaymentCreate,
+    ExpensePaymentListResponse,
+    ExpensePaymentResponse,
+    ExpensePaymentUpdate,
+)
 from app.schemas.operating_expense import (
     OperatingExpenseCreate,
     OperatingExpenseResponse,
@@ -32,6 +37,26 @@ def get_organization_expense(
     if expense is None or expense.organization_id != organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Расход не найден")
     return expense
+
+
+def get_organization_payment(
+    db: Session,
+    *,
+    payment_id: UUID,
+    organization_id: UUID,
+) -> ExpensePayment:
+    stmt = (
+        select(ExpensePayment)
+        .join(OperatingExpense, OperatingExpense.id == ExpensePayment.expense_id)
+        .where(
+            ExpensePayment.id == payment_id,
+            OperatingExpense.organization_id == organization_id,
+        )
+    )
+    payment = db.scalar(stmt)
+    if payment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Выплата не найдена")
+    return payment
 
 
 def _default_expense_group(category: ExpenseCategory) -> ExpenseGroup:
@@ -80,25 +105,48 @@ def create_operating_expense(
     return expense
 
 
-@router.get("/payments", response_model=list[ExpensePaymentResponse])
+@router.get("/payments", response_model=list[ExpensePaymentListResponse])
 def list_expense_payments(
     period_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     expense_group: ExpenseGroup | None = Query(default=None),
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
-) -> list[ExpensePayment]:
+) -> list[ExpensePaymentListResponse]:
     stmt = (
-        select(ExpensePayment)
+        select(
+            ExpensePayment,
+            OperatingExpense.name,
+            OperatingExpense.expense_group,
+            User.full_name,
+        )
         .join(OperatingExpense, OperatingExpense.id == ExpensePayment.expense_id)
+        .join(User, User.id == ExpensePayment.created_by)
         .where(OperatingExpense.organization_id == current_user.organization_id)
-        .order_by(ExpensePayment.payment_date.desc())
+        .order_by(ExpensePayment.period_month.desc(), ExpensePayment.payment_date.desc())
     )
     if period_month:
         start, end = month_bounds(period_month)
         stmt = stmt.where(ExpensePayment.period_month >= start, ExpensePayment.period_month <= end)
     if expense_group:
         stmt = stmt.where(OperatingExpense.expense_group == expense_group)
-    return list(db.scalars(stmt))
+
+    rows = db.execute(stmt).all()
+    return [
+        ExpensePaymentListResponse(
+            id=payment.id,
+            expense_id=payment.expense_id,
+            amount=payment.amount,
+            payment_date=payment.payment_date,
+            period_month=payment.period_month,
+            comment=payment.comment,
+            created_by=payment.created_by,
+            created_at=payment.created_at,
+            expense_name=expense_name,
+            expense_group=expense_group_value,
+            created_by_name=created_by_name,
+        )
+        for payment, expense_name, expense_group_value, created_by_name in rows
+    ]
 
 
 @router.post(
@@ -132,6 +180,38 @@ def create_expense_payment(
         entity_id=payment.id,
         action=AuditAction.CREATE,
     )
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+@router.patch("/payments/{payment_id}", response_model=ExpensePaymentResponse)
+def update_expense_payment(
+    payment_id: UUID,
+    payload: ExpensePaymentUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> ExpensePayment:
+    payment = get_organization_payment(
+        db, payment_id=payment_id, organization_id=current_user.organization_id
+    )
+    updates = payload.model_dump(exclude_unset=True)
+
+    for field, value in updates.items():
+        old_value = getattr(payment, field)
+        if old_value != value:
+            log_audit(
+                db,
+                user=current_user,
+                entity_type="expense_payment",
+                entity_id=payment.id,
+                action=AuditAction.UPDATE,
+                field_name=field,
+                old_value=old_value,
+                new_value=value,
+            )
+            setattr(payment, field, value)
+
     db.commit()
     db.refresh(payment)
     return payment

@@ -375,6 +375,9 @@ export interface ExpensePayment {
   comment: string | null;
   created_by: string;
   created_at: string;
+  expense_name?: string;
+  expense_group?: ExpenseGroup;
+  created_by_name?: string;
 }
 
 export type RetailContractStatus = "active" | "completed" | "overdue" | "cancelled";

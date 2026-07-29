@@ -17,7 +17,14 @@ import {
   StatCard,
 } from "@/components/ui";
 import { ApiRequestError, expensesApi } from "@/lib/api-client";
-import { formatDate, formatMoney, formatMonthLabel, statusLabel } from "@/lib/format";
+import { cn } from "@/lib/cn";
+import {
+  formatAmountInput,
+  formatDate,
+  formatMoney,
+  formatMonthLabel,
+  statusLabel,
+} from "@/lib/format";
 import type { ExpenseCategory, ExpenseGroup, ExpensePayment, OperatingExpense } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -39,6 +46,11 @@ type EditForm = {
   sort_order: string;
 };
 
+type PaymentEditForm = {
+  amount: string;
+  payment_date: string;
+};
+
 function categoryTone(category: ExpenseCategory): "default" | "success" | "warning" | "danger" {
   if (category === "salary") return "warning";
   if (category === "rent") return "danger";
@@ -51,9 +63,16 @@ function toEditForm(item: OperatingExpense): EditForm {
     name: item.name,
     category: item.category,
     expense_group: item.expense_group,
-    amount: item.amount,
+    amount: formatAmountInput(item.amount),
     pay_day: item.pay_day ? String(item.pay_day) : "",
     sort_order: String(item.sort_order),
+  };
+}
+
+function toPaymentEditForm(payment: ExpensePayment): PaymentEditForm {
+  return {
+    amount: formatAmountInput(payment.amount),
+    payment_date: payment.payment_date,
   };
 }
 
@@ -79,7 +98,17 @@ function ExpenseTable({
   onRecordPayment,
   recordingId,
   showPayDay,
+  trackMonthlyPayments,
+  periodMonth,
+  paymentByExpenseId,
+  editingPaymentId,
+  paymentEditForm,
+  savingPaymentId,
+  onStartPaymentEdit,
+  onCancelPaymentEdit,
+  onSavePaymentEdit,
   setEditForm,
+  setPaymentEditForm,
 }: {
   items: OperatingExpense[];
   editingId: string | null;
@@ -92,25 +121,49 @@ function ExpenseTable({
   onRecordPayment: (item: OperatingExpense) => void;
   recordingId: string | null;
   showPayDay: boolean;
+  trackMonthlyPayments?: boolean;
+  periodMonth?: string;
+  paymentByExpenseId?: Map<string, ExpensePayment>;
+  editingPaymentId?: string | null;
+  paymentEditForm?: PaymentEditForm | null;
+  savingPaymentId?: string | null;
+  onStartPaymentEdit?: (payment: ExpensePayment) => void;
+  onCancelPaymentEdit?: () => void;
+  onSavePaymentEdit?: (paymentId: string) => void;
   setEditForm: React.Dispatch<React.SetStateAction<EditForm | null>>;
+  setPaymentEditForm?: React.Dispatch<React.SetStateAction<PaymentEditForm | null>>;
 }) {
   if (items.length === 0) return <EmptyState>Статьи не добавлены</EmptyState>;
 
   return (
     <div className="overflow-x-auto">
-      <table className="data-table">
+      <table className="data-table text-xs">
         <thead>
           <tr>
             <th>Название</th>
             <th>Категория</th>
-            {showPayDay && <th>День выплаты</th>}
-            <th>Сумма / мес.</th>
+            {showPayDay && <th>День</th>}
+            <th className="text-right">План / мес.</th>
+            {trackMonthlyPayments && periodMonth && (
+              <>
+                <th className="text-right">Выплачено</th>
+                <th>Статус</th>
+              </>
+            )}
             <th>Действия</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item) => {
+            const payment = paymentByExpenseId?.get(item.id);
+            const isPaid = Boolean(payment);
             const isEditing = editingId === item.id && editForm !== null;
+            const isEditingPayment =
+              payment &&
+              editingPaymentId === payment.id &&
+              paymentEditForm &&
+              setPaymentEditForm;
+
             if (isEditing) {
               return (
                 <tr key={item.id} className="is-editing">
@@ -153,18 +206,20 @@ function ExpenseTable({
                       type="number"
                       min={1}
                       step={1}
+                      className="text-right"
                       value={editForm.amount}
                       onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
                     />
                   </td>
+                  {trackMonthlyPayments && periodMonth && <td colSpan={2} />}
                   <td>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1">
                       <Button
                         type="button"
                         disabled={savingId === item.id}
                         onClick={() => onSaveEdit(item.id)}
                       >
-                        {savingId === item.id ? "Сохранение..." : "Сохранить"}
+                        {savingId === item.id ? "…" : "Сохранить"}
                       </Button>
                       <Button type="button" variant="secondary" onClick={onCancelEdit}>
                         Отмена
@@ -176,30 +231,113 @@ function ExpenseTable({
             }
 
             return (
-              <tr key={item.id}>
+              <tr
+                key={item.id}
+                className={cn(
+                  trackMonthlyPayments && isPaid && "bg-status-success-bg/70 hover:bg-status-success-bg",
+                )}
+              >
                 <td className="font-medium text-slate-900">{item.name}</td>
                 <td>
                   <Badge tone={categoryTone(item.category)}>{statusLabel(item.category)}</Badge>
                 </td>
-                {showPayDay && <td>{item.pay_day ? `${item.pay_day}-е число` : "—"}</td>}
-                <td>{formatMoney(item.amount)}</td>
+                {showPayDay && <td>{item.pay_day ? `${item.pay_day}-е` : "—"}</td>}
+                <td className="text-right tabular-nums">{formatMoney(item.amount)}</td>
+                {trackMonthlyPayments && periodMonth && (
+                  <>
+                    <td className="text-right">
+                      {isEditingPayment ? (
+                        <div className="flex flex-col gap-1">
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            className="w-24 py-0.5 text-right"
+                            value={paymentEditForm.amount}
+                            onChange={(e) =>
+                              setPaymentEditForm({ ...paymentEditForm, amount: e.target.value })
+                            }
+                          />
+                          <Input
+                            type="date"
+                            className="w-32 py-0.5"
+                            value={paymentEditForm.payment_date}
+                            onChange={(e) =>
+                              setPaymentEditForm({
+                                ...paymentEditForm,
+                                payment_date: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      ) : isPaid ? (
+                        <div className="leading-tight">
+                          <p className="whitespace-nowrap font-semibold text-status-success-text">
+                            {formatMoney(payment!.amount)}
+                          </p>
+                          <p className="text-[10px] text-muted">{formatDate(payment!.payment_date)}</p>
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {isPaid ? (
+                        <Badge tone="success">Выплачено</Badge>
+                      ) : (
+                        <Badge tone="warning">Ожидает</Badge>
+                      )}
+                    </td>
+                  </>
+                )}
                 <td>
-                  <div className="flex flex-wrap gap-2">
-                    {showPayDay && (
+                  <div className="flex flex-wrap gap-1">
+                    {trackMonthlyPayments && periodMonth && isEditingPayment && payment && (
+                      <>
+                        <Button
+                          type="button"
+                          disabled={savingPaymentId === payment.id}
+                          onClick={() => onSavePaymentEdit?.(payment.id)}
+                        >
+                          {savingPaymentId === payment.id ? "…" : "Сохранить"}
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={onCancelPaymentEdit}>
+                          Отмена
+                        </Button>
+                      </>
+                    )}
+                    {trackMonthlyPayments &&
+                      periodMonth &&
+                      !isEditingPayment &&
+                      isPaid &&
+                      payment && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => onStartPaymentEdit?.(payment)}
+                        >
+                          Сумма
+                        </Button>
+                      )}
+                    {trackMonthlyPayments && periodMonth && !isPaid && showPayDay && (
                       <Button
                         type="button"
                         disabled={recordingId === item.id}
                         onClick={() => onRecordPayment(item)}
                       >
-                        {recordingId === item.id ? "Сохранение..." : "Выплата"}
+                        {recordingId === item.id ? "…" : "Выплатить"}
                       </Button>
                     )}
-                    <Button type="button" variant="secondary" onClick={() => onStartEdit(item)}>
-                      Изменить
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => onDelete(item.id, item.name)}>
-                      Удалить
-                    </Button>
+                    {!isEditingPayment && (
+                      <>
+                        <Button type="button" variant="ghost" onClick={() => onStartEdit(item)}>
+                          Статья
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => onDelete(item.id, item.name)}>
+                          ×
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -223,7 +361,11 @@ export default function ExpensesPage() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [recordingId, setRecordingId] = useState<string | null>(null);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [paymentEditForm, setPaymentEditForm] = useState<PaymentEditForm | null>(null);
+  const [savingPaymentId, setSavingPaymentId] = useState<string | null>(null);
   const [periodMonth, setPeriodMonth] = useState(currentMonthValue());
+  const [historyMonthFilter, setHistoryMonthFilter] = useState<string>("");
 
   useEffect(() => {
     if (user && user.role !== "owner") {
@@ -257,7 +399,7 @@ export default function ExpensesPage() {
     if (!Number.isFinite(parsed) || parsed <= 0) {
       throw new Error("Укажите сумму больше 0");
     }
-    return parsed.toFixed(2);
+    return Math.round(parsed).toFixed(2);
   }
 
   async function handleCreate(event: React.FormEvent) {
@@ -295,6 +437,17 @@ export default function ExpensesPage() {
     setEditForm(null);
   }
 
+  function startPaymentEdit(payment: ExpensePayment) {
+    setEditingPaymentId(payment.id);
+    setPaymentEditForm(toPaymentEditForm(payment));
+    setError(null);
+  }
+
+  function cancelPaymentEdit() {
+    setEditingPaymentId(null);
+    setPaymentEditForm(null);
+  }
+
   async function handleSaveEdit(itemId: string) {
     if (!editForm) return;
     setSavingId(itemId);
@@ -324,6 +477,28 @@ export default function ExpensesPage() {
     }
   }
 
+  async function handleSavePaymentEdit(paymentId: string) {
+    if (!paymentEditForm) return;
+    setSavingPaymentId(paymentId);
+    setError(null);
+    try {
+      await expensesApi.updatePayment(paymentId, {
+        amount: normalizeAmount(paymentEditForm.amount),
+        payment_date: paymentEditForm.payment_date,
+      });
+      cancelPaymentEdit();
+      loadData();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError || err instanceof Error
+          ? err.message
+          : "Не удалось сохранить выплату",
+      );
+    } finally {
+      setSavingPaymentId(null);
+    }
+  }
+
   async function handleDelete(id: string, name: string) {
     if (!window.confirm(`Удалить статью расхода «${name}»?`)) return;
     setError(null);
@@ -343,12 +518,19 @@ export default function ExpensesPage() {
     setError(null);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      await expensesApi.recordPayment(item.id, {
-        amount: item.amount,
+      const existing = paymentByExpenseId.get(item.id);
+      const payload = {
+        amount: normalizeAmount(formatAmountInput(item.amount)),
         payment_date: today,
         period_month: monthToPeriodDate(periodMonth),
-        comment: `Зарплата за ${periodMonth}`,
-      });
+        comment: `Зарплата за ${formatMonthLabel(periodMonth)}`,
+      };
+
+      if (existing) {
+        await expensesApi.updatePayment(existing.id, payload);
+      } else {
+        await expensesApi.recordPayment(item.id, payload);
+      }
       loadData();
     } catch (err) {
       setError(
@@ -368,25 +550,45 @@ export default function ExpensesPage() {
   const productionTotal = productionExpenses.reduce((sum, item) => sum + Number(item.amount), 0);
   const totalMonthly = salaryTotal + productionTotal;
 
-  const expenseNameById = useMemo(
-    () => new Map(activeExpenses.map((item) => [item.id, item.name])),
-    [activeExpenses],
-  );
-
-  const paymentsByMonth = useMemo(() => {
-    const groups = new Map<string, ExpensePayment[]>();
+  const paymentByExpenseId = useMemo(() => {
+    const map = new Map<string, ExpensePayment>();
     for (const payment of payments) {
-      const key = payment.period_month.slice(0, 7);
-      const bucket = groups.get(key) ?? [];
-      bucket.push(payment);
-      groups.set(key, bucket);
+      if (payment.period_month.slice(0, 7) !== periodMonth) continue;
+      const existing = map.get(payment.expense_id);
+      if (!existing || payment.payment_date > existing.payment_date) {
+        map.set(payment.expense_id, payment);
+      }
     }
-    return Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a));
-  }, [payments]);
+    return map;
+  }, [payments, periodMonth]);
 
-  const currentMonthPayments = payments.filter(
-    (payment) => payment.period_month.slice(0, 7) === periodMonth,
+  const currentMonthSalaryPayments = useMemo(
+    () =>
+      payments.filter(
+        (payment) =>
+          payment.period_month.slice(0, 7) === periodMonth &&
+          payment.expense_group === "salary_project",
+      ),
+    [payments, periodMonth],
   );
+
+  const monthPaidTotal = currentMonthSalaryPayments.reduce(
+    (sum, payment) => sum + Number(payment.amount),
+    0,
+  );
+  const monthPaidCount = paymentByExpenseId.size;
+  const monthPendingCount = Math.max(salaryExpenses.length - monthPaidCount, 0);
+
+  const filteredHistory = useMemo(() => {
+    const items = historyMonthFilter
+      ? payments.filter((payment) => payment.period_month.slice(0, 7) === historyMonthFilter)
+      : payments;
+    return [...items].sort((a, b) => {
+      const monthCmp = b.period_month.localeCompare(a.period_month);
+      if (monthCmp !== 0) return monthCmp;
+      return b.payment_date.localeCompare(a.payment_date);
+    });
+  }, [payments, historyMonthFilter]);
 
   if (user?.role !== "owner") {
     return <LoadingState text="Доступ только для руководителя" />;
@@ -414,21 +616,42 @@ export default function ExpensesPage() {
         />
       </div>
 
-      <Card>
+      <Card variant="accent">
         <SectionTitle
-          title="Учёт выплат по месяцам"
-          description="Выберите месяц для фиксации новых выплат. История сохраняется в базе."
+          title="Выплаты за месяц"
+          description="Выберите месяц — выплаченные строки подсветятся зелёным, сумму можно изменить"
         />
-        <div className="max-w-xs">
-          <FormField label="Месяц для новой выплаты">
-            <Input type="month" value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} />
+        <div className="grid gap-3 md:grid-cols-[minmax(0,220px)_1fr] md:items-end">
+          <FormField label="Расчётный месяц">
+            <Input
+              type="month"
+              value={periodMonth}
+              onChange={(e) => {
+                setPeriodMonth(e.target.value);
+                cancelPaymentEdit();
+              }}
+            />
           </FormField>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <StatCard
+              label="Выплачено"
+              value={formatMoney(monthPaidTotal)}
+              tone="success"
+              hint={`${monthPaidCount} из ${salaryExpenses.length}`}
+            />
+            <StatCard
+              label="Ожидает"
+              value={String(monthPendingCount)}
+              tone="warning"
+              hint="сотрудников без выплаты"
+            />
+            <StatCard
+              label="План по зарплате"
+              value={formatMoney(salaryTotal)}
+              tone="default"
+            />
+          </div>
         </div>
-        {currentMonthPayments.length > 0 && (
-          <p className="mt-3 text-sm text-emerald-700">
-            За {formatMonthLabel(periodMonth)} зафиксировано выплат: {currentMonthPayments.length}
-          </p>
-        )}
       </Card>
 
       <Card variant="accent">
@@ -498,16 +721,12 @@ export default function ExpensesPage() {
         </form>
       </Card>
 
-      {error && (
-        <p className="alert-danger">
-          {error}
-        </p>
-      )}
+      {error && <p className="alert-danger">{error}</p>}
 
       <Card>
         <SectionTitle
-          title="Зарплатный проект"
-          description="Сотрудники, день выплаты и фиксация зарплатных выплат"
+          title={`Зарплатный проект · ${formatMonthLabel(periodMonth)}`}
+          description="Выплаты за выбранный месяц — зелёная строка значит выплачено"
         />
         {loading ? (
           <LoadingState text="Загрузка..." />
@@ -524,7 +743,17 @@ export default function ExpensesPage() {
             onRecordPayment={handleRecordPayment}
             recordingId={recordingId}
             showPayDay
+            trackMonthlyPayments
+            periodMonth={periodMonth}
+            paymentByExpenseId={paymentByExpenseId}
+            editingPaymentId={editingPaymentId}
+            paymentEditForm={paymentEditForm}
+            savingPaymentId={savingPaymentId}
+            onStartPaymentEdit={startPaymentEdit}
+            onCancelPaymentEdit={cancelPaymentEdit}
+            onSavePaymentEdit={handleSavePaymentEdit}
             setEditForm={setEditForm}
+            setPaymentEditForm={setPaymentEditForm}
           />
         )}
       </Card>
@@ -556,49 +785,124 @@ export default function ExpensesPage() {
 
       <Card>
         <SectionTitle
-          title="История выплат по месяцам"
-          description="Все зафиксированные выплаты сохраняются и доступны для просмотра"
+          title="История выплат"
+          description="Кто, за какой месяц и сколько получил — суммы можно исправить"
         />
+        <div className="mb-3 max-w-xs">
+          <FormField label="Фильтр по месяцу">
+            <Select
+              value={historyMonthFilter}
+              onChange={(e) => setHistoryMonthFilter(e.target.value)}
+            >
+              <option value="">Все месяцы</option>
+              {Array.from(new Set(payments.map((p) => p.period_month.slice(0, 7))))
+                .sort((a, b) => b.localeCompare(a))
+                .map((month) => (
+                  <option key={month} value={month}>
+                    {formatMonthLabel(month)}
+                  </option>
+                ))}
+            </Select>
+          </FormField>
+        </div>
         {loading ? (
           <LoadingState text="Загрузка выплат..." />
-        ) : paymentsByMonth.length === 0 ? (
+        ) : filteredHistory.length === 0 ? (
           <EmptyState>Выплаты ещё не зафиксированы</EmptyState>
         ) : (
-          <div className="space-y-6">
-            {paymentsByMonth.map(([month, monthPayments]) => {
-              const monthTotal = monthPayments.reduce(
-                (sum, payment) => sum + Number(payment.amount),
-                0,
-              );
-              return (
-                <div key={month} className="rounded-2xl border border-slate-200/80 bg-slate-50/40 p-4">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-bold capitalize text-slate-900">
-                      {formatMonthLabel(month)}
-                    </h3>
-                    <p className="text-sm font-semibold text-brand-700">
-                      Итого: {formatMoney(monthTotal)}
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    {monthPayments.map((payment) => (
-                      <div key={payment.id} className="history-item">
-                        <div>
-                          <p className="font-semibold text-slate-900">
-                            {expenseNameById.get(payment.expense_id) ?? "Статья расхода"}
-                          </p>
-                          <p className="text-sm text-slate-500">
-                            {formatDate(payment.payment_date)}
-                            {payment.comment ? ` · ${payment.comment}` : ""}
-                          </p>
+          <div className="overflow-x-auto">
+            <table className="data-table text-xs">
+              <thead>
+                <tr>
+                  <th>Месяц</th>
+                  <th>Получатель</th>
+                  <th className="text-right">Сумма</th>
+                  <th>Дата выплаты</th>
+                  <th>Зафиксировал</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredHistory.map((payment) => {
+                  const isEditing = editingPaymentId === payment.id && paymentEditForm;
+                  const isCurrentMonth = payment.period_month.slice(0, 7) === periodMonth;
+
+                  return (
+                    <tr
+                      key={payment.id}
+                      className={cn(isCurrentMonth && "bg-status-success-bg/40")}
+                    >
+                      <td className="capitalize">{formatMonthLabel(payment.period_month.slice(0, 7))}</td>
+                      <td className="font-medium text-slate-900">
+                        {payment.expense_name ?? "Статья расхода"}
+                      </td>
+                      <td className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            className="w-24 py-0.5 text-right"
+                            value={paymentEditForm.amount}
+                            onChange={(e) =>
+                              setPaymentEditForm({ ...paymentEditForm, amount: e.target.value })
+                            }
+                          />
+                        ) : (
+                          <span className="font-semibold text-status-success-text">
+                            {formatMoney(payment.amount)}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <Input
+                            type="date"
+                            className="w-32 py-0.5"
+                            value={paymentEditForm.payment_date}
+                            onChange={(e) =>
+                              setPaymentEditForm({
+                                ...paymentEditForm,
+                                payment_date: e.target.value,
+                              })
+                            }
+                          />
+                        ) : (
+                          formatDate(payment.payment_date)
+                        )}
+                      </td>
+                      <td className="text-muted">{payment.created_by_name ?? "—"}</td>
+                      <td>
+                        <div className="flex flex-wrap gap-1">
+                          {isEditing ? (
+                            <>
+                              <Button
+                                type="button"
+                                disabled={savingPaymentId === payment.id}
+                                onClick={() => handleSavePaymentEdit(payment.id)}
+                              >
+                                {savingPaymentId === payment.id ? "…" : "OK"}
+                              </Button>
+                              <Button type="button" variant="ghost" onClick={cancelPaymentEdit}>
+                                ×
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => startPaymentEdit(payment)}
+                            >
+                              Изменить
+                            </Button>
+                          )}
                         </div>
-                        <p className="font-bold text-brand-700">{formatMoney(payment.amount)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>

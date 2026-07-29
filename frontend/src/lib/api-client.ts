@@ -440,6 +440,11 @@ export const expensesApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  updatePayment: (paymentId: string, data: Record<string, unknown>) =>
+    apiFetch<ExpensePayment>(`/operating-expenses/payments/${paymentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const scheduleApi = {
