@@ -121,6 +121,13 @@ def convert_to_bankruptcy(
                 client=client,
                 contract_total=payload.contract_total,
             )
+        from app.services.funnel import ensure_first_payment_task_for_manager_client
+
+        ensure_first_payment_task_for_manager_client(
+            db,
+            client=client,
+            actor=current_user,
+        )
         log_audit(
             db,
             user=current_user,

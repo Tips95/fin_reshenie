@@ -77,6 +77,143 @@ def _build_task_title(client_name: str, overdue_days: int, schedule_due: date) -
     )
 
 
+def _first_payment_already_recorded(db: Session, client_id: UUID) -> bool:
+    month1 = db.scalar(
+        select(PaymentSchedule)
+        .join(InstallmentPlan, InstallmentPlan.id == PaymentSchedule.installment_plan_id)
+        .where(
+            InstallmentPlan.client_id == client_id,
+            PaymentSchedule.month_number == 1,
+        )
+    )
+    return month1 is not None and month1.paid_amount > Decimal("0.00")
+
+
+def ensure_first_payment_task_for_manager_client(
+    db: Session,
+    *,
+    client: Client,
+    actor: User,
+) -> None:
+    if actor.role != UserRole.MANAGER:
+        return
+
+    existing = db.scalar(
+        select(ManagerTask).where(
+            ManagerTask.client_id == client.id,
+            ManagerTask.task_type == TaskType.FIRST_PAYMENT_RECORD,
+            ManagerTask.status == TaskStatus.OPEN,
+        )
+    )
+    if existing is not None:
+        if client.engagement_stage == EngagementStage.BANKRUPTCY:
+            existing.title = f"Зафиксировать первый платёж: {client.full_name}"
+        return
+
+    if client.engagement_stage == EngagementStage.BANKRUPTCY:
+        if _first_payment_already_recorded(db, client.id):
+            return
+        plan = db.scalar(select(InstallmentPlan).where(InstallmentPlan.client_id == client.id).limit(1))
+        if plan is None:
+            return
+        title = f"Зафиксировать первый платёж: {client.full_name}"
+        note = f"Клиент занесён менеджером {actor.full_name}"
+    elif client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION:
+        title = f"Новый клиент: {client.full_name} — зафиксировать первый платёж"
+        note = (
+            f"Менеджер {actor.full_name} добавил клиента. "
+            "После перевода на банкротство откройте карточку и внесите 1-й платёж."
+        )
+    else:
+        return
+
+    db.add(
+        ManagerTask(
+            organization_id=client.organization_id,
+            client_id=client.id,
+            assigned_manager_id=None,
+            task_type=TaskType.FIRST_PAYMENT_RECORD,
+            status=TaskStatus.OPEN,
+            source=TaskSource.AUTO,
+            title=title,
+            note=note,
+            due_date=date.today(),
+        )
+    )
+
+
+def complete_first_payment_tasks(
+    db: Session,
+    client_id: UUID,
+    *,
+    completed_by: UUID | None = None,
+) -> None:
+    tasks = list(
+        db.scalars(
+            select(ManagerTask).where(
+                ManagerTask.client_id == client_id,
+                ManagerTask.task_type == TaskType.FIRST_PAYMENT_RECORD,
+                ManagerTask.status == TaskStatus.OPEN,
+            )
+        )
+    )
+    if not tasks:
+        return
+
+    today = date.today()
+    for task in tasks:
+        task.status = TaskStatus.DONE
+        task.completed_at = today
+        if completed_by is not None:
+            task.completed_by = completed_by
+
+
+def sync_first_payment_tasks(db: Session, user: User) -> None:
+    if user.role == UserRole.CALL_CENTER:
+        return
+
+    open_tasks = list(
+        db.scalars(
+            select(ManagerTask).where(
+                ManagerTask.organization_id == user.organization_id,
+                ManagerTask.task_type == TaskType.FIRST_PAYMENT_RECORD,
+                ManagerTask.status == TaskStatus.OPEN,
+            )
+        )
+    )
+    if not open_tasks:
+        return
+
+    today = date.today()
+    for task in open_tasks:
+        client = db.get(Client, task.client_id)
+        if client is None or client.is_deleted:
+            task.status = TaskStatus.DISMISSED
+            task.completed_at = today
+            continue
+        if _first_payment_already_recorded(db, client.id):
+            task.status = TaskStatus.DONE
+            task.completed_at = today
+
+    db.commit()
+
+
+def count_open_manager_tasks(db: Session, user: User) -> int:
+    sync_overdue_tasks(db, user)
+    sync_first_payment_tasks(db, user)
+
+    stmt = select(ManagerTask).where(
+        ManagerTask.organization_id == user.organization_id,
+        ManagerTask.status == TaskStatus.OPEN,
+    )
+    if user.role == UserRole.MANAGER:
+        stmt = stmt.where(ManagerTask.assigned_manager_id == user.id)
+
+    visible_client_ids = {client.id for client in _visible_clients(db, user)}
+    tasks = list(db.scalars(stmt))
+    return sum(1 for task in tasks if task.client_id in visible_client_ids)
+
+
 def sync_overdue_tasks(db: Session, user: User) -> None:
     if user.role == UserRole.CALL_CENTER:
         return
@@ -226,6 +363,7 @@ def list_manager_tasks(
     status: TaskStatus | None = TaskStatus.OPEN,
 ) -> list[ManagerTaskResponse]:
     sync_overdue_tasks(db, user)
+    sync_first_payment_tasks(db, user)
 
     stmt = select(ManagerTask).where(ManagerTask.organization_id == user.organization_id)
     if user.role == UserRole.MANAGER:
@@ -233,9 +371,16 @@ def list_manager_tasks(
     if status is not None:
         stmt = stmt.where(ManagerTask.status == status)
 
-    tasks = list(db.scalars(stmt.order_by(ManagerTask.overdue_days.desc(), ManagerTask.created_at.desc())))
+    tasks = list(db.scalars(stmt))
     visible_client_ids = {client.id for client in _visible_clients(db, user)}
     filtered = [task for task in tasks if task.client_id in visible_client_ids]
+    filtered.sort(
+        key=lambda task: (
+            0 if task.task_type == TaskType.FIRST_PAYMENT_RECORD else 1,
+            -(task.overdue_days or 0),
+            task.created_at,
+        ),
+    )
     return [_task_to_response(task, db) for task in filtered]
 
 

@@ -287,6 +287,7 @@ export const funnelApi = {
 };
 
 export const tasksApi = {
+  count: () => apiFetch<{ count: number }>("/tasks/count"),
   list: (status = "open") => apiFetch<ManagerTask[]>(`/tasks?status=${status}`),
   create: (data: Record<string, unknown>) =>
     apiFetch<ManagerTask>("/tasks", { method: "POST", body: JSON.stringify(data) }),

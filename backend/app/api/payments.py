@@ -89,6 +89,15 @@ def create_payment(
 
     sync_client_payment_schedules(db, payload.client_id)
 
+    from app.services.funnel import _first_payment_already_recorded, complete_first_payment_tasks
+
+    if not payload.is_refund and _first_payment_already_recorded(db, payload.client_id):
+        complete_first_payment_tasks(
+            db,
+            payload.client_id,
+            completed_by=current_user.id,
+        )
+
     log_audit(
         db,
         user=current_user,

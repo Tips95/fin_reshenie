@@ -12,9 +12,11 @@ from app.schemas.funnel import (
     ManagerTaskCreate,
     ManagerTaskResponse,
     ManagerTaskUpdate,
+    OpenTasksCount,
 )
 from app.services.funnel import (
     create_manual_task,
+    count_open_manager_tasks,
     get_funnel_overview,
     list_manager_tasks,
     update_manager_task,
@@ -29,6 +31,14 @@ def funnel_overview(
     db: Session = Depends(get_db),
 ) -> FunnelOverview:
     return get_funnel_overview(db, current_user)
+
+
+@router.get("/count", response_model=OpenTasksCount)
+def get_open_tasks_count(
+    current_user: User = Depends(require_owner_or_manager),
+    db: Session = Depends(get_db),
+) -> OpenTasksCount:
+    return OpenTasksCount(count=count_open_manager_tasks(db, current_user))
 
 
 @router.get("", response_model=list[ManagerTaskResponse])

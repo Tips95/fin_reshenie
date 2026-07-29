@@ -40,6 +40,7 @@ class ProcedureStage(str, enum.Enum):
 
 class TaskType(str, enum.Enum):
     OVERDUE_PAYMENT = "overdue_payment"
+    FIRST_PAYMENT_RECORD = "first_payment_record"
     DEFERRAL_REVIEW = "deferral_review"
     MANUAL = "manual"
 

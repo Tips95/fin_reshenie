@@ -116,3 +116,34 @@ class TestOverdueTaskSync:
         sync_overdue_tasks(db, make_user())
 
         db.add.assert_not_called()
+
+
+class TestFirstPaymentTask:
+    def test_creates_task_when_manager_adds_document_collection_client(self):
+        from app.models.enums import EngagementStage, TaskType, UserRole
+        from app.services.funnel import ensure_first_payment_task_for_manager_client
+
+        client = SimpleNamespace(
+            id=CLIENT_ID,
+            organization_id=ORG_ID,
+            full_name="Петров Пётр",
+            engagement_stage=EngagementStage.DOCUMENT_COLLECTION,
+            is_deleted=False,
+        )
+        manager = SimpleNamespace(
+            id=uuid.uuid4(),
+            organization_id=ORG_ID,
+            role=UserRole.MANAGER,
+            full_name="Менеджер",
+        )
+
+        db = MagicMock()
+        db.scalar.side_effect = [None]
+
+        ensure_first_payment_task_for_manager_client(db, client=client, actor=manager)
+
+        db.add.assert_called_once()
+        created = db.add.call_args.args[0]
+        assert created.task_type == TaskType.FIRST_PAYMENT_RECORD
+        assert created.assigned_manager_id is None
+        assert "Петров" in created.title

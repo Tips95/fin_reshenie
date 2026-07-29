@@ -51,3 +51,7 @@ class ManagerTaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     note: str | None = Field(default=None, max_length=2000)
     due_date: date | None = None
+
+
+class OpenTasksCount(BaseModel):
+    count: int

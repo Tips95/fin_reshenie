@@ -62,8 +62,6 @@ const EMPTY_SCHEDULE_DRAFT: ScheduleDraft = {
   pendingWaives: [],
 };
 
-const MANAGER_FIRST_COMMISSION = 10000;
-
 type ToastState = {
   message: string;
   tone: "success" | "error" | "info";
@@ -188,10 +186,7 @@ export default function ClientDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
-  const [editingContractAmount, setEditingContractAmount] = useState(false);
-  const [contractAmountValue, setContractAmountValue] = useState("");
   const [scheduleContractDraft, setScheduleContractDraft] = useState("");
-  const [contractAmountSaving, setContractAmountSaving] = useState(false);
   const [deferringId, setDeferringId] = useState<string | null>(null);
   const [deferForm, setDeferForm] = useState({ deferred_until: "", comment: "" });
   const [notePanelId, setNotePanelId] = useState<string | null>(null);
@@ -691,31 +686,6 @@ export default function ClientDetailPage() {
     }
   }
 
-  async function handleSaveContractAmount() {
-    if (!client || !isDetail(client) || !client.installment_plan) return;
-    const amountError = validatePositiveAmount(contractAmountValue, { label: "Сумма договора" });
-    if (amountError) {
-      showToast(amountError, "error");
-      return;
-    }
-    setContractAmountSaving(true);
-    try {
-      await installmentApi.update(client.id, client.installment_plan.id, {
-        total_amount: Number(contractAmountValue).toFixed(2),
-      });
-      setEditingContractAmount(false);
-      await refreshClient();
-      showToast("Сумма договора сохранена");
-    } catch (error) {
-      showToast(
-        error instanceof ApiRequestError ? error.message : "Не удалось сохранить сумму договора",
-        "error",
-      );
-    } finally {
-      setContractAmountSaving(false);
-    }
-  }
-
   function startDefer(item: PaymentScheduleItem) {
     setDeferringId(item.id);
     setDeferForm({
@@ -1042,7 +1012,6 @@ export default function ClientDetailPage() {
       }
 
       resetScheduleDraft();
-      setEditingContractAmount(false);
       await refreshClient();
       showToast(scheduleDirty && needsContractUpdate ? "Договор и график сохранены" : scheduleDirty ? "График платежей сохранён" : "Сумма договора сохранена");
     } catch (error) {
@@ -1122,9 +1091,6 @@ export default function ClientDetailPage() {
     }
     if (canEditClient && docCollection) {
       sections.push({ id: "section-doc", label: "Сбор документов" });
-    }
-    if (isBankruptcy && canEditClient && detail.installment_plan) {
-      sections.push({ id: "section-contract", label: "Сумма договора" });
     }
     if (isBankruptcy) {
       if (isOwner) {
@@ -1352,49 +1318,6 @@ export default function ClientDetailPage() {
       ? formatScheduleMismatchMessage(effectiveScheduleContract, draftPlannedTotal)
       : "";
 
-  function renderManagerCommissionCard() {
-    if (!showManagerCommission) return null;
-
-    return (
-      <div
-        className={cn(
-          "mt-3 rounded-md border px-3 py-2",
-          managerCommissionCollected
-            ? "border-status-success-border bg-status-success-bg"
-            : "border-status-warning-border bg-status-warning-bg",
-        )}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">
-              Менеджерские {formatMoney(MANAGER_FIRST_COMMISSION)}
-            </p>
-            <p className="text-xs text-muted">
-              С первого платежа клиента ({formatMoney(firstScheduleMonth?.planned_amount ?? 0)}).
-              {managerCommissionCollected
-                ? isDetail(client) && client.manager_first_commission_collected_by_name
-                  ? ` Отметил ${client.manager_first_commission_collected_by_name}.`
-                  : " Выдано."
-                : " Отметьте, если менеджер уже забрал."}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant={managerCommissionCollected ? "secondary" : "primary"}
-            disabled={commissionSaving}
-            onClick={() => handleToggleManagerCommission(!managerCommissionCollected)}
-          >
-            {commissionSaving
-              ? "Сохранение…"
-              : managerCommissionCollected
-                ? "Снять отметку"
-                : "Менеджер забрал 10 000 ₽"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   function renderManualPaymentForm() {
     if (!canRecordSchedulePayment || !detail || !isBankruptcy) {
       return null;
@@ -1456,7 +1379,6 @@ export default function ClientDetailPage() {
             Сохранить платёж
           </Button>
         </form>
-        {renderManagerCommissionCard()}
       </Card>
     );
   }
@@ -1514,17 +1436,6 @@ export default function ClientDetailPage() {
                 {exporting ? "Выгрузка..." : "Excel"}
               </Button>
             )}
-            <Badge
-              tone={
-                client.status === "active"
-                  ? "success"
-                  : client.status === "defaulted"
-                    ? "danger"
-                    : "default"
-              }
-            >
-              {statusLabel(client.status)}
-            </Badge>
           </div>
         }
       />
@@ -1573,6 +1484,24 @@ export default function ClientDetailPage() {
               {overdueScheduleItems.length > 0 ? (
                 <Badge tone="danger">Просрочка: {overdueScheduleItems.length} мес.</Badge>
               ) : null}
+              {isOwner ? (
+                <>
+                  <span>
+                    <span className="text-muted">Получено:</span>{" "}
+                    <strong>{formatMoney(collectedTotal)}</strong>
+                  </span>
+                  <span>
+                    <span className="text-muted">Прибыль:</span>{" "}
+                    <strong
+                      className={
+                        clientProfit >= 0 ? "text-status-success-text" : "text-status-danger-text"
+                      }
+                    >
+                      {formatMoney(clientProfit)}
+                    </strong>
+                  </span>
+                </>
+              ) : null}
             </div>
           ) : null}
           {clientNavSections.length > 0 ? (
@@ -1620,7 +1549,7 @@ export default function ClientDetailPage() {
         >
           <SectionTitle
             title="Данные клиента"
-            description={client.phone}
+            description="Контакты, даты и статус"
           />
           <div className="space-y-4">
             {isOwner && (
@@ -1720,13 +1649,7 @@ export default function ClientDetailPage() {
             </div>
 
             {isDetail(client) && (
-              <>
-                <div>
-                  <Badge tone={isBankruptcy ? "success" : "warning"}>
-                    {engagementStageLabel(client.engagement_stage)}
-                  </Badge>
-                </div>
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                   <FormField label="Дата договора (1-й месяц графика)">
                     <Input
                       type="date"
@@ -1789,7 +1712,6 @@ export default function ClientDetailPage() {
                     </FormField>
                   )}
                 </div>
-              </>
             )}
           </div>
         </Card>
@@ -1805,8 +1727,8 @@ export default function ClientDetailPage() {
             title="Сбор документов"
             description={
               isBankruptcy
-                ? `История сбора: ${formatMoney(docCollection.total_amount)} (${formatMoney(docCollection.collection_fee)} в кассу + ${formatMoney(docCollection.notary_fee)} нотариус + ${formatMoney(docCollection.manager_commission)} менеджеру). Выписки/госпошлина учитываются отдельно`
-                : `Единоразовая оплата ${formatMoney(docCollection.total_amount)}: сбор ${formatMoney(docCollection.collection_fee)} + нотариус ${formatMoney(docCollection.notary_fee)} + менеджеру ${formatMoney(docCollection.manager_commission)}`
+                ? `Оплачено ${formatDate(docCollection.paid_date ?? client.contract_date)} · ${formatMoney(docCollection.total_amount)}`
+                : `Единоразовая оплата ${formatMoney(docCollection.total_amount)}`
             }
           />
           {!isBankruptcy && docCollection.status === "pending" && editingDocCollectionAmounts ? (
@@ -1889,6 +1811,7 @@ export default function ClientDetailPage() {
               </div>
             </div>
           ) : (
+            !isBankruptcy ? (
             <>
               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="К оплате" value={formatMoney(docCollection.total_amount)} tone="brand" />
@@ -1919,6 +1842,7 @@ export default function ClientDetailPage() {
                 </div>
               )}
             </>
+            ) : null
           )}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Badge tone={docCollection.status === "paid" ? "success" : "warning"}>
@@ -2047,100 +1971,6 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      {detail && isBankruptcy && isOwner && (
-        <Card className="border-t-4 border-t-slate-300 opacity-95">
-          <SectionTitle
-            title="Прибыль по клиенту"
-            description="Получено по платежам минус обязательные расходы"
-          />
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Получено" value={formatMoney(collectedTotal)} tone="success" />
-            <StatCard
-              label="Обязательные расходы"
-              value={formatMoney(mandatoryPaidTotal)}
-              tone="warning"
-            />
-            <StatCard
-              label="Прибыль"
-              value={formatMoney(clientProfit)}
-              tone={clientProfit >= 0 ? "success" : "danger"}
-            />
-            <StatCard
-              label="Остаток по договору"
-              value={formatMoney(remainder)}
-              tone={remainder > 0 ? "warning" : "success"}
-            />
-          </div>
-        </Card>
-      )}
-
-      {detail && isBankruptcy && canEditClient && detail.installment_plan && (
-        <Card
-          id="section-contract"
-          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-violet-600")}
-        >
-          <SectionTitle
-            title="Сумма договора"
-            description={
-              isManualInstallment
-                ? "Можно изменить здесь или в блоке «График платежей». При расхождении последний месяц подстроится автоматически"
-                : "Можно изменить здесь или в графике — система подстроит последний неоплаченный месяц"
-            }
-          />
-          {isManualInstallment && planContractTotal > 0 && hasScheduleDraftRows && scheduleMismatchMessage ? (
-            <p className="mb-3 rounded-md border border-status-warning-border bg-status-warning-bg px-3 py-2 text-xs text-status-warning-text">
-              {scheduleMismatchMessage}. Сохраните изменения — суммы выровняются автоматически или нажмите «Подогнать последний месяц» в графике.
-            </p>
-          ) : null}
-          {editingContractAmount ? (
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[220px]">
-                <FormField label="Сумма договора, ₽">
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1000}
-                    value={contractAmountValue}
-                    onChange={(e) => setContractAmountValue(e.target.value)}
-                  />
-                </FormField>
-              </div>
-              <Button
-                type="button"
-                disabled={contractAmountSaving}
-                onClick={handleSaveContractAmount}
-              >
-                {contractAmountSaving ? "Сохранение..." : "Сохранить"}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setEditingContractAmount(false);
-                  setContractAmountValue(String(contractTotal));
-                }}
-              >
-                Отмена
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-lg font-bold text-slate-900">{formatMoney(contractTotal)}</p>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setContractAmountValue(String(contractTotal));
-                  setEditingContractAmount(true);
-                }}
-              >
-                Изменить сумму договора
-              </Button>
-            </div>
-          )}
-        </Card>
-      )}
-
       {detail && isBankruptcy && (
         <>
           {detail.matched_tier && (
@@ -2164,10 +1994,6 @@ export default function ClientDetailPage() {
                   <p className="mt-1 font-medium text-slate-900">
                     {formatMoney(detail.matched_tier.total_cost)}
                   </p>
-                </div>
-                <div>
-                  <p className="text-slate-500">Фактическая сумма договора</p>
-                  <p className="mt-1 font-medium text-slate-900">{formatMoney(contractTotal)}</p>
                 </div>
                 <div>
                   <p className="text-slate-500">Срок</p>
@@ -2517,20 +2343,6 @@ export default function ClientDetailPage() {
                             {item.deferred_until && !item.deferral_comment && (
                               <p className="mt-0.5 text-[10px] text-amber-600">
                                 до {formatDate(item.deferred_until)}
-                              </p>
-                            )}
-                            {item.month_number === 1 && firstMonthPaid && canRecordSchedulePayment && (
-                              <p
-                                className={cn(
-                                  "mt-0.5 text-[10px] font-medium",
-                                  managerCommissionCollected
-                                    ? "text-status-success-text"
-                                    : "text-status-warning-text",
-                                )}
-                              >
-                                {managerCommissionCollected
-                                  ? "10 000 ₽ менеджеру выдано"
-                                  : "10 000 ₽ менеджеру не отмечено"}
                               </p>
                             )}
                           </td>

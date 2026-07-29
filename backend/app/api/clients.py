@@ -48,6 +48,7 @@ from app.services.client_duplicates import (
     find_existing_client,
     phone_has_minimum_digits,
 )
+from app.services.funnel import ensure_first_payment_task_for_manager_client
 from app.services.mandatory_payments import create_default_mandatory_payments
 from app.services.document_collection import (
     create_document_collection,
@@ -365,6 +366,11 @@ def create_client(
                 _create_installment_for_client(
                     db, client=client, organization_id=current_user.organization_id
                 )
+        ensure_first_payment_task_for_manager_client(
+            db,
+            client=client,
+            actor=current_user,
+        )
         db.commit()
     except HTTPException:
         db.rollback()

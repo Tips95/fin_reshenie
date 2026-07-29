@@ -136,8 +136,8 @@ export default function TasksPage() {
 
       <Card>
         <SectionTitle
-          title="Задачи по просрочкам"
-          description="Появляются после конца месяца, если платёж не поступил. «Выполнено» — звонок сделан; задача вернётся только при усилении просрочки (4, 8, 15+ дней)."
+          title="Открытые задачи"
+          description="Просрочки и напоминания зафиксировать первый платёж по новым клиентам от менеджеров."
           action={
             <Badge tone={tasks.length > 0 ? "danger" : "success"}>
               Открытых: {tasks.length}
@@ -146,7 +146,7 @@ export default function TasksPage() {
         />
         {tasks.length === 0 ? (
           <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-4 text-center text-xs text-emerald-800">
-            Открытых задач нет — все просрочки обработаны или оплачены.
+            Открытых задач нет.
           </p>
         ) : (
           <div className="space-y-2">
@@ -158,10 +158,13 @@ export default function TasksPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={bucketTone(task.overdue_days)}>
-                        {overdueBucketLabel(task.overdue_days)}
-                      </Badge>
-                      <Badge tone="default">{statusLabel(task.task_type)}</Badge>
+                      {task.task_type === "overdue_payment" ? (
+                        <Badge tone={bucketTone(task.overdue_days)}>
+                          {overdueBucketLabel(task.overdue_days)}
+                        </Badge>
+                      ) : (
+                        <Badge tone="warning">{statusLabel(task.task_type)}</Badge>
+                      )}
                     </div>
                     <p className="mt-2 font-semibold text-slate-900">{task.title}</p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">

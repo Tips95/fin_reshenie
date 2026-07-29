@@ -71,6 +71,7 @@ export function statusLabel(status: string): string {
     done: "Выполнена",
     dismissed: "Отклонена",
     overdue_payment: "Просрочка",
+    first_payment_record: "Первый платёж",
     manual: "Ручная",
     pending: "Ожидает",
     paid: "Оплачен",

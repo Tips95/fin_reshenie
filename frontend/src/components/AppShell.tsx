@@ -7,6 +7,8 @@ import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { LogoMark } from "@/components/ui";
 import { APP_CREATOR, APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
+import { cn } from "@/lib/cn";
+import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
@@ -59,6 +61,7 @@ const MOBILE_PRIMARY_HREFS = ["/", "/clients/collection", "/clients/contracts", 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const openTasksCount = useOpenTasksCount();
 
   const visibleNav = navItems.filter((item) => {
     if (item.ownerOnly && user?.role !== "owner") return false;
@@ -80,14 +83,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <nav className="mt-2 space-y-0.5">
             {visibleNav.map((item) => {
               const active = isNavActive(pathname, item.href);
+              const badge = item.href === "/tasks" ? openTasksCount : 0;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={active ? "nav-item-active" : "nav-item-inactive"}
+                  className={cn(active ? "nav-item-active" : "nav-item-inactive", "relative")}
                 >
                   <span className="w-4 text-center text-[11px] opacity-70">{item.icon}</span>
                   {item.label}
+                  {badge > 0 ? (
+                    <span className="absolute right-1 top-1/2 flex h-4 min-w-4 -translate-y-1/2 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -155,6 +164,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             items={visibleNav}
             primaryHrefs={MOBILE_PRIMARY_HREFS}
             pathname={pathname}
+            badges={{ "/tasks": openTasksCount }}
             extraLinks={[{ href: "/login", label: "Товарная рассрочка" }]}
           />
         </div>
