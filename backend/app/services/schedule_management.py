@@ -32,7 +32,7 @@ def _sync_plan_totals(db: Session, plan: InstallmentPlan) -> None:
         )
     )
     plan.total_months = len(schedules)
-    if plan.pricing_tier_id is not None:
+    if schedules:
         plan.total_amount = sum((item.planned_amount for item in schedules), Decimal("0.00"))
 
 

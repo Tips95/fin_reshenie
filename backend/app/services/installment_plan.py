@@ -74,11 +74,6 @@ def update_installment_plan_total_amount(
         plan.total_amount = new_total
         return plan
 
-    if plan.pricing_tier_id is None:
-        plan.total_amount = new_total
-        assert_manual_schedule_matches_contract(plan, schedules)
-        return plan
-
     planned_total = _schedule_planned_total(schedules)
     delta = new_total - planned_total
     if delta == Decimal("0.00"):

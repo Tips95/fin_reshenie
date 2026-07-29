@@ -190,6 +190,7 @@ export default function ClientDetailPage() {
   const [nameSaving, setNameSaving] = useState(false);
   const [editingContractAmount, setEditingContractAmount] = useState(false);
   const [contractAmountValue, setContractAmountValue] = useState("");
+  const [scheduleContractDraft, setScheduleContractDraft] = useState("");
   const [contractAmountSaving, setContractAmountSaving] = useState(false);
   const [deferringId, setDeferringId] = useState<string | null>(null);
   const [deferForm, setDeferForm] = useState({ deferred_until: "", comment: "" });
@@ -354,6 +355,12 @@ export default function ClientDetailPage() {
       setScheduleOpen(true);
     }
   }, [scheduleDraft, client]);
+
+  useEffect(() => {
+    if (!client || !isDetail(client) || !client.installment_plan) return;
+    if (isScheduleDraftDirty(scheduleDraft, client.payment_schedule ?? [])) return;
+    setScheduleContractDraft(formatAmountInput(client.installment_plan.total_amount));
+  }, [client, scheduleDraft]);
 
   function isDetail(data: ClientDetail | ClientBrief | null): data is ClientDetail {
     return data !== null && "debt_amount" in data;
@@ -691,18 +698,6 @@ export default function ClientDetailPage() {
       showToast(amountError, "error");
       return;
     }
-    const newTotal = Number(contractAmountValue);
-    const schedulePlanned = client.payment_schedule.reduce(
-      (sum, item) => sum + Number(item.planned_amount),
-      0,
-    );
-    if (schedulePlanned > 0) {
-      const mismatch = formatScheduleMismatchMessage(newTotal, schedulePlanned);
-      if (mismatch) {
-        showToast(mismatch, "error");
-        return;
-      }
-    }
     setContractAmountSaving(true);
     try {
       await installmentApi.update(client.id, client.installment_plan.id, {
@@ -807,6 +802,9 @@ export default function ClientDetailPage() {
   function resetScheduleDraft() {
     setScheduleDraft(EMPTY_SCHEDULE_DRAFT);
     setScheduleError(null);
+    if (client && isDetail(client) && client.installment_plan) {
+      setScheduleContractDraft(formatAmountInput(client.installment_plan.total_amount));
+    }
   }
 
   function handleAddPendingMonth() {
@@ -896,30 +894,133 @@ export default function ClientDetailPage() {
     }));
   }
 
-  async function handleSaveScheduleDraft() {
-    if (!client || !isDetail(client) || !client.installment_plan) return;
+  function syncScheduleContractToDraftTotal() {
+    setScheduleContractDraft(formatAmountInput(String(draftPlannedTotalForActions())));
+  }
 
-    const targetContractTotal = Number(client.installment_plan.total_amount);
-    const draftPlannedTotal = computeScheduleDraftPlannedTotal(
-      client.payment_schedule,
-      scheduleDraft,
-    );
-    const visibleMonths =
-      client.payment_schedule.filter((item) => !scheduleDraft.pendingDeletes.includes(item.id))
-        .length + scheduleDraft.pendingAdds.length;
+  function draftPlannedTotalForActions(): number {
+    if (!client || !isDetail(client)) return 0;
+    return computeScheduleDraftPlannedTotal(client.payment_schedule, scheduleDraft);
+  }
 
-    if (targetContractTotal <= 0 && visibleMonths > 0) {
-      const message = "Сначала укажите сумму договора, затем распишите её по месяцам";
-      setScheduleError(message);
-      showToast(message, "error");
+  function adjustLastScheduleMonthToContract() {
+    if (!client || !isDetail(client)) return;
+    const target = Number(scheduleContractDraft) || Number(client.installment_plan?.total_amount ?? 0);
+    const draftPlanned = draftPlannedTotalForActions();
+    const delta = Math.round(target - draftPlanned);
+    if (delta === 0) return;
+
+    const scheduleItems = client.payment_schedule;
+    const visible = scheduleItems.filter((item) => !scheduleDraft.pendingDeletes.includes(item.id));
+    const lastAdd = scheduleDraft.pendingAdds[scheduleDraft.pendingAdds.length - 1];
+
+    if (lastAdd) {
+      const paidFloor = 0;
+      const newVal = Math.max(paidFloor + 1, Math.round(Number(lastAdd.planned_amount) + delta));
+      updatePendingAdd(lastAdd.tempId, "planned_amount", String(newVal));
       return;
     }
 
-    if (targetContractTotal > 0 && visibleMonths > 0) {
-      const mismatch = formatScheduleMismatchMessage(targetContractTotal, draftPlannedTotal);
-      if (mismatch) {
-        setScheduleError(mismatch);
-        showToast(mismatch, "error");
+    const adjustable = visible.filter((item) => item.status !== "paid");
+    const targetItem = adjustable[adjustable.length - 1] ?? visible[visible.length - 1];
+
+    if (!targetItem) {
+      if (delta > 0) {
+        const startDate =
+          client.installment_plan?.start_date ?? client.contract_date ?? new Date().toISOString().slice(0, 10);
+        setScheduleDraft((current) => ({
+          ...current,
+          pendingAdds: [
+            ...current.pendingAdds,
+            {
+              tempId: crypto.randomUUID(),
+              planned_amount: String(delta),
+              due_date: startDate,
+            },
+          ],
+        }));
+      }
+      return;
+    }
+
+    const values = getScheduleEditValues(targetItem, scheduleDraft.edits);
+    const minAmount = Math.max(1, Math.round(Number(targetItem.paid_amount)));
+    const newAmount = Math.max(minAmount, Math.round(Number(values.planned_amount) + delta));
+    setScheduleDraft((current) => ({
+      ...current,
+      edits: {
+        ...current.edits,
+        [targetItem.id]: { ...values, planned_amount: String(newAmount) },
+      },
+    }));
+  }
+
+  async function applyScheduleDraftChanges() {
+    if (!client || !isDetail(client) || !client.installment_plan) return;
+
+    for (const id of scheduleDraft.pendingDeletes) {
+      await scheduleApi.delete(id);
+    }
+
+    for (const item of client.payment_schedule) {
+      if (scheduleDraft.pendingDeletes.includes(item.id)) {
+        continue;
+      }
+
+      const values = getScheduleEditValues(item, scheduleDraft.edits);
+      const payload: { planned_amount?: string; due_date?: string } = {};
+
+      if (values.planned_amount !== item.planned_amount) {
+        payload.planned_amount = Number(values.planned_amount).toFixed(2);
+      }
+      if (values.due_date !== item.due_date) {
+        payload.due_date = values.due_date;
+      }
+
+      if (Object.keys(payload).length > 0) {
+        await scheduleApi.update(item.id, payload);
+      }
+    }
+
+    for (const add of scheduleDraft.pendingAdds) {
+      if (!add.planned_amount || Number(add.planned_amount) <= 0) {
+        throw new Error("Укажите сумму для каждого нового месяца");
+      }
+
+      await scheduleApi.addMonth(client.id, client.installment_plan.id, {
+        planned_amount: Number(add.planned_amount).toFixed(2),
+        due_date: add.due_date || undefined,
+      });
+    }
+
+    for (const id of scheduleDraft.pendingWaives) {
+      await scheduleApi.waiveOverdue(id);
+    }
+  }
+
+  async function handleSaveContractAndSchedule() {
+    if (!client || !isDetail(client) || !client.installment_plan) return;
+
+    const draftPlanned = computeScheduleDraftPlannedTotal(client.payment_schedule, scheduleDraft);
+    const scheduleDirty = isScheduleDraftDirty(scheduleDraft, client.payment_schedule);
+    const savedContract = Number(client.installment_plan.total_amount);
+    let targetContract = Number(scheduleContractDraft);
+    if (!Number.isFinite(targetContract) || targetContract <= 0) {
+      targetContract = draftPlanned;
+    }
+    const contractDirty = Math.round(targetContract) !== Math.round(savedContract);
+
+    if (!scheduleDirty && !contractDirty) return;
+
+    if (scheduleDirty && draftPlanned <= 0) {
+      showToast("Укажите суммы для месяцев графика", "error");
+      return;
+    }
+
+    if (contractDirty || scheduleDirty) {
+      const amountError = validatePositiveAmount(String(targetContract), { label: "Сумма договора" });
+      if (amountError) {
+        showToast(amountError, "error");
         return;
       }
     }
@@ -928,55 +1029,29 @@ export default function ClientDetailPage() {
     setScheduleError(null);
 
     try {
-      for (const id of scheduleDraft.pendingDeletes) {
-        await scheduleApi.delete(id);
+      if (scheduleDirty) {
+        await applyScheduleDraftChanges();
       }
 
-      for (const item of client.payment_schedule) {
-        if (scheduleDraft.pendingDeletes.includes(item.id)) {
-          continue;
-        }
-
-        const values = getScheduleEditValues(item, scheduleDraft.edits);
-        const payload: { planned_amount?: string; due_date?: string } = {};
-
-        if (values.planned_amount !== item.planned_amount) {
-          payload.planned_amount = Number(values.planned_amount).toFixed(2);
-        }
-        if (values.due_date !== item.due_date) {
-          payload.due_date = values.due_date;
-        }
-
-        if (Object.keys(payload).length > 0) {
-          await scheduleApi.update(item.id, payload);
-        }
-      }
-
-      for (const add of scheduleDraft.pendingAdds) {
-        if (!add.planned_amount || Number(add.planned_amount) <= 0) {
-          throw new Error("Укажите сумму для каждого нового месяца");
-        }
-
-        await scheduleApi.addMonth(client.id, client.installment_plan.id, {
-          planned_amount: Number(add.planned_amount).toFixed(2),
-          due_date: add.due_date || undefined,
+      const needsContractUpdate =
+        contractDirty || (scheduleDirty && Math.round(targetContract) !== Math.round(draftPlanned));
+      if (needsContractUpdate) {
+        await installmentApi.update(client.id, client.installment_plan.id, {
+          total_amount: targetContract.toFixed(2),
         });
       }
 
-      for (const id of scheduleDraft.pendingWaives) {
-        await scheduleApi.waiveOverdue(id);
-      }
-
       resetScheduleDraft();
+      setEditingContractAmount(false);
       await refreshClient();
-      showToast("График платежей сохранён");
+      showToast(scheduleDirty && needsContractUpdate ? "Договор и график сохранены" : scheduleDirty ? "График платежей сохранён" : "Сумма договора сохранена");
     } catch (error) {
       const message =
         error instanceof ApiRequestError
           ? error.message
           : error instanceof Error
             ? error.message
-            : "Не удалось сохранить график";
+            : "Не удалось сохранить изменения";
       setScheduleError(message);
       showToast(message, "error");
     } finally {
@@ -1263,15 +1338,19 @@ export default function ClientDetailPage() {
   const planContractTotal = detail?.installment_plan ? Number(detail.installment_plan.total_amount) : 0;
   const isManualInstallment = detail?.installment_plan?.pricing_tier_id == null;
   const draftPlannedTotal = computeScheduleDraftPlannedTotal(schedule, scheduleDraft);
+  const effectiveScheduleContract = Number(scheduleContractDraft) || planContractTotal;
+  const contractDraftDirty =
+    canEditSchedule &&
+    scheduleContractDraft !== "" &&
+    Math.round(effectiveScheduleContract) !== Math.round(planContractTotal);
+  const contractScheduleDirty = scheduleDraftDirty || contractDraftDirty;
   const hasScheduleDraftRows =
     schedule.some((item) => !scheduleDraft.pendingDeletes.includes(item.id)) ||
     scheduleDraft.pendingAdds.length > 0;
   const scheduleMismatchMessage =
-    planContractTotal > 0 && hasScheduleDraftRows
-      ? formatScheduleMismatchMessage(planContractTotal, draftPlannedTotal)
-      : planContractTotal <= 0 && hasScheduleDraftRows
-        ? "Укажите сумму договора — иначе нельзя сохранить график"
-        : "";
+    hasScheduleDraftRows || contractDraftDirty
+      ? formatScheduleMismatchMessage(effectiveScheduleContract, draftPlannedTotal)
+      : "";
 
   function renderManagerCommissionCard() {
     if (!showManagerCommission) return null;
@@ -2004,20 +2083,13 @@ export default function ClientDetailPage() {
             title="Сумма договора"
             description={
               isManualInstallment
-                ? "Задайте общую сумму, затем распишите её по месяцам в графике — суммы должны совпасть"
-                : "Можно задать вручную — сумма синхронизируется с графиком платежей"
+                ? "Можно изменить здесь или в блоке «График платежей». При расхождении последний месяц подстроится автоматически"
+                : "Можно изменить здесь или в графике — система подстроит последний неоплаченный месяц"
             }
           />
-          {isManualInstallment && planContractTotal > 0 && hasScheduleDraftRows ? (
-            <p
-              className={
-                scheduleMismatchMessage
-                  ? "mb-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2 text-xs text-status-danger-text"
-                  : "mb-3 rounded-md border border-status-success-border bg-status-success-bg px-3 py-2 text-xs text-status-success-text"
-              }
-            >
-              {scheduleMismatchMessage ||
-                `График совпадает с договором: ${formatMoney(planContractTotal)}`}
+          {isManualInstallment && planContractTotal > 0 && hasScheduleDraftRows && scheduleMismatchMessage ? (
+            <p className="mb-3 rounded-md border border-status-warning-border bg-status-warning-bg px-3 py-2 text-xs text-status-warning-text">
+              {scheduleMismatchMessage}. Сохраните изменения — суммы выровняются автоматически или нажмите «Подогнать последний месяц» в графике.
             </p>
           ) : null}
           {editingContractAmount ? (
@@ -2246,8 +2318,8 @@ export default function ClientDetailPage() {
             description={
               canEditSchedule
                 ? isManualInstallment
-                  ? "Индивидуальный график: добавьте месяцы и суммы, итог должен совпасть с суммой договора"
-                  : "1-й месяц = дата договора, дальше по месяцам. Раскройте, чтобы изменить суммы или добавить месяцы"
+                  ? "Задайте сумму договора и месяцы — сохранение выровняет расхождения автоматически"
+                  : "1-й месяц = дата договора, дальше по месяцам. Сумму договора можно менять прямо здесь"
                 : "Раскройте, чтобы посмотреть помесячный график"
             }
             badge={
@@ -2266,6 +2338,41 @@ export default function ClientDetailPage() {
             onOpenChange={setScheduleOpen}
           >
             {canEditSchedule && detail?.installment_plan ? (
+              <div className="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-border bg-surface-muted p-3">
+                <div className="min-w-[180px]">
+                  <FormField label="Сумма договора, ₽">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={scheduleContractDraft}
+                      onChange={(e) => setScheduleContractDraft(e.target.value)}
+                    />
+                  </FormField>
+                </div>
+                <div className="text-xs text-muted">
+                  <p>
+                    По графику: <strong className="text-slate-900">{formatMoney(draftPlannedTotal)}</strong>
+                  </p>
+                  {scheduleMismatchMessage ? (
+                    <p className="mt-1 text-status-warning-text">{scheduleMismatchMessage}</p>
+                  ) : (
+                    <p className="mt-1 text-status-success-text">Суммы совпадают</p>
+                  )}
+                </div>
+                {scheduleMismatchMessage ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="secondary" onClick={syncScheduleContractToDraftTotal}>
+                      Договор = график
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={adjustLastScheduleMonthToContract}>
+                      Подогнать последний месяц
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {canEditSchedule && detail?.installment_plan ? (
               <div className="mb-2 flex justify-end">
                 <Button type="button" variant="secondary" onClick={handleAddPendingMonth}>
                   + Добавить месяц
@@ -2280,28 +2387,6 @@ export default function ClientDetailPage() {
                 {scheduleError}
               </p>
             )}
-            {canEditSchedule && hasScheduleDraftRows ? (
-              <div
-                className={
-                  scheduleMismatchMessage
-                    ? "mb-2 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2 text-xs text-status-danger-text"
-                    : "mb-2 rounded-md border border-status-success-border bg-status-success-bg px-3 py-2 text-xs text-status-success-text"
-                }
-              >
-                <p>
-                  <span className="text-muted">Сумма договора:</span>{" "}
-                  <strong>{planContractTotal > 0 ? formatMoney(planContractTotal) : "не задана"}</strong>
-                  {" · "}
-                  <span className="text-muted">По графику:</span>{" "}
-                  <strong>{formatMoney(draftPlannedTotal)}</strong>
-                </p>
-                {scheduleMismatchMessage ? (
-                  <p className="mt-1 font-medium">{scheduleMismatchMessage}</p>
-                ) : planContractTotal > 0 ? (
-                  <p className="mt-1">Суммы совпадают — можно сохранить график</p>
-                ) : null}
-              </div>
-            ) : null}
             {schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
               <EmptyState>
                 {canEditSchedule
@@ -2712,10 +2797,14 @@ export default function ClientDetailPage() {
                 </table>
               </div>
 
-              {canEditSchedule && scheduleDraftDirty && (
+              {canEditSchedule && contractScheduleDirty && (
                 <div className="sticky bottom-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 bg-white p-2">
                   <p className="text-xs font-medium text-slate-700">
-                    Есть несохранённые изменения в графике
+                    {scheduleDraftDirty && contractDraftDirty
+                      ? "Есть несохранённые изменения в договоре и графике"
+                      : scheduleDraftDirty
+                        ? "Есть несохранённые изменения в графике"
+                        : "Изменена сумма договора"}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -2729,9 +2818,15 @@ export default function ClientDetailPage() {
                     <Button
                       type="button"
                       disabled={scheduleSaving}
-                      onClick={handleSaveScheduleDraft}
+                      onClick={handleSaveContractAndSchedule}
                     >
-                      {scheduleSaving ? "Сохранение..." : "Сохранить график"}
+                      {scheduleSaving
+                        ? "Сохранение..."
+                        : scheduleDraftDirty && contractDraftDirty
+                          ? "Сохранить договор и график"
+                          : scheduleDraftDirty
+                            ? "Сохранить график"
+                            : "Сохранить сумму договора"}
                     </Button>
                   </div>
                 </div>
