@@ -34,7 +34,7 @@ class ManagerTask(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     task_type: Mapped[TaskType] = mapped_column(
         Enum(
             TaskType,
-            name="task_type",
+            name="tasktype",
             native_enum=False,
             values_callable=lambda enum: [item.value for item in enum],
         ),
