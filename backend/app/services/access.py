@@ -1,15 +1,14 @@
-from calendar import monthrange
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
-from app.models.enums import ClientStatus, EngagementStage, OrganizationType, PaymentScheduleStatus, UserRole
+from app.models.enums import EngagementStage, OrganizationType, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.organization import Organization
 from app.models.payment_schedule import PaymentSchedule
@@ -38,12 +37,12 @@ def get_organization_client(
 
 
 def manager_can_access_client(client: Client, user: User) -> bool:
+    """Сбор документов — общий пул: его ведёт отдельный сотрудник, поэтому
+    этап виден всем менеджерам независимо от закрепления. Договоры банкротства
+    остаются только у своего менеджера."""
     if client.assigned_manager_id == user.id:
         return True
-    return (
-        client.assigned_manager_id is None
-        and client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION
-    )
+    return client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION
 
 
 def ensure_client_read_access(db: Session, user: User, client_id: UUID) -> Client:
@@ -65,10 +64,7 @@ def apply_client_visibility_filter(stmt: Select, user: User) -> Select:
         stmt = stmt.where(
             or_(
                 Client.assigned_manager_id == user.id,
-                and_(
-                    Client.assigned_manager_id.is_(None),
-                    Client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION,
-                ),
+                Client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION,
             )
         )
     return stmt

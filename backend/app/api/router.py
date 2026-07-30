@@ -4,6 +4,7 @@ from app.api import (
     analytics,
     audit_logs,
     auth,
+    cashbox,
     clients,
     dashboard,
     document_collection,
@@ -25,6 +26,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(cashbox.router, prefix="/cashbox", tags=["cashbox"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(funnel.router, prefix="/funnel", tags=["funnel"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])

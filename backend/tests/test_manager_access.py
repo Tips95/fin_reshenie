@@ -46,8 +46,16 @@ class TestManagerClientAccess:
         )
         assert manager_can_access_client(client, make_manager()) is False
 
-    def test_other_manager_client_not_accessible(self):
+    def test_collection_client_of_other_manager_accessible(self):
+        """Сбором документов занимается отдельный сотрудник, поэтому этап общий."""
         client = make_client(assigned_manager_id=OTHER_MANAGER_ID)
+        assert manager_can_access_client(client, make_manager()) is True
+
+    def test_other_manager_bankruptcy_client_not_accessible(self):
+        client = make_client(
+            assigned_manager_id=OTHER_MANAGER_ID,
+            engagement_stage=EngagementStage.BANKRUPTCY,
+        )
         assert manager_can_access_client(client, make_manager()) is False
 
 

@@ -112,6 +112,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [overdueFilter, setOverdueFilter] = useState(
     searchParams.get("overdue") === "true",
   );
+  const [procedureStageFilter, setProcedureStageFilter] = useState(
+    () => searchParams.get("procedure_stage") ?? "",
+  );
   const [managerFilter, setManagerFilter] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
   const [nameSearch, setNameSearch] = useState("");
@@ -154,6 +157,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       JSON.stringify({
         statusFilter,
         overdueFilter,
+        procedureStageFilter,
         managerFilter,
         phoneSearch,
         nameSearch,
@@ -167,6 +171,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     [
       statusFilter,
       overdueFilter,
+      procedureStageFilter,
       managerFilter,
       phoneSearch,
       nameSearch,
@@ -201,6 +206,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         const data = await clientsApi.list({
           status: isCollectionView ? statusFilter || undefined : undefined,
           overdue: overdueFilter || undefined,
+          procedure_stage: isCollectionView ? undefined : procedureStageFilter || undefined,
           engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
           collection_view: isCollectionView ? collectionView : undefined,
           manager_id: managerFilter || undefined,
@@ -238,6 +244,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     isCollectionView,
     statusFilter,
     overdueFilter,
+    procedureStageFilter,
     workspaceConfig.engagementStage,
     collectionView,
     managerFilter,
@@ -505,6 +512,22 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   value={dueMonth}
                   onChange={(e) => setDueMonth(e.target.value)}
                 />
+              </div>
+            )}
+            {!isCollectionView && (
+              <div className="min-w-[140px] flex-1 sm:w-[170px] sm:flex-none">
+                <label className="mb-0.5 block text-xs text-muted">Этап процедуры</label>
+                <Select
+                  value={procedureStageFilter}
+                  onChange={(e) => setProcedureStageFilter(e.target.value)}
+                >
+                  <option value="">Все этапы</option>
+                  {PROCEDURE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
             )}
             {!isCollectionView && (

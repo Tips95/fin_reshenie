@@ -171,6 +171,7 @@ class TestExcelExport:
             status=PaymentScheduleStatus.PARTIAL,
             due_date=date(2020, 1, 1),
             deferred_until=None,
+            overdue_waived=False,
         )
         db = MagicMock()
         db.scalars.return_value = [schedule]

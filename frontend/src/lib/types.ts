@@ -245,9 +245,13 @@ export interface DashboardOverdueClientItem {
 }
 
 export interface DashboardSummary {
+  period_month: string;
+  is_current_month: boolean;
   clients_total: number;
   clients_active: number;
   clients_overdue: number;
+  clients_new_this_month: number;
+  collection_in_progress: number;
   expected_this_month: string;
   collected_this_month: string;
   overdue_amount: string;
@@ -264,6 +268,65 @@ export interface DashboardSummary {
   net_profit_this_month: string;
   open_tasks_count: number;
   overdue_clients_preview: DashboardOverdueClientItem[];
+}
+
+export interface CashboxScheduleItem {
+  schedule_id: string;
+  client_id: string;
+  client_name: string;
+  phone: string;
+  month_number: number;
+  due_date: string;
+  planned_amount: string;
+  paid_amount: string;
+  remainder: string;
+  status: PaymentScheduleStatus;
+  is_overdue: boolean;
+  overdue_days: number;
+  is_deferred: boolean;
+  manager_name: string | null;
+}
+
+export interface CashboxCollectionItem {
+  client_id: string;
+  client_name: string;
+  phone: string;
+  contract_date: string;
+  total_amount: string;
+  collection_fee: string;
+  notary_fee: string;
+  manager_commission: string;
+  waiting_days: number;
+  manager_name: string | null;
+}
+
+export interface CashboxMandatoryItem {
+  mandatory_payment_id: string;
+  client_id: string;
+  client_name: string;
+  phone: string;
+  payment_type: MandatoryPaymentType;
+  planned_amount: string;
+  paid_amount: string;
+  remainder: string;
+}
+
+export interface CashboxGroupTotals {
+  count: number;
+  amount: string;
+}
+
+export interface CashboxOverview {
+  month: string;
+  collected_in_month: string;
+  expected_total: string;
+  schedule_totals: CashboxGroupTotals;
+  collection_totals: CashboxGroupTotals;
+  mandatory_totals: CashboxGroupTotals;
+  overdue_count: number;
+  schedule_items: CashboxScheduleItem[];
+  collection_items: CashboxCollectionItem[];
+  mandatory_items: CashboxMandatoryItem[];
 }
 
 export interface ClientProfitItem {

@@ -6,7 +6,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
-from app.models.enums import ClientStatus, TaskStatus, UserRole
+from app.models.enums import ClientStatus, EngagementStage, TaskStatus, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.manager_task import ManagerTask
 from app.models.operating_expense import OperatingExpense
@@ -26,6 +26,7 @@ from app.services.document_collection_stats import (
 )
 from app.services.mandatory_payment_stats import MandatoryPaymentTotals, breakdown_from_totals, get_mandatory_paid_totals
 from app.services.client_finances import contract_totals_by_client, sum_active_contract_totals
+from app.services.phone import month_bounds
 from app.services.schedule_dates import effective_due_date, payment_window_end
 
 
@@ -34,6 +35,17 @@ def _month_bounds(today: date) -> tuple[date, date]:
     _, last_day = monthrange(today.year, today.month)
     month_end = today.replace(day=last_day)
     return month_start, month_end
+
+
+def _resolve_period(month: str | None, today: date) -> tuple[str, date, date, bool]:
+    """Границы отчётного месяца: выбранного вручную или текущего."""
+    current_key = today.strftime("%Y-%m")
+    if not month:
+        month_start, month_end = _month_bounds(today)
+        return current_key, month_start, month_end, True
+
+    month_start, month_end = month_bounds(month)
+    return month, month_start, month_end, month == current_key
 
 
 def _visible_clients_stmt(user: User) -> Select:
@@ -150,10 +162,26 @@ def _dashboard_activity_fields(
     )
 
 
-def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
+def get_dashboard_summary(
+    db: Session,
+    user: User,
+    *,
+    month: str | None = None,
+) -> DashboardSummary:
+    today = date.today()
+    period_month, month_start, month_end, is_current_month = _resolve_period(month, today)
+
     clients = list(db.scalars(_visible_clients_stmt(user)))
     active_clients = [client for client in clients if client.status == ClientStatus.ACTIVE]
     client_ids = [client.id for client in clients]
+    clients_new_this_month = sum(
+        1 for client in clients if month_start <= client.contract_date <= month_end
+    )
+    collection_in_progress = sum(
+        1
+        for client in clients
+        if client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION
+    )
     overdue_map = clients_overdue_map(db, client_ids)
     clients_overdue = sum(1 for client_id in client_ids if overdue_map.get(client_id, False))
     open_tasks_count, overdue_clients_preview = _dashboard_activity_fields(
@@ -167,9 +195,13 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
 
     if user.role != UserRole.OWNER:
         return DashboardSummary(
+            period_month=period_month,
+            is_current_month=is_current_month,
             clients_total=len(clients),
             clients_active=len(active_clients),
             clients_overdue=clients_overdue,
+            clients_new_this_month=clients_new_this_month,
+            collection_in_progress=collection_in_progress,
             expected_this_month=Decimal("0.00"),
             collected_this_month=Decimal("0.00"),
             overdue_amount=Decimal("0.00"),
@@ -189,8 +221,6 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         )
 
     monthly_expenses = _monthly_expenses_total(db, user.organization_id)
-    today = date.today()
-    month_start, month_end = _month_bounds(today)
 
     active_contract_total = sum_active_contract_totals(db, clients)
 
@@ -280,9 +310,13 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
     )
 
     return DashboardSummary(
+        period_month=period_month,
+        is_current_month=is_current_month,
         clients_total=len(clients),
         clients_active=len(active_clients),
         clients_overdue=clients_overdue,
+        clients_new_this_month=clients_new_this_month,
+        collection_in_progress=collection_in_progress,
         expected_this_month=expected_this_month,
         collected_this_month=collected_this_month,
         overdue_amount=overdue_amount,

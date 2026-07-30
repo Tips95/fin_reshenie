@@ -8,7 +8,6 @@ from app.core.database import get_db
 from app.models.enums import TaskStatus
 from app.models.user import User
 from app.schemas.funnel import (
-    FunnelOverview,
     ManagerTaskCreate,
     ManagerTaskResponse,
     ManagerTaskUpdate,
@@ -17,20 +16,11 @@ from app.schemas.funnel import (
 from app.services.funnel import (
     create_manual_task,
     count_open_manager_tasks,
-    get_funnel_overview,
     list_manager_tasks,
     update_manager_task,
 )
 
 router = APIRouter()
-
-
-@router.get("/overview", response_model=FunnelOverview)
-def funnel_overview(
-    current_user: User = Depends(require_owner_or_manager),
-    db: Session = Depends(get_db),
-) -> FunnelOverview:
-    return get_funnel_overview(db, current_user)
 
 
 @router.get("/count", response_model=OpenTasksCount)

@@ -60,6 +60,7 @@ class TestOverdueTaskSync:
             due_date=date(2020, 1, 1),
             deferred_until=None,
             status=PaymentScheduleStatus.OVERDUE,
+            overdue_waived=False,
         )
 
         db = MagicMock()
@@ -95,6 +96,7 @@ class TestOverdueTaskSync:
             due_date=due_date,
             deferred_until=None,
             status=PaymentScheduleStatus.OVERDUE,
+            overdue_waived=False,
         )
         handled_task = SimpleNamespace(
             payment_schedule_id=SCHEDULE_ID,

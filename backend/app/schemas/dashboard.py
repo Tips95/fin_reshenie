@@ -31,9 +31,13 @@ class DashboardOverdueClientItem(BaseModel):
 
 
 class DashboardSummary(BaseModel):
+    period_month: str
+    is_current_month: bool
     clients_total: int
     clients_active: int
     clients_overdue: int
+    clients_new_this_month: int = 0
+    collection_in_progress: int = 0
     expected_this_month: Decimal
     collected_this_month: Decimal
     overdue_amount: Decimal

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { Badge, Button, Card, LoadingState, PageHeader, SectionTitle, StatCard } from "@/components/ui";
+import { Badge, Button, Card, Input, LoadingState, PageHeader, SectionTitle, StatCard } from "@/components/ui";
 import { dashboardApi, exportsApi } from "@/lib/api-client";
-import { formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
+import { formatDate, formatMoney, formatMonthLabel, formatShortName, statusLabel } from "@/lib/format";
 import type {
   DashboardOverdueClientItem,
   DashboardSummary,
@@ -137,9 +137,11 @@ function DashboardSection({
 
 function MandatoryPaymentsTable({
   month,
+  monthLabel,
   total,
 }: {
   month: MandatoryPaymentBreakdown;
+  monthLabel: string;
   total: MandatoryPaymentBreakdown;
 }) {
   return (
@@ -156,7 +158,7 @@ function MandatoryPaymentsTable({
         </thead>
         <tbody>
           <tr>
-            <td data-label="Период" className="font-medium text-foreground">Этот месяц</td>
+            <td data-label="Период" className="font-medium text-foreground">{monthLabel}</td>
             <td data-label="Депозит">{formatMoney(month.deposit)}</td>
             <td data-label="Фин. управление">{formatMoney(month.financial_management)}</td>
             <td data-label="Госпошлина">{formatMoney(month.court_fee)}</td>
@@ -179,8 +181,14 @@ function MandatoryPaymentsTable({
   );
 }
 
+function currentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [month, setMonth] = useState(currentMonth);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportingOverdue, setExportingOverdue] = useState(false);
@@ -188,18 +196,21 @@ export default function DashboardPage() {
   const isOwner = user?.role === "owner";
   const canManageClients = isOwner || user?.role === "manager";
   const showOrgFinance = isOwner;
+  const monthLabel = formatMonthLabel(month);
+  const isCurrentMonth = month === currentMonth();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setSummary(normalizeSummary(await dashboardApi.summary(month)));
+    } finally {
+      setLoading(false);
+    }
+  }, [month]);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const summaryData = await dashboardApi.summary();
-        setSummary(normalizeSummary(summaryData));
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const overdueClients = summary?.overdue_clients_preview ?? [];
   const openTasksCount = summary?.open_tasks_count ?? 0;
@@ -224,7 +235,19 @@ export default function DashboardPage() {
           subtitle={`Добро пожаловать, ${user?.full_name}`}
           action={
             canManageClients ? (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Input
+                  type="month"
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value || currentMonth())}
+                  className="w-[150px]"
+                  aria-label="Отчётный месяц"
+                />
+                {isOwner && (
+                  <Link href="/cashbox">
+                    <Button type="button">Касса</Button>
+                  </Link>
+                )}
                 <Link href="/tasks">
                   <Button type="button" variant="secondary">
                     Задачи{openTasksCount > 0 ? ` (${openTasksCount})` : ""}
@@ -242,18 +265,33 @@ export default function DashboardPage() {
           }
         />
 
+        {!isCurrentMonth && (
+          <p className="alert-warning">
+            Показаны данные за {monthLabel}. Просрочка и остатки по графикам всегда считаются на
+            сегодня.{" "}
+            <button
+              type="button"
+              className="link-brand font-medium"
+              onClick={() => setMonth(currentMonth())}
+            >
+              Вернуться к текущему месяцу
+            </button>
+          </p>
+        )}
+
         <div className="stat-grid">
           {showOrgFinance ? (
             <>
               <StatCard
-                label="Чистая прибыль (месяц)"
+                label={`Чистая прибыль за ${monthLabel}`}
                 value={formatMoney(summary.net_profit_this_month)}
                 tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
               />
               <StatCard
-                label="Получено в этом месяце"
+                label={`Касса за ${monthLabel}`}
                 value={formatMoney(summary.collected_this_month)}
                 tone="success"
+                hint="Платежи по рассрочке"
               />
               <StatCard
                 label="Сумма просрочки"
@@ -315,8 +353,8 @@ export default function DashboardPage() {
           <DashboardSection
             id="dash-activity"
             tone="activity"
-            title="Активность за месяц"
-            description="Сколько человек оплатили сбор документов и заключили договор банкротства"
+            title={`Активность за ${monthLabel}`}
+            description="Сколько человек пришло, оплатило сбор документов и заключило договор банкротства"
             action={
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -334,18 +372,29 @@ export default function DashboardPage() {
               </div>
             }
           >
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="stat-grid">
+              <StatCard
+                label="Новых клиентов"
+                value={summary.clients_new_this_month}
+                tone="brand"
+                hint={`Дата договора в ${monthLabel}`}
+              />
               <StatCard
                 label="Оплатили сбор документов"
                 value={summary.document_collection_this_month.paid_count}
-                tone="brand"
                 hint="13 000 ₽ за клиента (10k + 2k + 1k)"
               />
               <StatCard
                 label="Заключили договор"
                 value={summary.contracts_signed_this_month}
                 tone="success"
-                hint="Переведены на банкротство в этом месяце"
+                hint="Переведены на банкротство"
+              />
+              <StatCard
+                label="Сейчас на сборе"
+                value={summary.collection_in_progress}
+                tone="warning"
+                hint="Текущее состояние, не зависит от месяца"
               />
             </div>
           </DashboardSection>
@@ -358,7 +407,7 @@ export default function DashboardPage() {
           >
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               <StatCard
-                label="Ожидается в этом месяце"
+                label={`Ожидается в ${monthLabel}`}
                 value={formatMoney(summary.expected_this_month)}
               />
               <StatCard label="Всего получено" value={formatMoney(summary.total_collected)} />
@@ -384,7 +433,7 @@ export default function DashboardPage() {
               />
             </div>
             <div className="mt-2 rounded-md border border-status-success-border bg-surface px-3 py-2">
-              <p className="text-xs font-semibold text-foreground">Формула за текущий месяц</p>
+              <p className="text-xs font-semibold text-foreground">Формула за {monthLabel}</p>
               <p className="mt-1 text-xs leading-relaxed text-muted">
                 Рассрочка{" "}
                 <span className="font-semibold text-foreground">
@@ -445,7 +494,7 @@ export default function DashboardPage() {
               >
                 <div className="stat-grid">
                   <StatCard
-                    label="Касса (этот месяц)"
+                    label={`Касса сбора за ${monthLabel}`}
                     value={formatMoney(summary.document_collection_this_month.collection_cash)}
                     tone="success"
                     hint={`${summary.document_collection_this_month.paid_count} оплат`}
@@ -474,6 +523,7 @@ export default function DashboardPage() {
               >
                 <MandatoryPaymentsTable
                   month={summary.mandatory_paid_this_month}
+                  monthLabel={monthLabel}
                   total={summary.mandatory_paid_total}
                 />
               </DashboardSection>
@@ -526,7 +576,7 @@ export default function DashboardPage() {
                   {exportingOverdue ? "Выгрузка..." : "Excel"}
                 </Button>
                 <Link
-                  href="/clients?overdue=true"
+                  href="/clients/contracts?overdue=true"
                   className="text-sm font-semibold text-brand-600 hover:text-brand-700"
                 >
                   Все клиенты →

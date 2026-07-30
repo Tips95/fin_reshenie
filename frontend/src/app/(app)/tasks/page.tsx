@@ -115,7 +115,10 @@ export default function TasksPage() {
         {stageFilter && (
           <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2">
             <p className="text-xs text-muted">Фильтр: {procedureStageLabel(stageFilter)}</p>
-            <Link href={`/clients?procedure_stage=${stageFilter}`} className="link-brand text-xs">
+            <Link
+              href={`/clients/contracts?procedure_stage=${stageFilter}`}
+              className="link-brand text-xs"
+            >
               Открыть клиентов →
             </Link>
             <button

@@ -13,10 +13,11 @@ import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
   { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
+  { href: "/cashbox", label: "Касса", icon: "₽", shortLabel: "Касса", ownerOnly: true },
   { href: "/clients/collection", label: "Сбор документов", icon: "◫", shortLabel: "Сбор" },
   { href: "/clients/contracts", label: "Договоры", icon: "◎", shortLabel: "Договоры" },
   { href: "/analytics", label: "Аналитика", icon: "◉", ownerOnly: true },
-  { href: "/tasks", label: "Задачи", icon: "◐", shortLabel: "Задачи" },
+  { href: "/tasks", label: "Задачи", icon: "◐", shortLabel: "Задачи", roles: ["owner", "manager"] },
   { href: "/expenses", label: "Расходы", icon: "◇", ownerOnly: true },
   { href: "/audit", label: "Журнал", icon: "▣", ownerOnly: true },
   { href: "/users", label: "Команда", icon: "◌", ownerOnly: true },
@@ -27,10 +28,12 @@ const navItems = [
   icon: string;
   shortLabel?: string;
   ownerOnly?: boolean;
+  roles?: string[];
 }>;
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
+  if (pathname.startsWith("/cashbox")) return "Касса";
   if (pathname.startsWith("/clients/collection")) return "Сбор документов";
   if (pathname.startsWith("/clients/contracts")) return "Договоры";
   if (pathname.startsWith("/clients/")) return "Карточка клиента";
@@ -56,7 +59,9 @@ function isNavActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
-const MOBILE_PRIMARY_HREFS = ["/", "/clients/collection", "/clients/contracts", "/tasks"];
+// У руководителя нижняя панель ведёт в кассу, у остальных — в сбор документов.
+const MOBILE_PRIMARY_OWNER = ["/", "/cashbox", "/clients/contracts", "/tasks"];
+const MOBILE_PRIMARY_STAFF = ["/", "/clients/collection", "/clients/contracts", "/tasks"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -65,6 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const visibleNav = navItems.filter((item) => {
     if (item.ownerOnly && user?.role !== "owner") return false;
+    if (item.roles && !item.roles.includes(user?.role ?? "")) return false;
     return true;
   });
 
@@ -132,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:px-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                <LogoMark className="h-7 w-7 text-[11px] lg:hidden" />
+                <LogoMark className="lg:hidden" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-foreground lg:text-xs lg:font-medium lg:text-muted">
                     {pageTitle(pathname)}
@@ -162,7 +168,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <MobileBottomNav
             items={visibleNav}
-            primaryHrefs={MOBILE_PRIMARY_HREFS}
+            primaryHrefs={user?.role === "owner" ? MOBILE_PRIMARY_OWNER : MOBILE_PRIMARY_STAFF}
             pathname={pathname}
             badges={{ "/tasks": openTasksCount }}
             extraLinks={[{ href: "/login", label: "Товарная рассрочка" }]}

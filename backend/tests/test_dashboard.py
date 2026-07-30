@@ -4,7 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.models.enums import ClientStatus, UserRole
+from app.models.enums import ClientStatus, EngagementStage, UserRole
 from app.services.dashboard import get_dashboard_summary
 
 
@@ -25,6 +25,8 @@ def make_client(
     *,
     status: ClientStatus = ClientStatus.ACTIVE,
     debt_amount: str = "350000.00",
+    contract_date: date | None = None,
+    engagement_stage: EngagementStage = EngagementStage.BANKRUPTCY,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=CLIENT_ID,
@@ -33,6 +35,8 @@ def make_client(
         is_deleted=False,
         organization_id=ORG_ID,
         assigned_manager_id=USER_ID,
+        contract_date=contract_date or date.today(),
+        engagement_stage=engagement_stage,
     )
 
 
@@ -142,6 +146,80 @@ class TestDashboardSummary:
         assert summary.expected_this_month == Decimal("0.00")
         assert summary.total_collected == Decimal("0.00")
         assert summary.active_contract_total == Decimal("0.00")
+
+    def test_selected_month_shifts_the_reporting_period(self, monkeypatch):
+        in_period = make_client(contract_date=date(2026, 5, 14))
+        db = MagicMock()
+        db.scalars.return_value = [in_period]
+        monkeypatch.setattr(
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
+        )
+
+        summary = get_dashboard_summary(
+            db,
+            make_user(UserRole.MANAGER),
+            month="2026-05",
+        )
+
+        assert summary.period_month == "2026-05"
+        assert summary.is_current_month is False
+        assert summary.clients_new_this_month == 1
+
+    def test_client_from_another_month_is_not_counted_as_new(self, monkeypatch):
+        out_of_period = make_client(contract_date=date(2026, 5, 14))
+        db = MagicMock()
+        db.scalars.return_value = [out_of_period]
+        monkeypatch.setattr(
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
+        )
+
+        summary = get_dashboard_summary(
+            db,
+            make_user(UserRole.MANAGER),
+            month="2026-06",
+        )
+
+        assert summary.clients_new_this_month == 0
+
+    def test_clients_on_document_collection_are_counted(self, monkeypatch):
+        client = make_client(engagement_stage=EngagementStage.DOCUMENT_COLLECTION)
+        db = MagicMock()
+        db.scalars.return_value = [client]
+        monkeypatch.setattr(
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
+        )
+
+        summary = get_dashboard_summary(db, make_user(UserRole.MANAGER))
+
+        assert summary.collection_in_progress == 1
+        assert summary.is_current_month is True
 
     def test_call_center_gets_limited_summary(self, monkeypatch):
         client = make_client()
