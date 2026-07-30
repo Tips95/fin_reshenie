@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { BrandFooter, Button, Card, Input, LogoMark } from "@/components/ui";
-import { APP_NAME } from "@/lib/brand";
+import { BrandFooter, Button, Card, Input, LogoLockup } from "@/components/ui";
 import { PHONE_PREFIX } from "@/lib/phone";
 import type { Workspace } from "@/lib/types";
 import { validateLogin } from "@/lib/validation";
@@ -53,12 +52,9 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4 py-6 mesh-bg">
       <Card className="w-full max-w-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <LogoMark />
-          <div>
-            <h1 className="text-base font-semibold text-foreground">{APP_NAME}</h1>
-            <p className="text-xs text-muted">Выберите контур и войдите</p>
-          </div>
+        <div className="mb-4 space-y-2">
+          <LogoLockup />
+          <p className="text-center text-xs text-muted">Выберите контур и войдите</p>
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-1.5">

@@ -28,7 +28,7 @@ def upsert_initial_admin(db: Session) -> bool:
     if organization is None:
         organization = Organization(
             id=uuid.uuid4(),
-            name="Решение",
+            name="Решение Финансы",
             organization_type=OrganizationType.BANKRUPTCY,
         )
         db.add(organization)
@@ -59,7 +59,7 @@ def seed_demo_user(db: Session) -> None:
     else:
         organization = Organization(
             id=uuid.uuid4(),
-            name="Решение",
+            name="Решение Финансы",
             organization_type=OrganizationType.BANKRUPTCY,
         )
         db.add(organization)

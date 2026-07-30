@@ -123,7 +123,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
           <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:px-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                <LogoMark className="h-7 w-7 text-[11px] lg:hidden" />
+                <LogoMark className="lg:hidden" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-foreground lg:text-xs lg:font-medium lg:text-muted">
                     {pageTitle(pathname)}

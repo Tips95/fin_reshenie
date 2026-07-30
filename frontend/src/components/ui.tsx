@@ -1,21 +1,52 @@
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { APP_NAME } from "@/lib/brand";
+import { APP_LOGO_FULL, APP_LOGO_MARK, APP_NAME } from "@/lib/brand";
 import { PHONE_PREFIX, applyPhoneInput } from "@/lib/phone";
 import { applyPassportInput, PASSPORT_PLACEHOLDER } from "@/lib/passport";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <div
+    <span
       className={cn(
-        "flex h-7 w-7 items-center justify-center rounded-md border border-brand-600 bg-brand-700 text-[11px] font-bold text-white shadow-soft",
+        "relative block h-7 w-7 shrink-0 overflow-hidden rounded-md border border-brand-800 bg-black shadow-soft",
         className,
       )}
     >
-      FR
-    </div>
+      <Image
+        src={APP_LOGO_MARK}
+        alt={APP_NAME}
+        fill
+        sizes="32px"
+        unoptimized
+        priority
+        className="object-cover"
+      />
+    </span>
+  );
+}
+
+/** Полный логотип с названием: подходит там, где есть горизонтальное место. */
+export function LogoLockup({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "relative block aspect-[1024/420] w-full overflow-hidden rounded-lg border border-brand-800 bg-black shadow-card",
+        className,
+      )}
+    >
+      <Image
+        src={APP_LOGO_FULL}
+        alt={APP_NAME}
+        fill
+        sizes="(max-width: 640px) 90vw, 384px"
+        unoptimized
+        priority
+        className="object-contain"
+      />
+    </span>
   );
 }
 
@@ -488,7 +519,7 @@ export function LoadingState({ text = "Загрузка..." }: { text?: string }
 export function BrandFooter() {
   return (
     <p className="text-center text-[11px] text-muted">
-      {APP_NAME} · финансовая платформа для юридической компании
+      {APP_NAME} · платформа учёта для юридической компании
     </p>
   );
 }

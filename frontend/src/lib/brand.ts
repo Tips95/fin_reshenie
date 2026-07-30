@@ -1,6 +1,10 @@
-export const APP_NAME = "Fin Reshenie";
+export const APP_NAME = "Решение Финансы";
 
 export const APP_TAGLINE = "Учёт клиентов, рассрочки и обязательных платежей";
+
+export const APP_LOGO_MARK = "/brand/logo-mark.png";
+
+export const APP_LOGO_FULL = "/brand/logo-full.jpg";
 
 export const APP_CREATOR = {
   name: "Юнусов Магомед",
