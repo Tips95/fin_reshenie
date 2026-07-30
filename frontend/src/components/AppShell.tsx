@@ -13,7 +13,6 @@ import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
   { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
-  { href: "/cashbox", label: "Касса", icon: "₽", shortLabel: "Касса", ownerOnly: true },
   { href: "/clients/collection", label: "Сбор документов", icon: "◫", shortLabel: "Сбор" },
   { href: "/clients/contracts", label: "Договоры", icon: "◎", shortLabel: "Договоры" },
   { href: "/analytics", label: "Аналитика", icon: "◉", ownerOnly: true },
@@ -33,7 +32,6 @@ const navItems = [
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
-  if (pathname.startsWith("/cashbox")) return "Касса";
   if (pathname.startsWith("/clients/collection")) return "Сбор документов";
   if (pathname.startsWith("/clients/contracts")) return "Договоры";
   if (pathname.startsWith("/clients/")) return "Карточка клиента";
@@ -59,9 +57,7 @@ function isNavActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
-// У руководителя нижняя панель ведёт в кассу, у остальных — в сбор документов.
-const MOBILE_PRIMARY_OWNER = ["/", "/cashbox", "/clients/contracts", "/tasks"];
-const MOBILE_PRIMARY_STAFF = ["/", "/clients/collection", "/clients/contracts", "/tasks"];
+const MOBILE_PRIMARY_HREFS = ["/", "/clients/collection", "/clients/contracts", "/tasks"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -168,7 +164,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <MobileBottomNav
             items={visibleNav}
-            primaryHrefs={user?.role === "owner" ? MOBILE_PRIMARY_OWNER : MOBILE_PRIMARY_STAFF}
+            primaryHrefs={MOBILE_PRIMARY_HREFS}
             pathname={pathname}
             badges={{ "/tasks": openTasksCount }}
             extraLinks={[{ href: "/login", label: "Товарная рассрочка" }]}

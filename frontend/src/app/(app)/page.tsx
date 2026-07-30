@@ -243,11 +243,6 @@ export default function DashboardPage() {
                   className="w-[150px]"
                   aria-label="Отчётный месяц"
                 />
-                {isOwner && (
-                  <Link href="/cashbox">
-                    <Button type="button">Касса</Button>
-                  </Link>
-                )}
                 <Link href="/tasks">
                   <Button type="button" variant="secondary">
                     Задачи{openTasksCount > 0 ? ` (${openTasksCount})` : ""}
@@ -288,7 +283,7 @@ export default function DashboardPage() {
                 tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
               />
               <StatCard
-                label={`Касса за ${monthLabel}`}
+                label={`Получено за ${monthLabel}`}
                 value={formatMoney(summary.collected_this_month)}
                 tone="success"
                 hint="Платежи по рассрочке"

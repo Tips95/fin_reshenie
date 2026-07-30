@@ -6,7 +6,6 @@ import type {
   ClientBrief,
   ClientDetail,
   ClientListResponse,
-  CashboxOverview,
   DashboardSummary,
   AnalyticsOverview,
   FunnelOverview,
@@ -276,11 +275,6 @@ export const retailApi = {
 export const dashboardApi = {
   summary: (month?: string) =>
     apiFetch<DashboardSummary>(`/dashboard/summary${month ? `?month=${month}` : ""}`),
-};
-
-export const cashboxApi = {
-  overview: (month?: string) =>
-    apiFetch<CashboxOverview>(`/cashbox${month ? `?month=${month}` : ""}`),
 };
 
 export const analyticsApi = {
