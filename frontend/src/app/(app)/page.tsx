@@ -43,7 +43,7 @@ const SECTION_STYLES: Record<
   clients: {
     shell: "border-border bg-surface",
     header: "border-b border-border bg-surface-muted",
-    badge: "bg-brand-700 text-white",
+    badge: "bg-chrome text-white",
   },
   activity: {
     shell: "border-status-warning-border bg-status-warning-bg",
@@ -56,9 +56,9 @@ const SECTION_STYLES: Record<
     badge: "bg-status-success-solid text-white",
   },
   collection: {
-    shell: "border-brand-200 bg-brand-50",
-    header: "border-b border-brand-200 bg-brand-100",
-    badge: "bg-brand-700 text-white",
+    shell: "border-border bg-surface",
+    header: "border-b border-brand-200 bg-brand-50",
+    badge: "bg-brand-gradient text-white",
   },
   mandatory: {
     shell: "border-status-warning-border bg-surface",

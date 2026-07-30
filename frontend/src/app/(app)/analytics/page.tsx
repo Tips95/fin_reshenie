@@ -221,7 +221,7 @@ export default function AnalyticsPage() {
                     <span className="w-20 shrink-0 text-muted sm:w-28">Ожидалось</span>
                     <div className="h-2 flex-1 rounded-full bg-surface-muted">
                       <div
-                        className="h-2 rounded-full bg-brand-500"
+                        className="h-2 rounded-full bg-status-neutral-solid"
                         style={{ width: `${expectedWidth}%` }}
                       />
                     </div>

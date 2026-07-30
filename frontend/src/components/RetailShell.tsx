@@ -65,12 +65,12 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen mesh-bg">
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
-        <aside className="sticky top-0 hidden h-screen w-52 shrink-0 flex-col border-r border-brand-900 bg-brand-950 px-2 py-2 text-white shadow-card lg:flex">
-          <div className="flex items-center gap-2 border-b border-brand-800 pb-2">
+        <aside className="app-sidebar sticky top-0 hidden h-screen w-52 shrink-0 flex-col px-2 py-2 shadow-card lg:flex">
+          <div className="flex items-center gap-2 border-b border-chrome-border pb-2">
             <LogoMark />
             <div>
               <p className="text-sm font-semibold leading-tight">Товарная рассрочка</p>
-              <p className="text-[11px] leading-tight text-brand-300">Отдельный контур</p>
+              <p className="text-[11px] leading-tight text-chrome-muted">Отдельный контур</p>
             </div>
           </div>
 
@@ -93,26 +93,26 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="mt-auto space-y-2 border-t border-brand-800 pt-3">
+          <div className="mt-auto space-y-2 border-t border-chrome-border pt-3">
             <Link
               href="/login"
-              className="interactive block rounded-md border border-brand-700 px-2 py-1.5 text-xs text-brand-200 hover:border-brand-600 hover:bg-brand-800 hover:text-white"
+              className="interactive block rounded-md border border-chrome-border px-2 py-1.5 text-xs text-chrome-muted hover:border-brand-600 hover:bg-chrome-hover hover:text-chrome-text"
             >
               Юрфирма
             </Link>
             {user && (
-              <div className="rounded-md border border-brand-800 bg-brand-900/50 px-2 py-2">
+              <div className="rounded-md border border-chrome-border bg-chrome-elevated px-2 py-2">
                 <p className="text-xs font-medium">{user.full_name}</p>
-                <p className="text-[11px] text-brand-300">{statusLabel(user.role)}</p>
+                <p className="text-[11px] text-chrome-muted">{statusLabel(user.role)}</p>
                 <button
                   onClick={logout}
-                  className="interactive mt-1.5 text-[11px] text-brand-300 hover:text-white"
+                  className="interactive mt-1.5 text-[11px] text-chrome-muted hover:text-chrome-text"
                 >
                   Выйти
                 </button>
               </div>
             )}
-            <div className="text-[11px] leading-relaxed text-brand-400">
+            <div className="text-[11px] leading-relaxed text-chrome-muted opacity-70">
               <p>{APP_CREATOR.role}</p>
               <p>{APP_CREATOR.name}</p>
             </div>
@@ -120,25 +120,25 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border bg-surface/95 px-page-x py-2 shadow-soft backdrop-blur lg:px-3">
+          <header className="app-header sticky top-0 z-20 px-page-x py-2 shadow-card backdrop-blur lg:px-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <LogoMark className="lg:hidden" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground lg:text-xs lg:font-medium lg:text-muted">
+                  <p className="truncate text-sm font-semibold text-chrome-text lg:text-xs lg:font-medium lg:text-chrome-muted">
                     {pageTitle(pathname)}
                   </p>
-                  <p className="truncate text-[11px] text-muted lg:hidden">{APP_NAME}</p>
+                  <p className="truncate text-[11px] text-chrome-muted lg:hidden">{APP_NAME}</p>
                 </div>
               </div>
               {user && (
                 <div className="shrink-0 text-right">
-                  <p className="max-w-[120px] truncate text-xs font-medium text-foreground sm:max-w-none">
+                  <p className="max-w-[120px] truncate text-xs font-medium text-chrome-text sm:max-w-none">
                     {user.full_name}
                   </p>
                   <button
                     onClick={logout}
-                    className="interactive text-[11px] text-muted hover:text-brand-700 lg:hidden"
+                    className="interactive text-[11px] text-chrome-muted hover:text-chrome-text lg:hidden"
                   >
                     Выйти
                   </button>

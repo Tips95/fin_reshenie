@@ -1560,7 +1560,7 @@ export default function ClientDetailPage() {
       {canEditClient && (
         <Card
           id="section-client"
-          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-brand-600")}
+          className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-chrome")}
         >
           <SectionTitle
             title="Данные клиента"

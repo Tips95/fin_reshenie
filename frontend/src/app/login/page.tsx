@@ -50,7 +50,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center px-4 py-6 mesh-bg">
+    <div className="auth-page relative flex min-h-screen items-center justify-center px-4 py-6">
       <Card className="w-full max-w-sm">
         <div className="mb-4 space-y-2">
           <LogoLockup />
@@ -63,7 +63,7 @@ export default function LoginPage() {
             onClick={() => setWorkspace("legal")}
             className={
               workspace === "legal"
-                ? "interactive rounded-md border border-brand-700 bg-brand-700 px-2 py-1.5 text-xs font-medium text-white shadow-soft hover:bg-brand-800"
+                ? "btn-primary interactive rounded-md border px-2 py-1.5 text-xs font-medium"
                 : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
             }
           >
@@ -74,7 +74,7 @@ export default function LoginPage() {
             onClick={() => setWorkspace("retail")}
             className={
               workspace === "retail"
-                ? "interactive rounded-md border border-brand-700 bg-brand-700 px-2 py-1.5 text-xs font-medium text-white shadow-soft hover:bg-brand-800"
+                ? "btn-primary interactive rounded-md border px-2 py-1.5 text-xs font-medium"
                 : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
             }
           >
@@ -117,7 +117,7 @@ export default function LoginPage() {
       </Card>
 
       <div className="absolute bottom-3 left-0 right-0">
-        <BrandFooter />
+        <BrandFooter onDark />
       </div>
     </div>
   );

@@ -68,7 +68,9 @@ export function MobileBottomNav({
 
       {menuOpen && (
         <div className="mobile-menu-sheet lg:hidden">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Разделы</p>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-chrome-muted">
+            Разделы
+          </p>
           <div className="space-y-1">
             {secondaryItems.map((item) => {
               const count = badges?.[item.href] ?? 0;
@@ -79,8 +81,8 @@ export function MobileBottomNav({
                   className={cn(
                     "interactive flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium",
                     isActive(pathname, item.href)
-                      ? "bg-brand-100 text-brand-800"
-                      : "text-foreground hover:bg-surface-muted",
+                      ? "bg-brand-gradient text-white shadow-brand"
+                      : "text-chrome-text hover:bg-chrome-hover",
                   )}
                   onClick={() => setMenuOpen(false)}
                 >

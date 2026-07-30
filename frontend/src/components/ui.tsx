@@ -11,7 +11,7 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "relative block h-7 w-7 shrink-0 overflow-hidden rounded-md border border-brand-800 bg-black shadow-soft",
+        "relative block h-7 w-7 shrink-0 overflow-hidden rounded-md border border-chrome-border bg-chrome shadow-soft",
         className,
       )}
     >
@@ -33,7 +33,7 @@ export function LogoLockup({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "relative block aspect-[1024/420] w-full overflow-hidden rounded-lg border border-brand-800 bg-black shadow-card",
+        "relative block aspect-[1024/420] w-full overflow-hidden rounded-lg border border-chrome-border bg-chrome shadow-card",
         className,
       )}
     >
@@ -60,8 +60,7 @@ export function Button({
   size?: "sm" | "md" | "lg";
 }) {
   const variants = {
-    primary:
-      "border border-brand-700 bg-brand-700 text-white shadow-soft hover:border-brand-800 hover:bg-brand-800 hover:shadow-card",
+    primary: "btn-primary border",
     secondary:
       "border border-border bg-surface text-foreground shadow-soft hover:border-border-strong hover:bg-surface-muted hover:shadow-card",
     danger:
@@ -331,7 +330,10 @@ export function Card({
 }) {
   const variants = {
     default: "surface-card-hover p-card",
-    accent: "interactive rounded-lg border border-brand-200 bg-brand-50 p-card shadow-soft hover:shadow-card",
+    // Выделенная зона действия: нейтральная подложка, чтобы красный остался
+    // только у кнопок, активного меню и просрочки.
+    accent:
+      "interactive rounded-lg border border-border-strong bg-surface-muted p-card shadow-soft hover:shadow-card",
   };
 
   return (
@@ -495,7 +497,9 @@ export function StatCard({
     success: "text-status-success-text",
     warning: "text-status-warning-text",
     danger: "text-status-danger-text",
-    brand: "text-brand-700",
+    // Тёмно-вишнёвый: фирменный оттенок без тревоги, красный остаётся
+    // за просрочкой и главными кнопками.
+    brand: "text-brand-900",
   };
 
   return (
@@ -516,9 +520,9 @@ export function LoadingState({ text = "Загрузка..." }: { text?: string }
   );
 }
 
-export function BrandFooter() {
+export function BrandFooter({ onDark = false }: { onDark?: boolean }) {
   return (
-    <p className="text-center text-[11px] text-muted">
+    <p className={cn("text-center text-[11px]", onDark ? "text-chrome-muted" : "text-muted")}>
       {APP_NAME} · платформа учёта для юридической компании
     </p>
   );

@@ -23,6 +23,14 @@ const config: Config = {
           DEFAULT: "var(--border)",
           strong: "var(--border-strong)",
         },
+        chrome: {
+          DEFAULT: "var(--chrome)",
+          elevated: "var(--chrome-elevated)",
+          hover: "var(--chrome-hover)",
+          border: "var(--chrome-border)",
+          text: "var(--chrome-text)",
+          muted: "var(--chrome-muted)",
+        },
         brand: {
           50: "var(--brand-50)",
           100: "var(--brand-100)",
@@ -54,6 +62,7 @@ const config: Config = {
             border: "var(--status-danger-border)",
             text: "var(--status-danger-text)",
             solid: "var(--status-danger-solid)",
+            stripe: "var(--status-danger-stripe)",
           },
           neutral: {
             bg: "var(--status-neutral-bg)",
@@ -67,6 +76,11 @@ const config: Config = {
         soft: "var(--shadow-soft)",
         card: "var(--shadow-card)",
         hover: "var(--shadow-hover)",
+        brand: "var(--shadow-brand)",
+      },
+      backgroundImage: {
+        "brand-gradient": "var(--brand-gradient)",
+        "chrome-gradient": "var(--chrome-gradient)",
       },
       borderRadius: {
         sm: "var(--radius-sm)",

@@ -3,56 +3,74 @@
 @tailwind utilities;
 
 :root {
-  --background: #eef1f5;
-  --foreground: #1a2332;
-  --muted: #64748b;
+  --background: #f1f2f4;
+  --foreground: #16171a;
+  --muted: #6c6e76;
 
   --surface: #ffffff;
-  --surface-muted: #f4f6f9;
+  --surface-muted: #f6f7f8;
 
-  --border: #d8dee8;
-  --border-strong: #c2cad6;
+  --border: #e3e4e8;
+  --border-strong: #c9cbd2;
 
-  --brand-50: #f0f4f9;
-  --brand-100: #dce6f2;
-  --brand-200: #b8cce4;
-  --brand-300: #8fadc9;
-  --brand-400: #6b8fb0;
-  --brand-500: #4f7296;
-  --brand-600: #3d5c7a;
-  --brand-700: #324c66;
-  --brand-800: #283d52;
-  --brand-900: #1f3040;
-  --brand-950: #152230;
+  /* Фирменный красный из логотипа: светлые ступени — для подложек и пилюль,
+     тёмные (800–950) — почти чёрные, для навигации и логотипа. */
+  --brand-50: #fff5f5;
+  --brand-100: #ffe3e5;
+  --brand-200: #fecdd1;
+  --brand-300: #fca5ac;
+  --brand-400: #f6606f;
+  --brand-500: #e51c2a;
+  --brand-600: #d1101d;
+  --brand-700: #ad0c17;
+  --brand-800: #7d0810;
+  --brand-900: #4a050a;
+  --brand-950: #14070a;
 
-  --status-success-bg: #ecfdf5;
-  --status-success-border: #a7f3d0;
-  --status-success-text: #065f46;
-  --status-success-solid: #059669;
+  /* Тёмный каркас: боковое меню, шапка, мобильная навигация. */
+  --chrome: #0a0a0c;
+  --chrome-elevated: #15151a;
+  --chrome-hover: #1f1f26;
+  --chrome-border: #26262e;
+  --chrome-text: #f3f4f6;
+  --chrome-muted: #9a9ba5;
 
-  --status-warning-bg: #fffbeb;
-  --status-warning-border: #fde68a;
-  --status-warning-text: #92400e;
-  --status-warning-solid: #d97706;
+  --brand-gradient: linear-gradient(135deg, #e8202e 0%, #c50d1a 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #f2333f 0%, #d4111e 100%);
+  --chrome-gradient: linear-gradient(180deg, #131318 0%, #0a0a0c 55%, #150709 100%);
 
-  --status-danger-bg: #fff1f2;
-  --status-danger-border: #fecdd3;
-  --status-danger-text: #9f1239;
-  --status-danger-solid: #e11d48;
+  --status-success-bg: #ecfdf3;
+  --status-success-border: #a8e6c4;
+  --status-success-text: #0a6b42;
+  --status-success-solid: #0f9d58;
 
-  --status-neutral-bg: #f1f5f9;
-  --status-neutral-border: #e2e8f0;
-  --status-neutral-text: #475569;
-  --status-neutral-solid: #64748b;
+  --status-warning-bg: #fff8ec;
+  --status-warning-border: #f9dfae;
+  --status-warning-text: #8a5106;
+  --status-warning-solid: #d98410;
+
+  /* Просрочка — вишнёвая: тревожная, но не спорит с фирменным красным.
+     Отличает её от бренда яркая полоса слева у строки. */
+  --status-danger-bg: #fdf1f3;
+  --status-danger-border: #edc7ce;
+  --status-danger-text: #78101f;
+  --status-danger-solid: #9a1226;
+  --status-danger-stripe: #e51c2a;
+
+  --status-neutral-bg: #f3f4f6;
+  --status-neutral-border: #e4e6ea;
+  --status-neutral-text: #4c4f57;
+  --status-neutral-solid: #6c6e76;
 
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
 
-  --shadow-soft: 0 1px 2px rgb(21 34 48 / 0.04);
-  --shadow-card: 0 1px 3px rgb(21 34 48 / 0.06), 0 1px 2px rgb(21 34 48 / 0.04);
-  --shadow-hover: 0 4px 14px rgb(21 34 48 / 0.08);
+  --shadow-soft: 0 1px 2px rgb(10 10 12 / 0.05);
+  --shadow-card: 0 1px 3px rgb(10 10 12 / 0.07), 0 1px 2px rgb(10 10 12 / 0.04);
+  --shadow-hover: 0 6px 18px rgb(10 10 12 / 0.1);
+  --shadow-brand: 0 1px 2px rgb(10 10 12 / 0.08), 0 2px 8px rgb(209 16 29 / 0.22);
 
   --space-page-x: 0.75rem;
   --space-page-y: 0.625rem;
@@ -93,8 +111,15 @@ body {
 }
 
 @layer utilities {
+  /* Фон рабочей области: светлый, с едва заметным красным отсветом в углу —
+     тот же приём, что на логотипе. */
   .mesh-bg {
     background-color: var(--background);
+    background-image: radial-gradient(
+      900px 380px at 100% -8%,
+      rgb(229 28 42 / 0.05),
+      transparent 70%
+    );
   }
 }
 
@@ -174,6 +199,56 @@ body {
     @apply interactive font-semibold text-brand-700 hover:text-brand-600;
   }
 
+  /* Главное действие: фирменный красный с лёгким глянцем, как на логотипе. */
+  .btn-primary {
+    @apply text-white;
+    border-color: var(--brand-700);
+    background-image: var(--brand-gradient);
+    box-shadow: var(--shadow-brand);
+  }
+
+  .btn-primary:hover {
+    border-color: var(--brand-800);
+    background-image: var(--brand-gradient-hover);
+  }
+
+  /* Тёмный каркас приложения. */
+  .app-sidebar {
+    background-color: var(--chrome);
+    background-image: var(--chrome-gradient);
+    border-right: 1px solid var(--chrome-border);
+    color: var(--chrome-text);
+    position: relative;
+  }
+
+  /* Красная линия по краю меню — повторяет разделитель на логотипе. */
+  .app-sidebar::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    right: -1px;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgb(229 28 42 / 0.55) 30%,
+      rgb(229 28 42 / 0.55) 70%,
+      transparent 100%
+    );
+  }
+
+  .app-header {
+    background-color: rgb(10 10 12 / 0.95);
+    border-bottom: 1px solid var(--chrome-border);
+    color: var(--chrome-text);
+  }
+
+  .chrome-panel {
+    background-color: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    color: var(--chrome-text);
+  }
+
   .tab-pill {
     @apply interactive rounded-full px-3 py-1 text-xs font-semibold;
   }
@@ -191,11 +266,12 @@ body {
   }
 
   .nav-item-active {
-    @apply nav-item bg-brand-700 text-white shadow-soft;
+    @apply nav-item text-white shadow-soft;
+    background-image: var(--brand-gradient);
   }
 
   .nav-item-inactive {
-    @apply nav-item text-brand-200 hover:bg-brand-800 hover:text-white;
+    @apply nav-item text-chrome-muted hover:bg-chrome-hover hover:text-chrome-text;
   }
 
   .data-table {
@@ -226,6 +302,11 @@ body {
     @apply bg-status-danger-bg hover:bg-status-danger-bg;
   }
 
+  /* Полоса слева отделяет просрочку от фирменного красного в кнопках. */
+  .data-table tbody tr.is-overdue td:first-child {
+    border-left: 3px solid var(--status-danger-stripe);
+  }
+
   /* На телефоне таблица разворачивается в карточки: каждая ячейка получает
      подпись из data-label вместо шапки, горизонтальный скролл не нужен. */
   @media (max-width: 1023px) {
@@ -251,6 +332,11 @@ body {
 
     .table-cards tbody tr.is-overdue {
       @apply border-status-danger-border bg-status-danger-bg;
+      border-left: 3px solid var(--status-danger-stripe);
+    }
+
+    .table-cards tbody tr.is-overdue td:first-child {
+      border-left: 0;
     }
 
     .table-cards td {
@@ -305,6 +391,7 @@ body {
 
   .row-card-overdue {
     @apply border-status-danger-border bg-status-danger-bg;
+    border-left: 3px solid var(--status-danger-stripe);
   }
 
   .row-card-head {
@@ -372,22 +459,36 @@ body {
   }
 
   .mobile-bottom-nav {
-    @apply fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface shadow-card backdrop-blur;
+    @apply fixed inset-x-0 bottom-0 z-30 grid shadow-hover backdrop-blur;
+    background-color: rgb(10 10 12 / 0.97);
+    border-top: 1px solid var(--chrome-border);
     grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     padding-bottom: var(--safe-area-bottom);
     min-height: calc(var(--mobile-nav-height) + var(--safe-area-bottom));
   }
 
   .mobile-bottom-nav-item {
-    @apply interactive flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[11px] font-medium text-muted;
+    @apply interactive relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[11px] font-medium text-chrome-muted;
   }
 
   .mobile-bottom-nav-item-active {
-    @apply text-brand-700;
+    @apply text-white;
+  }
+
+  /* Активный раздел подчёркнут красным сверху — как закладка. */
+  .mobile-bottom-nav-item-active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 25%;
+    right: 25%;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background-color: var(--brand-500);
   }
 
   .mobile-menu-sheet {
-    @apply fixed inset-x-2 bottom-[calc(var(--mobile-nav-height)+var(--safe-area-bottom)+0.5rem)] z-50 max-h-[55vh] overflow-y-auto rounded-lg border border-border bg-surface p-3 shadow-hover;
+    @apply chrome-panel fixed inset-x-2 bottom-[calc(var(--mobile-nav-height)+var(--safe-area-bottom)+0.5rem)] z-50 max-h-[55vh] overflow-y-auto rounded-lg p-3 shadow-hover;
   }
 
   .mobile-client-card {
@@ -396,6 +497,17 @@ body {
 
   .mobile-client-card-overdue {
     @apply border-status-danger-border bg-status-danger-bg;
+    border-left: 3px solid var(--status-danger-stripe);
+  }
+
+  /* Вход — единственный экран без данных, поэтому он полностью в фирменных
+     чёрно-красных тонах логотипа. */
+  .auth-page {
+    background-color: #08080a;
+    background-image:
+      radial-gradient(1100px 460px at 8% -12%, rgb(229 28 42 / 0.2), transparent 62%),
+      radial-gradient(900px 420px at 108% 112%, rgb(229 28 42 / 0.16), transparent 62%),
+      linear-gradient(160deg, #131318 0%, #08080a 58%, #12070a 100%);
   }
 
   .desktop-only {
