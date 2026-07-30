@@ -5,8 +5,19 @@ __pycache__/
 .venv/
 venv/
 .env
-backend/dev.db
+backend/dev.db*
 uploads/
+
+# Локальные выгрузки и дампы боевых данных
+data/
+*.xlsm
+*_audit_report.json
+
+# Одноразовые локальные скрипты анализа прода и сидинга
+backend/scripts/analyze_prod_*.py
+backend/scripts/compare_july_*.py
+backend/scripts/prod_audit_run.py
+backend/scripts/seed_demo_clients.py
 
 # Node
 node_modules/
