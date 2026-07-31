@@ -32,34 +32,75 @@ import type {
 
 export class ApiRequestError extends Error {
   status: number;
+  detail: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, detail?: unknown) {
     super(message);
     this.status = status;
+    this.detail = detail;
   }
 }
 
-async function parseError(response: Response): Promise<string> {
+export type DuplicateClientConflict = {
+  code: "duplicate_client";
+  message: string;
+  client_id: string;
+  full_name?: string;
+  phone?: string;
+  engagement_stage?: string;
+};
+
+export function getDuplicateClientId(error: unknown): string | null {
+  if (!(error instanceof ApiRequestError)) return null;
+  const detail = error.detail;
+  if (
+    typeof detail === "object" &&
+    detail !== null &&
+    "client_id" in detail &&
+    typeof (detail as { client_id: unknown }).client_id === "string"
+  ) {
+    return (detail as { client_id: string }).client_id;
+  }
+  return null;
+}
+
+function messageFromDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "object" && item && "msg" in item) {
+          return String((item as { msg: string }).msg);
+        }
+        return String(item);
+      })
+      .join("; ");
+  }
+  if (typeof detail === "object" && detail !== null && "message" in detail) {
+    return String((detail as { message: unknown }).message);
+  }
+  return "Ошибка запроса";
+}
+
+async function parseError(response: Response): Promise<{ message: string; detail: unknown }> {
   try {
     const data = (await response.json()) as ApiError | { detail: unknown };
     const detail = data.detail;
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((item) => {
-          if (typeof item === "object" && item && "msg" in item) {
-            return String((item as { msg: string }).msg);
-          }
-          return String(item);
-        })
-        .join("; ");
-    }
-    return "Ошибка запроса";
+    return { message: messageFromDetail(detail), detail };
   } catch {
-    if (response.status === 404) return "Сервис не найден. Перезапустите backend.";
-    if (response.status >= 500) return "Ошибка сервера. Попробуйте позже.";
-    return "Ошибка запроса";
+    if (response.status === 404) {
+      return { message: "Сервис не найден. Перезапустите backend.", detail: undefined };
+    }
+    if (response.status >= 500) {
+      return { message: "Ошибка сервера. Попробуйте позже.", detail: undefined };
+    }
+    return { message: "Ошибка запроса", detail: undefined };
   }
+}
+
+async function throwApiError(response: Response): Promise<never> {
+  const parsed = await parseError(response);
+  throw new ApiRequestError(parsed.message, response.status, parsed.detail);
 }
 
 async function refreshTokens(): Promise<boolean> {
@@ -105,7 +146,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (!response.ok) {
     if (response.status === 401) clearTokens();
-    throw new ApiRequestError(await parseError(response), response.status);
+    await throwApiError(response);
   }
 
   if (response.status === 204) {
@@ -140,7 +181,7 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
 
   if (!response.ok) {
     if (response.status === 401) clearTokens();
-    throw new ApiRequestError(await parseError(response), response.status);
+    await throwApiError(response);
   }
 
   const blob = await response.blob();
@@ -184,7 +225,7 @@ export async function uploadFile<T = unknown>(path: string, file: File, fieldNam
 
   if (!response.ok) {
     if (response.status === 401) clearTokens();
-    throw new ApiRequestError(await parseError(response), response.status);
+    await throwApiError(response);
   }
 
   if (response.status === 204) {

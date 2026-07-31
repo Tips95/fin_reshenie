@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 import { APP_LOGO_FULL, APP_LOGO_MARK, APP_NAME } from "@/lib/brand";
@@ -266,12 +266,12 @@ export function Toast({
   tone = "success",
   onClose,
 }: {
-  message: string;
+  message: ReactNode;
   tone?: "success" | "error" | "info";
   onClose?: () => void;
 }) {
   useEffect(() => {
-    const timer = window.setTimeout(() => onClose?.(), 4000);
+    const timer = window.setTimeout(() => onClose?.(), 6000);
     return () => window.clearTimeout(timer);
   }, [message, onClose]);
 

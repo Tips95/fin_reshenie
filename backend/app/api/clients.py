@@ -43,8 +43,8 @@ from app.schemas.payment_schedule import PaymentScheduleResponse
 from app.services.installment_schedule import create_payment_schedule_models
 from app.services.client_deletion import hard_delete_client
 from app.services.client_duplicates import (
-    DUPLICATE_CLIENT_MESSAGE,
     INCOMPLETE_PHONE_MESSAGE,
+    duplicate_client_payload,
     find_existing_client,
     phone_has_minimum_digits,
 )
@@ -319,15 +319,16 @@ def create_client(
             detail=INCOMPLETE_PHONE_MESSAGE,
         )
 
-    if find_existing_client(
+    existing = find_existing_client(
         db,
         organization_id=current_user.organization_id,
         phone=payload.phone,
         full_name=payload.full_name,
-    ) is not None:
+    )
+    if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=DUPLICATE_CLIENT_MESSAGE,
+            detail=duplicate_client_payload(existing),
         )
 
     client = Client(
@@ -468,16 +469,17 @@ def update_client(
     duplicate_phone = updates.get("phone", client.phone)
     duplicate_name = updates.get("full_name", client.full_name)
     if "phone" in updates or "full_name" in updates:
-        if find_existing_client(
+        existing = find_existing_client(
             db,
             organization_id=current_user.organization_id,
             phone=duplicate_phone,
             full_name=duplicate_name,
             exclude_client_id=client.id,
-        ) is not None:
+        )
+        if existing is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=DUPLICATE_CLIENT_MESSAGE,
+                detail=duplicate_client_payload(existing),
             )
 
     if "assigned_manager_id" in updates:

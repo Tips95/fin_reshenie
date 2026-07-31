@@ -245,7 +245,7 @@ export interface ClientDetail extends Client {
 }
 
 export interface ApiError {
-  detail: string;
+  detail: string | Record<string, unknown> | Array<{ msg?: string }>;
 }
 
 export interface MandatoryPaymentBreakdown {

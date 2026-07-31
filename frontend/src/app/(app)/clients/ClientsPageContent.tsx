@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Badge, Button, Card, EmptyState, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, StatCard, Toast } from "@/components/ui";
-import { ApiRequestError, clientsApi, exportsApi, usersApi } from "@/lib/api-client";
+import { ApiRequestError, clientsApi, exportsApi, getDuplicateClientId, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatMonthLabel, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
@@ -130,11 +130,12 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const [managers, setManagers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<{ message: string; clientId?: string } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
-    null,
-  );
+  const [toast, setToast] = useState<{
+    message: ReactNode;
+    tone: "success" | "error" | "info";
+  } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("created_at");
@@ -305,9 +306,22 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     } catch (error) {
       const message =
         error instanceof ApiRequestError ? error.message : "Не удалось создать клиента";
-      setCreateError(message);
+      const clientId = getDuplicateClientId(error) ?? undefined;
+      setCreateError({ message, clientId });
       if (error instanceof ApiRequestError && error.status === 409) {
-        setToast({ message, tone: "error" });
+        setToast({
+          message: clientId ? (
+            <span>
+              {message}{" "}
+              <Link href={`/clients/${clientId}`} className="font-medium underline underline-offset-2">
+                Открыть карточку
+              </Link>
+            </span>
+          ) : (
+            message
+          ),
+          tone: "error",
+        });
       }
     }
   }
@@ -467,7 +481,10 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <Input
                 placeholder="Иванов Иван"
                 value={nameSearch}
-                onChange={(e) => setNameSearch(e.target.value)}
+                onChange={(e) => {
+                  setNameSearch(e.target.value);
+                  if (e.target.value.trim() && dueMonth) setDueMonth("");
+                }}
               />
             </div>
             <div className="min-w-0">
@@ -475,10 +492,19 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <Input
                 placeholder="+7 928 000-00-00"
                 value={phoneSearch}
-                onChange={(e) => setPhoneSearch(e.target.value)}
+                onChange={(e) => {
+                  setPhoneSearch(e.target.value);
+                  if (e.target.value.trim() && dueMonth) setDueMonth("");
+                }}
               />
             </div>
           </div>
+
+          {(nameSearch.trim() || phoneSearch.trim()) && (
+            <p className="text-[11px] text-muted">
+              Поиск по всей компании: фильтры месяца и раздела временно не мешают находить клиента.
+            </p>
+          )}
 
           <div className="flex flex-wrap items-end gap-2">
             {isCollectionView && (
@@ -651,7 +677,22 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             <Button type="submit" className="md:col-span-2">
               Создать (сбор документов)
             </Button>
-            {createError && <p className="text-sm text-status-danger-text md:col-span-2">{createError}</p>}
+            {createError && (
+              <p className="text-sm text-status-danger-text md:col-span-2">
+                {createError.message}
+                {createError.clientId ? (
+                  <>
+                    {" "}
+                    <Link
+                      href={`/clients/${createError.clientId}`}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Открыть карточку
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            )}
           </form>
         </Card>
       )}

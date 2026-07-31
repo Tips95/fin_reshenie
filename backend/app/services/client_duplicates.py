@@ -9,6 +9,32 @@ from app.services.phone import normalize_phone
 DUPLICATE_CLIENT_MESSAGE = "Такой клиент уже есть в базе"
 INCOMPLETE_PHONE_MESSAGE = "Укажите полный номер телефона"
 
+STAGE_LABELS = {
+    "document_collection": "сбор документов",
+    "bankruptcy": "договоры",
+}
+
+
+def duplicate_client_payload(client: Client) -> dict[str, str]:
+    """Структурированный 409: текст + id для ссылки на карточку."""
+    stage = getattr(client.engagement_stage, "value", str(client.engagement_stage))
+    where = STAGE_LABELS.get(stage, stage)
+    return {
+        "code": "duplicate_client",
+        "message": (
+            f"Такой клиент уже есть в базе: {client.full_name}, {client.phone} "
+            f"(раздел «{where}»)."
+        ),
+        "client_id": str(client.id),
+        "full_name": client.full_name,
+        "phone": client.phone,
+        "engagement_stage": stage,
+    }
+
+
+def duplicate_client_message(client: Client) -> str:
+    return duplicate_client_payload(client)["message"]
+
 
 def norm_name(value: str) -> str:
     return " ".join(value.strip().lower().split())

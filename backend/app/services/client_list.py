@@ -84,31 +84,41 @@ def query_clients(
     stmt = select(Client)
     stmt = apply_client_visibility_filter(stmt, user)
 
+    # Поиск по ФИО/телефону — ищем по всей компании. Иначе фильтры «договоры /
+    # текущий месяц / сбор» прячут человека, а проверка дублей его всё равно находит.
+    searching = bool((phone and phone.strip()) or (name and name.strip()))
+
     if status_filter is not None:
         stmt = stmt.where(Client.status == status_filter)
-    if procedure_stage is not None:
+    if procedure_stage is not None and not searching:
         stmt = stmt.where(Client.procedure_stage == procedure_stage)
-    if engagement_stage is not None and collection_view is None:
+    if engagement_stage is not None and collection_view is None and not searching:
         stmt = stmt.where(Client.engagement_stage == engagement_stage)
     if manager_id is not None:
         stmt = stmt.where(Client.assigned_manager_id == manager_id)
-    if phone:
+    if phone and phone.strip():
         normalized = normalize_phone(phone)
         if normalized:
+            # Как в проверке дублей: сравниваем последние 10 цифр, чтобы
+            # 8928… и +7928… находили одного и того же клиента.
+            last10 = normalized[-10:] if len(normalized) >= 10 else normalized
+            phone_digits = func.replace(
+                func.replace(func.replace(Client.phone, " ", ""), "-", ""),
+                "+",
+                "",
+            )
             stmt = stmt.where(
                 or_(
-                    func.replace(func.replace(func.replace(Client.phone, " ", ""), "-", ""), "+", "").like(
-                        f"%{normalized}%"
-                    ),
+                    phone_digits.like(f"%{last10}%"),
                     Client.phone.ilike(f"%{phone.strip()}%"),
                 )
             )
-    if name:
+    if name and name.strip():
         stmt = stmt.where(Client.full_name.ilike(f"%{name.strip()}%"))
-    if contract_month:
+    if contract_month and not searching:
         start, end = month_bounds(contract_month)
         stmt = stmt.where(Client.contract_date >= start, Client.contract_date <= end)
-    if due_month:
+    if due_month and not searching:
         start, end = month_bounds(due_month)
         client_ids = db.scalars(
             select(InstallmentPlan.client_id)
@@ -121,8 +131,10 @@ def query_clients(
         )
         stmt = stmt.where(Client.id.in_(list(client_ids)))
 
-    if collection_view is not None:
-        stmt = stmt.join(
+    if collection_view is not None and not searching:
+        # OUTER JOIN: клиент на сборе без записи DocumentCollection иначе
+        # не виден ни в сборе, ни в договорах, но дубль его блокирует.
+        stmt = stmt.outerjoin(
             DocumentCollection,
             DocumentCollection.client_id == Client.id,
         )
@@ -139,7 +151,7 @@ def query_clients(
                 DocumentCollection.status == DocumentCollectionStatus.PAID,
             )
 
-    clients = list(db.scalars(stmt))
+    clients = list(db.scalars(stmt).unique())
 
     if overdue is not None:
         overdue_map = clients_overdue_map(db, [client.id for client in clients])
