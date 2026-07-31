@@ -28,6 +28,7 @@ import {
   validateRequiredDate,
 } from "@/lib/validation";
 import type { RetailClient, RetailContractBrief, RetailTermRate, User } from "@/lib/types";
+import { isRetailOwner, isRetailStaff } from "@/lib/retail-access";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function contractStatusTone(status: string): "default" | "success" | "warning" | "danger" {
@@ -49,7 +50,8 @@ export default function RetailClientDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const isOwner = user?.role === "owner";
+  const isOwner = isRetailOwner(user);
+  const canManage = isRetailStaff(user);
   const [client, setClient] = useState<RetailClient | null>(null);
   const [contracts, setContracts] = useState<RetailContractBrief[]>([]);
   const [investors, setInvestors] = useState<User[]>([]);
@@ -95,7 +97,7 @@ export default function RetailClientDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!isOwner) return;
+    if (!canManage) return;
     void (async () => {
       try {
         const [investorsData, ratesData] = await Promise.all([
@@ -115,7 +117,7 @@ export default function RetailClientDetailPage() {
         setRates([]);
       }
     })();
-  }, [isOwner]);
+  }, [canManage]);
 
   async function handleUploadClientPassport(file: File) {
     if (!client) return;
@@ -214,14 +216,16 @@ export default function RetailClientDetailPage() {
         subtitle={`${client.phone} · ${client.contracts_count} договор(ов)`}
         back={<BackLink href="/retail/clients">К клиентам</BackLink>}
         action={
-          isOwner ? (
+          canManage ? (
             <div className="flex flex-wrap gap-2">
               <Button type="button" onClick={() => setShowContractForm((value) => !value)}>
                 {showContractForm ? "Скрыть договор" : "Новый договор"}
               </Button>
-              <Button variant="danger" disabled={deleting} onClick={handleDeleteClient}>
-                {deleting ? "Удаление..." : "Удалить клиента"}
-              </Button>
+              {isOwner && (
+                <Button variant="danger" disabled={deleting} onClick={handleDeleteClient}>
+                  {deleting ? "Удаление..." : "Удалить клиента"}
+                </Button>
+              )}
             </div>
           ) : undefined
         }
@@ -229,7 +233,7 @@ export default function RetailClientDetailPage() {
 
       {error ? <p className="alert-danger">{error}</p> : null}
 
-      {isOwner && showContractForm && (
+      {canManage && showContractForm && (
         <Card>
           <SectionTitle
             title="Создать договор"
@@ -344,8 +348,8 @@ export default function RetailClientDetailPage() {
               hasFile={client.has_passport_pdf}
               filename={client.passport_pdf_filename}
               uploading={uploadingDoc === "client"}
-              canUpload={isOwner}
-              canDelete={isOwner}
+              canUpload={canManage}
+              canDelete={canManage}
               onUpload={handleUploadClientPassport}
               onDownload={() =>
                 retailApi.downloadClientPassportPdf(
@@ -392,8 +396,8 @@ export default function RetailClientDetailPage() {
               hasFile={client.has_guarantor_passport_pdf}
               filename={client.guarantor_passport_pdf_filename}
               uploading={uploadingDoc === "guarantor"}
-              canUpload={isOwner}
-              canDelete={isOwner}
+              canUpload={canManage}
+              canDelete={canManage}
               onUpload={handleUploadGuarantorPassport}
               onDownload={() =>
                 retailApi.downloadGuarantorPassportPdf(
@@ -425,7 +429,7 @@ export default function RetailClientDetailPage() {
           title="Договоры"
           description="Все договоры по этому клиенту"
           action={
-            isOwner ? (
+            canManage ? (
               <Button type="button" variant="secondary" onClick={() => setShowContractForm(true)}>
                 Новый договор
               </Button>
@@ -434,7 +438,7 @@ export default function RetailClientDetailPage() {
         />
         {contracts.length === 0 ? (
           <EmptyState>
-            {isOwner ? (
+            {canManage ? (
               <div className="space-y-2">
                 <p>Договоров пока нет</p>
                 <Button type="button" onClick={() => setShowContractForm(true)}>

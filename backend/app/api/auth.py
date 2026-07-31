@@ -4,8 +4,21 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_active_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse, UserResponse
-from app.services.auth import authenticate_user, issue_tokens, refresh_access_token
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
+from app.schemas.organization import organization_features
+from app.services.accounts import register_organization
+from app.services.auth import (
+    WORKSPACE_TO_ORG_TYPE,
+    authenticate_user,
+    issue_tokens,
+    refresh_access_token,
+)
 
 router = APIRouter()
 
@@ -16,6 +29,7 @@ def _user_response(user: User) -> UserResponse:
         organization_id=user.organization_id,
         organization_name=user.organization.name,
         organization_type=user.organization.organization_type,
+        organization_features=organization_features(user.organization),
         full_name=user.full_name,
         phone=user.phone,
         email=user.email,
@@ -34,6 +48,20 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
             detail="Неверный логин или пароль",
         )
     return issue_tokens(user)
+
+
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    """Регистрирует компанию с её руководителем и сразу выдаёт токены."""
+    owner = register_organization(
+        db,
+        organization_name=payload.organization_name,
+        login=payload.login,
+        password=payload.password,
+        owner_name=payload.full_name,
+        organization_type=WORKSPACE_TO_ORG_TYPE[payload.workspace],
+    )
+    return issue_tokens(owner)
 
 
 @router.post("/refresh", response_model=TokenResponse)

@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { LogoMark } from "@/components/ui";
-import { APP_CREATOR, APP_NAME } from "@/lib/brand";
+import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
+import { getOrganizationFeatures } from "@/lib/organization-features";
+import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const retailNavItems = [
@@ -20,7 +22,22 @@ const retailNavItems = [
     investorLabel: "Мои клиенты",
   },
   { href: "/retail/capital", label: "Мой вклад", icon: "◇", shortLabel: "Вклад", investorOnly: true },
-  { href: "/retail/investors", label: "Инвесторы", icon: "◌", shortLabel: "Инвест.", ownerOnly: true },
+  {
+    href: "/retail/investors",
+    label: "Инвесторы",
+    icon: "◌",
+    shortLabel: "Инвест.",
+    ownerOnly: true,
+    feature: "investors" as const,
+  },
+  { href: "/retail/users", label: "Команда", icon: "◍", shortLabel: "Команда", ownerOnly: true },
+  {
+    href: "/retail/settings",
+    label: "Настройки",
+    icon: "⚙",
+    shortLabel: "Настр.",
+    ownerOnly: true,
+  },
 ] as Array<{
   href: string;
   label: string;
@@ -29,6 +46,7 @@ const retailNavItems = [
   investorLabel?: string;
   investorOnly?: boolean;
   ownerOnly?: boolean;
+  feature?: "investors";
 }>;
 
 function pageTitle(pathname: string): string {
@@ -39,17 +57,22 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith("/retail/clients")) return "Клиенты";
   if (pathname.startsWith("/retail/capital")) return "Мой вклад";
   if (pathname.startsWith("/retail/investors")) return "Инвесторы";
-  return "Товарная рассрочка";
+  if (pathname.startsWith("/retail/users")) return "Команда";
+  if (pathname.startsWith("/retail/settings")) return "Настройки";
+  return WORKSPACE_LABELS.retail;
 }
 
 export function RetailShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const features = getOrganizationFeatures(user);
+  const companyName = user?.organization_name || WORKSPACE_LABELS.retail;
 
   const visibleNav = retailNavItems
     .filter((item) => {
       if (item.ownerOnly && user?.role !== "owner") return false;
       if (item.investorOnly && user?.role !== "investor") return false;
+      if (item.feature && !features[item.feature]) return false;
       return true;
     })
     .map((item) => ({
@@ -68,9 +91,9 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
         <aside className="app-sidebar sticky top-0 hidden h-screen w-52 shrink-0 flex-col px-2 py-2 shadow-card lg:flex">
           <div className="flex items-center gap-2 border-b border-chrome-border pb-2">
             <LogoMark />
-            <div>
-              <p className="text-sm font-semibold leading-tight">Товарная рассрочка</p>
-              <p className="text-[11px] leading-tight text-chrome-muted">Отдельный контур</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold leading-tight">{companyName}</p>
+              <p className="text-[11px] leading-tight text-chrome-muted">{WORKSPACE_LABELS.retail}</p>
             </div>
           </div>
 
@@ -98,7 +121,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
               href="/login"
               className="interactive block rounded-md border border-chrome-border px-2 py-1.5 text-xs text-chrome-muted hover:border-brand-600 hover:bg-chrome-hover hover:text-chrome-text"
             >
-              Юрфирма
+              {WORKSPACE_LABELS.legal}
             </Link>
             {user && (
               <div className="rounded-md border border-chrome-border bg-chrome-elevated px-2 py-2">
@@ -128,7 +151,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
                   <p className="truncate text-sm font-semibold text-chrome-text lg:text-xs lg:font-medium lg:text-chrome-muted">
                     {pageTitle(pathname)}
                   </p>
-                  <p className="truncate text-[11px] text-chrome-muted lg:hidden">{APP_NAME}</p>
+                  <p className="truncate text-[11px] text-chrome-muted lg:hidden">{companyName}</p>
                 </div>
               </div>
               {user && (
@@ -155,7 +178,7 @@ export function RetailShell({ children }: { children: React.ReactNode }) {
             items={visibleNav}
             primaryHrefs={visibleNav.map((item) => item.href)}
             pathname={pathname}
-            extraLinks={[{ href: "/login", label: "Юрфирма" }]}
+            extraLinks={[{ href: "/login", label: WORKSPACE_LABELS.legal }]}
           />
         </div>
       </div>

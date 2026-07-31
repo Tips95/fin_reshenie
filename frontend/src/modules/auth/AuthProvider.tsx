@@ -7,10 +7,19 @@ import { ApiRequestError, authApi } from "@/lib/api-client";
 import { clearTokens, isAuthenticated, setTokens } from "@/lib/auth-storage";
 import type { User, Workspace } from "@/lib/types";
 
+interface RegisterPayload {
+  organizationName: string;
+  login: string;
+  password: string;
+  fullName?: string;
+  workspace?: Workspace;
+}
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   login: (login: string, password: string, workspace?: Workspace) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -55,6 +64,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [router],
   );
 
+  const register = useCallback(
+    async ({
+      organizationName,
+      login: loginValue,
+      password,
+      fullName,
+      workspace = "legal",
+    }: RegisterPayload) => {
+      const tokens = await authApi.register({
+        organization_name: organizationName,
+        login: loginValue,
+        password,
+        full_name: fullName?.trim() ? fullName.trim() : undefined,
+        workspace,
+      });
+      setTokens(tokens.access_token, tokens.refresh_token);
+      const me = await authApi.me();
+      setUser(me);
+      router.push(workspace === "retail" ? "/retail" : "/");
+    },
+    [router],
+  );
+
   const logout = useCallback(() => {
     clearTokens();
     setUser(null);
@@ -62,8 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, refreshUser }),
-    [user, loading, login, logout, refreshUser],
+    () => ({ user, loading, login, register, logout, refreshUser }),
+    [user, loading, login, register, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

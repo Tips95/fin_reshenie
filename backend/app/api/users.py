@@ -7,13 +7,32 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_owner
 from app.core.database import get_db
 from app.core.security import get_password_hash
-from app.models.enums import AuditAction
+from app.models.enums import AuditAction, OrganizationType, UserRole
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.access import get_organization_user
+from app.services.accounts import assert_contacts_available
 from app.services.audit import log_audit
 
 router = APIRouter()
+
+TEAM_ROLES = {UserRole.OWNER, UserRole.MANAGER, UserRole.CALL_CENTER}
+INVESTOR_VIA_USERS_MESSAGE = "Инвесторов добавляйте в разделе «Инвесторы»"
+
+
+def _assert_team_role(role: UserRole, *, organization_type: OrganizationType) -> None:
+    if role == UserRole.INVESTOR:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=INVESTOR_VIA_USERS_MESSAGE
+            if organization_type == OrganizationType.RETAIL
+            else "Роль инвестора доступна только в товарной рассрочке",
+        )
+    if role not in TEAM_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Недопустимая роль для команды",
+        )
 
 
 @router.get("", response_model=list[UserResponse])
@@ -36,6 +55,14 @@ def create_user(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Укажите email или телефон",
         )
+
+    assert_contacts_available(
+        db,
+        organization_type=current_user.organization.organization_type,
+        email=payload.email,
+        phone=payload.phone,
+    )
+    _assert_team_role(payload.role, organization_type=current_user.organization.organization_type)
 
     user = User(
         organization_id=current_user.organization_id,
@@ -79,6 +106,21 @@ def update_user(
 ) -> User:
     user = get_organization_user(db, user_id=user_id, organization_id=current_user.organization_id)
     updates = payload.model_dump(exclude_unset=True)
+
+    if "email" in updates or "phone" in updates:
+        assert_contacts_available(
+            db,
+            organization_type=current_user.organization.organization_type,
+            email=updates.get("email", user.email),
+            phone=updates.get("phone", user.phone),
+            exclude_user_id=user.id,
+        )
+
+    if "role" in updates:
+        _assert_team_role(
+            updates["role"],
+            organization_type=current_user.organization.organization_type,
+        )
 
     if "password" in updates:
         updates["password_hash"] = get_password_hash(updates.pop("password"))

@@ -6,6 +6,8 @@ import { cn } from "@/lib/cn";
 import { APP_LOGO_FULL, APP_LOGO_MARK, APP_NAME } from "@/lib/brand";
 import { PHONE_PREFIX, applyPhoneInput } from "@/lib/phone";
 import { applyPassportInput, PASSPORT_PLACEHOLDER } from "@/lib/passport";
+import type { Workspace } from "@/lib/types";
+import { WORKSPACE_LABELS } from "@/lib/workspace";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
@@ -520,10 +522,41 @@ export function LoadingState({ text = "Загрузка..." }: { text?: string }
   );
 }
 
+/** Выбор контура на страницах входа и регистрации. */
+export function WorkspaceSwitch({
+  value,
+  onChange,
+}: {
+  value: Workspace;
+  onChange: (workspace: Workspace) => void;
+}) {
+  const options = Object.keys(WORKSPACE_LABELS) as Workspace[];
+
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(option)}
+          aria-pressed={value === option}
+          className={
+            value === option
+              ? "btn-primary interactive rounded-md border px-2 py-1.5 text-xs font-medium"
+              : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
+          }
+        >
+          {WORKSPACE_LABELS[option]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function BrandFooter({ onDark = false }: { onDark?: boolean }) {
   return (
     <p className={cn("text-center text-[11px]", onDark ? "text-chrome-muted" : "text-muted")}>
-      {APP_NAME} · платформа учёта для юридической компании
+      {APP_NAME} · платформа учёта рассрочки для компаний
     </p>
   );
 }

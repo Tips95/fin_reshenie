@@ -12,6 +12,34 @@ from app.services.organization_defaults import seed_all_bankruptcy_organization_
 from app.services.retail_seed import _upsert_owner, seed_retail_organization
 
 
+def _initial_admin_organization(db: Session, email: str) -> Organization | None:
+    """Компания начального администратора: та, где он уже есть.
+
+    После появления самостоятельной регистрации компаний в базе несколько, и
+    «первая подходящая» больше не годится — админа нельзя случайно завести
+    в компанию клиента. Если такого пользователя ещё нет, берём самую старую
+    компанию: это компания владельца установки.
+    """
+    existing = db.scalar(
+        select(User)
+        .join(Organization, Organization.id == User.organization_id)
+        .where(
+            Organization.organization_type == OrganizationType.BANKRUPTCY,
+            User.email == email,
+        )
+        .limit(1)
+    )
+    if existing is not None:
+        return db.get(Organization, existing.organization_id)
+
+    return db.scalar(
+        select(Organization)
+        .where(Organization.organization_type == OrganizationType.BANKRUPTCY)
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+
+
 def upsert_initial_admin(db: Session) -> bool:
     email = os.environ.get("INITIAL_ADMIN_EMAIL", "").strip()
     password = os.environ.get("INITIAL_ADMIN_PASSWORD", "").strip()
@@ -20,11 +48,7 @@ def upsert_initial_admin(db: Session) -> bool:
     if not email or not password:
         return False
 
-    organization = db.scalar(
-        select(Organization)
-        .where(Organization.organization_type == OrganizationType.BANKRUPTCY)
-        .limit(1)
-    )
+    organization = _initial_admin_organization(db, email)
     if organization is None:
         organization = Organization(
             id=uuid.uuid4(),
@@ -43,7 +67,7 @@ def upsert_initial_admin(db: Session) -> bool:
     )
 
     db.commit()
-    print(f"Owner ready for legal workspace: {email}")
+    print(f"Owner ready for legal workspace: {email} (organization: {organization.name})")
     return True
 
 

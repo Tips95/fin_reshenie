@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.api.deps import get_current_active_user, require_owner, require_roles
 from app.core.database import get_db
 from app.core.security import get_password_hash
-from app.models.enums import AuditAction, RetailContractStatus, UserRole
+from app.models.enums import AuditAction, OrganizationType, RetailContractStatus, UserRole
 from app.models.retail_client import RetailClient
 from app.models.retail_contract import RetailContract
 from app.models.retail_overdue_log import RetailOverdueLog
@@ -35,6 +35,7 @@ from app.schemas.user import (
     RetailInvestorUpdate,
     UserResponse,
 )
+from app.services.accounts import assert_contacts_available
 from app.services.audit import log_audit
 from app.services.retail_access import (
     apply_investor_contract_filter,
@@ -60,7 +61,18 @@ from app.services.validation import format_passport_display
 from app.models.retail_term_rate import RetailTermRate
 
 router = APIRouter()
-require_retail_user = require_roles(UserRole.OWNER, UserRole.INVESTOR)
+# Инвестор видит только своё; менеджер и колл-центр работают с клиентами и договорами.
+require_retail_user = require_roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.CALL_CENTER,
+    UserRole.INVESTOR,
+)
+require_retail_staff = require_roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.CALL_CENTER,
+)
 
 
 def _client_contracts_count(db: Session, user: User, client_id: UUID) -> int:
@@ -164,7 +176,7 @@ def list_clients(
 @router.post("/clients", response_model=RetailClientResponse, status_code=status.HTTP_201_CREATED)
 def create_client(
     payload: RetailClientCreate,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
@@ -229,7 +241,7 @@ def get_client(
 def update_client(
     client_id: UUID,
     payload: RetailClientUpdate,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
@@ -253,7 +265,7 @@ def update_client(
 async def upload_client_passport_pdf(
     client_id: UUID,
     file: UploadFile = File(...),
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
@@ -302,7 +314,7 @@ def download_client_passport_pdf(
 @router.delete("/clients/{client_id}/passport-pdf", response_model=RetailClientResponse)
 def delete_client_passport_pdf(
     client_id: UUID,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
@@ -332,7 +344,7 @@ def delete_client_passport_pdf(
 async def upload_guarantor_passport_pdf(
     client_id: UUID,
     file: UploadFile = File(...),
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
@@ -381,7 +393,7 @@ def download_guarantor_passport_pdf(
 @router.delete("/clients/{client_id}/guarantor-passport-pdf", response_model=RetailClientResponse)
 def delete_guarantor_passport_pdf(
     client_id: UUID,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
@@ -446,7 +458,7 @@ def list_contracts(
 @router.post("/contracts", response_model=RetailContractDetail, status_code=status.HTTP_201_CREATED)
 def create_contract(
     payload: RetailContractCreate,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailContractDetail:
     ensure_retail_organization(db, current_user)
@@ -526,7 +538,7 @@ def get_contract(
 async def upload_signed_contract_pdf(
     contract_id: UUID,
     file: UploadFile = File(...),
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailContractDetail:
     ensure_retail_organization(db, current_user)
@@ -582,7 +594,7 @@ def download_signed_contract_pdf(
 @router.delete("/contracts/{contract_id}/signed-contract-pdf", response_model=RetailContractDetail)
 def delete_signed_contract_pdf(
     contract_id: UUID,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> RetailContractDetail:
     ensure_retail_organization(db, current_user)
@@ -711,7 +723,7 @@ def create_overdue_log(
 
 @router.get("/investors", response_model=list[UserResponse])
 def list_investors(
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_retail_staff),
     db: Session = Depends(get_db),
 ) -> list[User]:
     ensure_retail_organization(db, current_user)
@@ -786,6 +798,12 @@ def create_investor(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Укажите email или телефон",
         )
+    assert_contacts_available(
+        db,
+        organization_type=OrganizationType.RETAIL,
+        email=payload.email,
+        phone=payload.phone,
+    )
     investor = User(
         organization_id=current_user.organization_id,
         full_name=payload.full_name,

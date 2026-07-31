@@ -36,12 +36,14 @@ import {
   validateRequiredDate,
 } from "@/lib/validation";
 import type { RetailClient, RetailTermRate, User } from "@/lib/types";
+import { isRetailOwner, isRetailStaff } from "@/lib/retail-access";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 export default function RetailClientsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const isOwner = user?.role === "owner";
+  const isOwner = isRetailOwner(user);
+  const canManage = isRetailStaff(user);
   const [clients, setClients] = useState<RetailClient[]>([]);
   const [investors, setInvestors] = useState<User[]>([]);
   const [rates, setRates] = useState<RetailTermRate[]>([]);
@@ -79,7 +81,7 @@ export default function RetailClientsPage() {
   useEffect(() => {
     void (async () => {
       try {
-        if (isOwner) {
+        if (canManage) {
           const [clientsData, investorsData, ratesData] = await Promise.all([
             retailApi.listClients(),
             retailApi.listInvestors(),
@@ -97,7 +99,7 @@ export default function RetailClientsPage() {
         setLoading(false);
       }
     })();
-  }, [isOwner]);
+  }, [canManage]);
 
   async function handleCreateClient(event: React.FormEvent) {
     event.preventDefault();
@@ -214,14 +216,14 @@ export default function RetailClientsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title={isOwner ? "Клиенты" : "Мои клиенты"}
+        title={canManage ? "Клиенты" : "Мои клиенты"}
         subtitle={
-          isOwner
+          canManage
             ? "Откройте карточку клиента для документов и договоров"
-            : "Клиенты по вашим договорам. Создание — только у администратора"
+            : "Клиенты по вашим договорам. Создание — у руководителя и сотрудников"
         }
         action={
-          isOwner ? (
+          canManage ? (
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowClientForm((v) => !v)}>
                 {showClientForm ? "Скрыть форму" : "Новый клиент"}
@@ -234,16 +236,16 @@ export default function RetailClientsPage() {
         }
       />
 
-      {!isOwner && (
+      {!canManage && (
         <Card variant="accent">
           <p className="text-sm text-muted">
             Как инвестор вы видите только клиентов по своим договорам. Новых клиентов и договоров
-            создаёт администратор и назначает их вам.
+            создаёт команда компании и назначает их вам.
           </p>
         </Card>
       )}
 
-      {isOwner && showClientForm && (
+      {canManage && showClientForm && (
         <Card>
           <SectionTitle title="Создать клиента" />
           <form onSubmit={handleCreateClient} className="grid gap-2 md:grid-cols-2">
@@ -372,7 +374,7 @@ export default function RetailClientsPage() {
         </Card>
       )}
 
-      {isOwner && showContractForm && (
+      {canManage && showContractForm && (
         <Card>
           <SectionTitle title="Создать договор" description="Назначьте инвестора — взнос пойдёт в его кассу" />
           <form onSubmit={handleCreateContract} className="grid gap-2 md:grid-cols-2">
@@ -466,9 +468,9 @@ export default function RetailClientsPage() {
       <Card>
         {clients.length === 0 ? (
           <EmptyState>
-            {isOwner
+            {canManage
               ? "Клиентов пока нет. Создайте первого клиента и договор."
-              : "Пока нет клиентов по вашим договорам. Администратор создаст договор и назначит его вам."}
+              : "Пока нет клиентов по вашим договорам. Команда создаст договор и назначит его вам."}
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">

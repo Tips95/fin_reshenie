@@ -3,16 +3,18 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { BrandFooter, Button, Card, Input, LogoLockup } from "@/components/ui";
-import { PHONE_PREFIX } from "@/lib/phone";
+import Link from "next/link";
+
+import { BrandFooter, Button, Card, Input, LogoLockup, WorkspaceSwitch } from "@/components/ui";
 import type { Workspace } from "@/lib/types";
-import { validateLogin } from "@/lib/validation";
+import { normalizeLoginValue, validateLogin } from "@/lib/validation";
+import { WORKSPACE_LABELS, resolveWorkspace, setStoredWorkspace } from "@/lib/workspace";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
-  const [workspace, setWorkspace] = useState<Workspace>("legal");
+  const [workspace, setWorkspace] = useState<Workspace>(() => resolveWorkspace());
   const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +25,12 @@ export default function LoginPage() {
       router.replace(user.organization_type === "retail" ? "/retail" : "/");
     }
   }, [loading, user, router]);
+
+  function changeWorkspace(next: Workspace) {
+    setWorkspace(next);
+    setStoredWorkspace(next);
+    setError(null);
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -35,13 +43,8 @@ export default function LoginPage() {
       return;
     }
     try {
-      const normalizedLogin =
-        loginValue.includes("@") || !/^[\d+\s()-]+$/.test(loginValue.trim())
-          ? loginValue.trim()
-          : loginValue.trim().startsWith("+")
-            ? loginValue.trim()
-            : `${PHONE_PREFIX}${loginValue.replace(/\D/g, "").replace(/^7/, "").slice(0, 10)}`;
-      await login(normalizedLogin, password, workspace);
+      setStoredWorkspace(workspace);
+      await login(normalizeLoginValue(loginValue), password, workspace);
     } catch (err) {
       setError(getAuthErrorMessage(err));
     } finally {
@@ -54,32 +57,13 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <div className="mb-4 space-y-2">
           <LogoLockup />
-          <p className="text-center text-xs text-muted">Выберите контур и войдите</p>
+          <p className="text-center text-xs text-muted">
+            Вход в контур «{WORKSPACE_LABELS[workspace]}»
+          </p>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            onClick={() => setWorkspace("legal")}
-            className={
-              workspace === "legal"
-                ? "btn-primary interactive rounded-md border px-2 py-1.5 text-xs font-medium"
-                : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
-            }
-          >
-            Юрфирма
-          </button>
-          <button
-            type="button"
-            onClick={() => setWorkspace("retail")}
-            className={
-              workspace === "retail"
-                ? "btn-primary interactive rounded-md border px-2 py-1.5 text-xs font-medium"
-                : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
-            }
-          >
-            Товарная рассрочка
-          </button>
+        <div className="mb-4">
+          <WorkspaceSwitch value={workspace} onChange={changeWorkspace} />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -103,11 +87,22 @@ export default function LoginPage() {
               required
             />
           </div>
-          {error && <p className="alert-danger px-2 py-1.5 text-xs">{error}</p>}
+          {error && (
+            <p className="alert-danger px-2 py-1.5 text-xs">
+              {error} · контур «{WORKSPACE_LABELS[workspace]}»
+            </p>
+          )}
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? "Вход..." : "Войти"}
           </Button>
         </form>
+
+        <p className="mt-3 text-center text-xs text-muted">
+          Нет аккаунта?{" "}
+          <Link href={`/register?workspace=${workspace}`} className="link-brand font-medium">
+            Зарегистрировать компанию
+          </Link>
+        </p>
 
         <p className="mt-3 text-[11px] text-muted">
           {workspace === "legal"

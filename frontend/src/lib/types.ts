@@ -4,6 +4,24 @@ export type OrganizationType = "bankruptcy" | "retail";
 
 export type Workspace = "legal" | "retail";
 
+export interface OrganizationFeatures {
+  document_collection: boolean;
+  tasks: boolean;
+  expenses: boolean;
+  pricing: boolean;
+  analytics: boolean;
+  investors: boolean;
+}
+
+export const DEFAULT_ORGANIZATION_FEATURES: OrganizationFeatures = {
+  document_collection: true,
+  tasks: true,
+  expenses: true,
+  pricing: true,
+  analytics: true,
+  investors: true,
+};
+
 export type ClientStatus = "active" | "completed" | "defaulted" | "cancelled";
 
 export type EngagementStage = "document_collection" | "bankruptcy";
@@ -50,6 +68,7 @@ export interface User {
   organization_id: string;
   organization_name: string;
   organization_type: OrganizationType;
+  organization_features?: OrganizationFeatures;
   full_name: string;
   phone: string | null;
   email: string | null;
@@ -57,6 +76,14 @@ export interface User {
   is_active: boolean;
   investment_amount?: string | null;
   created_at?: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  organization_type: OrganizationType;
+  features: OrganizationFeatures;
+  created_at: string;
 }
 
 export interface TokenResponse {

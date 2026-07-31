@@ -82,6 +82,15 @@ export function validateLogin(value: string): string | null {
   return "Введите email или номер телефона (+7...)";
 }
 
+/** Приводит введённый логин к виду, который ждёт бэкенд: email как есть, телефон в +7XXXXXXXXXX. */
+export function normalizeLoginValue(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.includes("@") || !/^[\d+\s()-]+$/.test(trimmed) || trimmed.startsWith("+")) {
+    return trimmed;
+  }
+  return `${PHONE_PREFIX}${trimmed.replace(/\D/g, "").replace(/^7/, "").slice(0, 10)}`;
+}
+
 export function validatePassport(value: string): string | null {
   if (!isPassportComplete(value)) {
     return "Паспорт: укажите серию и номер (формат 00 00 000000)";

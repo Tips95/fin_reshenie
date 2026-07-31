@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, String
+from sqlalchemy import Boolean, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -19,6 +19,16 @@ class Organization(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
         nullable=False,
         default=OrganizationType.BANKRUPTCY,
     )
+
+    # Модули продукта: руководитель включает/выключает под свою компанию.
+    # Значения по умолчанию True — чтобы продакшен с уже работающими разделами
+    # не «потерял» меню после миграции.
+    feature_document_collection: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    feature_tasks: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    feature_expenses: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    feature_pricing: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    feature_analytics: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    feature_investors: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
     clients: Mapped[list["Client"]] = relationship(back_populates="organization")

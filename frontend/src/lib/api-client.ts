@@ -26,6 +26,7 @@ import type {
   RetailDashboardSummary,
   RetailTermRate,
   Workspace,
+  Organization,
   User,
 } from "./types";
 
@@ -199,7 +200,23 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ login, password, workspace }),
     }),
+  register: (data: {
+    organization_name: string;
+    login: string;
+    password: string;
+    full_name?: string;
+    workspace: Workspace;
+  }) => apiFetch<TokenResponse>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
   me: () => apiFetch<User>("/auth/me"),
+};
+
+export const organizationsApi = {
+  current: () => apiFetch<Organization>("/organizations/current"),
+  update: (data: Record<string, unknown>) =>
+    apiFetch<Organization>("/organizations/current", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const retailApi = {

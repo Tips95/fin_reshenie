@@ -1,6 +1,6 @@
 export const APP_NAME = "Решение Финансы";
 
-export const APP_TAGLINE = "Учёт клиентов, рассрочки и обязательных платежей";
+export const APP_TAGLINE = "Платформа учёта рассрочки для компаний";
 
 export const APP_LOGO_MARK = "/brand/logo-mark.png";
 

@@ -14,7 +14,10 @@ async def lifespan(_: FastAPI):
 
     db = SessionLocal()
     try:
-        seed_all_bankruptcy_organization_defaults(db)
+        seed_all_bankruptcy_organization_defaults(
+            db,
+            force=settings.FORCE_ORGANIZATION_DEFAULTS_SYNC,
+        )
         db.commit()
     except Exception as exc:
         db.rollback()

@@ -5,22 +5,56 @@ import { usePathname } from "next/navigation";
 
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { LogoMark } from "@/components/ui";
-import { APP_CREATOR, APP_NAME, APP_TAGLINE } from "@/lib/brand";
+import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { getOrganizationFeatures } from "@/lib/organization-features";
+import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
   { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
-  { href: "/clients/collection", label: "Сбор документов", icon: "◫", shortLabel: "Сбор" },
+  {
+    href: "/clients/collection",
+    label: "Сбор документов",
+    icon: "◫",
+    shortLabel: "Сбор",
+    feature: "document_collection" as const,
+  },
   { href: "/clients/contracts", label: "Договоры", icon: "◎", shortLabel: "Договоры" },
-  { href: "/analytics", label: "Аналитика", icon: "◉", ownerOnly: true },
-  { href: "/tasks", label: "Задачи", icon: "◐", shortLabel: "Задачи", roles: ["owner", "manager"] },
-  { href: "/expenses", label: "Расходы", icon: "◇", ownerOnly: true },
+  {
+    href: "/analytics",
+    label: "Аналитика",
+    icon: "◉",
+    ownerOnly: true,
+    feature: "analytics" as const,
+  },
+  {
+    href: "/tasks",
+    label: "Задачи",
+    icon: "◐",
+    shortLabel: "Задачи",
+    roles: ["owner", "manager"],
+    feature: "tasks" as const,
+  },
+  {
+    href: "/expenses",
+    label: "Расходы",
+    icon: "◇",
+    ownerOnly: true,
+    feature: "expenses" as const,
+  },
   { href: "/audit", label: "Журнал", icon: "▣", ownerOnly: true },
   { href: "/users", label: "Команда", icon: "◌", ownerOnly: true },
-  { href: "/pricing", label: "Тарифы", icon: "◆", ownerOnly: true },
+  {
+    href: "/pricing",
+    label: "Тарифы",
+    icon: "◆",
+    ownerOnly: true,
+    feature: "pricing" as const,
+  },
+  { href: "/settings", label: "Настройки", icon: "⚙", shortLabel: "Настр.", ownerOnly: true },
 ] as Array<{
   href: string;
   label: string;
@@ -28,6 +62,7 @@ const navItems = [
   shortLabel?: string;
   ownerOnly?: boolean;
   roles?: string[];
+  feature?: keyof ReturnType<typeof getOrganizationFeatures>;
 }>;
 
 function pageTitle(pathname: string): string {
@@ -42,6 +77,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith("/audit")) return "Журнал";
   if (pathname.startsWith("/users")) return "Команда";
   if (pathname.startsWith("/pricing")) return "Тарифы";
+  if (pathname.startsWith("/settings")) return "Настройки";
   return "Панель управления";
 }
 
@@ -57,18 +93,26 @@ function isNavActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
-const MOBILE_PRIMARY_HREFS = ["/", "/clients/collection", "/clients/contracts", "/tasks"];
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const openTasksCount = useOpenTasksCount();
+  const features = getOrganizationFeatures(user);
+  const companyName = user?.organization_name || WORKSPACE_LABELS.legal;
 
   const visibleNav = navItems.filter((item) => {
     if (item.ownerOnly && user?.role !== "owner") return false;
     if (item.roles && !item.roles.includes(user?.role ?? "")) return false;
+    if (item.feature && !features[item.feature]) return false;
     return true;
   });
+
+  const mobilePrimary = ["/", "/clients/contracts", "/tasks", "/settings"].filter((href) =>
+    visibleNav.some((item) => item.href === href),
+  );
+  if (features.document_collection && !mobilePrimary.includes("/clients/collection")) {
+    mobilePrimary.splice(1, 0, "/clients/collection");
+  }
 
   return (
     <div className="min-h-screen mesh-bg">
@@ -76,9 +120,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <aside className="app-sidebar sticky top-0 hidden h-screen w-52 shrink-0 flex-col px-2 py-2 shadow-card lg:flex">
           <div className="flex items-center gap-2 border-b border-chrome-border pb-2">
             <LogoMark />
-            <div>
-              <p className="text-sm font-semibold leading-tight">{APP_NAME}</p>
-              <p className="text-[11px] leading-tight text-chrome-muted">{APP_TAGLINE}</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold leading-tight">{companyName}</p>
+              <p className="text-[11px] leading-tight text-chrome-muted">{WORKSPACE_LABELS.legal}</p>
             </div>
           </div>
 
@@ -109,7 +153,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               href="/login"
               className="interactive block rounded-md border border-chrome-border px-2 py-1.5 text-xs text-chrome-muted hover:border-brand-600 hover:bg-chrome-hover hover:text-chrome-text"
             >
-              Товарная рассрочка
+              {WORKSPACE_LABELS.retail}
             </Link>
             {user && (
               <div className="rounded-md border border-chrome-border bg-chrome-elevated px-2 py-2">
@@ -139,7 +183,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <p className="truncate text-sm font-semibold text-chrome-text lg:text-xs lg:font-medium lg:text-chrome-muted">
                     {pageTitle(pathname)}
                   </p>
-                  <p className="truncate text-[11px] text-chrome-muted lg:hidden">{APP_NAME}</p>
+                  <p className="truncate text-[11px] text-chrome-muted lg:hidden">{companyName}</p>
                 </div>
               </div>
               {user && (
@@ -164,10 +208,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <MobileBottomNav
             items={visibleNav}
-            primaryHrefs={MOBILE_PRIMARY_HREFS}
+            primaryHrefs={mobilePrimary}
             pathname={pathname}
             badges={{ "/tasks": openTasksCount }}
-            extraLinks={[{ href: "/login", label: "Товарная рассрочка" }]}
+            extraLinks={[{ href: "/login", label: WORKSPACE_LABELS.retail }]}
           />
         </div>
       </div>

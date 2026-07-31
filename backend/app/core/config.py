@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
 
+    # Обычно тарифы и статьи расходов досеиваются только тем компаниям, у
+    # которых их нет: иначе правки компании откатывались бы при каждом деплое.
+    # Флаг включает принудительное применение эталонной сетки ко всем.
+    FORCE_ORGANIZATION_DEFAULTS_SYNC: bool = False
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> list[str]:

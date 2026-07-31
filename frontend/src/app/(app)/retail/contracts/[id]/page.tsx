@@ -28,6 +28,7 @@ import {
   validateRequiredDate,
 } from "@/lib/validation";
 import { PdfDocumentField } from "@/components/PdfDocumentField";
+import { isRetailOwner, isRetailStaff } from "@/lib/retail-access";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function statusTone(status: string): "default" | "success" | "warning" | "danger" {
@@ -49,7 +50,8 @@ export default function RetailContractDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const isOwner = user?.role === "owner";
+  const isOwner = isRetailOwner(user);
+  const canManage = isRetailStaff(user);
   const [contract, setContract] = useState<RetailContractDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -286,8 +288,8 @@ export default function RetailContractDetailPage() {
           hasFile={contract.has_signed_contract_pdf}
           filename={contract.signed_contract_pdf_filename}
           uploading={uploadingContractPdf}
-          canUpload={isOwner}
-          canDelete={isOwner}
+          canUpload={canManage}
+          canDelete={canManage}
           onUpload={handleUploadSignedContract}
           onDownload={handleDownloadSignedContract}
           onDelete={handleDeleteSignedContract}
