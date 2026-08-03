@@ -8,7 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import MandatoryPaymentStatus, MandatoryPaymentType
 
-DEPOSIT_AMOUNT = Decimal("25000.00")
+# Дефолт 0: сумму депозита вводит руководитель вручную (раньше было фикс 25 000).
+DEPOSIT_AMOUNT = Decimal("0.00")
 
 
 class ClientMandatoryPayment(Base, UUIDPrimaryKeyMixin, TimestampMixin):

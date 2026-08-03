@@ -65,6 +65,13 @@ def update_mandatory_payment(
     item = _get_mandatory_payment(db, client_id=client_id, payment_id=payment_id)
     updates = payload.model_dump(exclude_unset=True)
 
+    if "planned_amount" in updates and updates["planned_amount"] is not None:
+        if updates["planned_amount"] < item.paid_amount:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Плановая сумма не может быть меньше уже оплаченной",
+            )
+
     for field, value in updates.items():
         old_value = getattr(item, field)
         if old_value != value:

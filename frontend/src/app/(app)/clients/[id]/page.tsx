@@ -152,9 +152,8 @@ function mandatoryRemaining(item: MandatoryPayment): number {
 }
 
 function mandatoryTypeHint(type: string): string {
-  if (type === "deposit") return "Фиксировано: 25 000 ₽";
-  if (type === "court_fee") return "Указывается при необходимости";
-  return "Укажите сумму перед внесением";
+  if (type === "court_fee") return "Включите, если пошлина нужна, и укажите сумму";
+  return "Укажите плановую сумму вручную";
 }
 
 export default function ClientDetailPage() {
@@ -181,7 +180,13 @@ export default function ClientDetailPage() {
     comment: "",
   });
   const [mandatoryPayingId, setMandatoryPayingId] = useState<string | null>(null);
+  const [mandatoryPayForm, setMandatoryPayForm] = useState<{
+    paymentId: string;
+    amount: string;
+    payment_date: string;
+  } | null>(null);
   const [plannedEdits, setPlannedEdits] = useState<Record<string, string>>({});
+  const [editingPlannedId, setEditingPlannedId] = useState<string | null>(null);
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneValue, setPhoneValue] = useState("");
   const [phoneSaving, setPhoneSaving] = useState(false);
@@ -606,31 +611,79 @@ export default function ClientDetailPage() {
   }
 
   async function handleMandatoryPay(item: MandatoryPayment) {
-    if (!client) return;
-    const amount = mandatoryRemaining(item);
-    if (amount <= 0) return;
+    if (!client || !mandatoryPayForm || mandatoryPayForm.paymentId !== item.id) return;
+
+    const amount = Number(mandatoryPayForm.amount);
+    const rest = mandatoryRemaining(item);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("Укажите сумму платежа", "error");
+      return;
+    }
+    if (amount > rest) {
+      showToast("Сумма превышает остаток", "error");
+      return;
+    }
+    if (!mandatoryPayForm.payment_date) {
+      showToast("Укажите дату платежа", "error");
+      return;
+    }
 
     setMandatoryPayingId(item.id);
     try {
       await mandatoryPaymentsApi.record(client.id, item.id, {
         amount: amount.toFixed(2),
-        payment_date: client.contract_date,
+        payment_date: mandatoryPayForm.payment_date,
         comment: statusLabel(item.payment_type),
       });
+      setMandatoryPayForm(null);
       await refreshClient();
+      showToast("Обязательный платёж записан");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось записать платёж",
+        "error",
+      );
     } finally {
       setMandatoryPayingId(null);
     }
   }
 
+  function openMandatoryPayForm(item: MandatoryPayment) {
+    const rest = mandatoryRemaining(item);
+    setMandatoryPayForm({
+      paymentId: item.id,
+      amount: rest > 0 ? String(Math.round(rest)) : "",
+      payment_date: new Date().toISOString().slice(0, 10),
+    });
+  }
+
   async function handleSavePlannedAmount(item: MandatoryPayment) {
     if (!client) return;
     const value = plannedEdits[item.id] ?? item.planned_amount;
-    await mandatoryPaymentsApi.update(client.id, item.id, {
-      planned_amount: Number(value).toFixed(2),
-      is_applicable: true,
-    });
-    await refreshClient();
+    const amount = Number(value);
+    const paid = Number(item.paid_amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      showToast("Укажите корректную плановую сумму", "error");
+      return;
+    }
+    if (amount < paid) {
+      showToast("Плановая сумма не может быть меньше уже оплаченной", "error");
+      return;
+    }
+    try {
+      await mandatoryPaymentsApi.update(client.id, item.id, {
+        planned_amount: amount.toFixed(2),
+        is_applicable: true,
+      });
+      setEditingPlannedId(null);
+      await refreshClient();
+      showToast("Плановая сумма сохранена");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить сумму",
+        "error",
+      );
+    }
   }
 
   async function handleToggleCourtFee(item: MandatoryPayment, enabled: boolean) {
@@ -2030,7 +2083,7 @@ export default function ClientDetailPage() {
             id="section-mandatory"
             className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-status-warning-solid")}
             title="Обязательные платежи по процедуре"
-            description="Депозит, финансовое управление и судебная пошлина — только для руководителя"
+            description="Суммы вводятся вручную. Дата внесения определяет месяц вычета из чистой прибыли"
             defaultOpen={!allMandatoryPaid}
             badge={
               allMandatoryPaid ? (
@@ -2051,6 +2104,7 @@ export default function ClientDetailPage() {
                       <th>План</th>
                       <th>Оплачено</th>
                       <th>Остаток</th>
+                      <th>Дата оплаты</th>
                       <th>Статус</th>
                       {canManageMandatory && <th>Действие</th>}
                     </tr>
@@ -2058,11 +2112,10 @@ export default function ClientDetailPage() {
                   <tbody>
                     {mandatory.map((item) => {
                       const rest = mandatoryRemaining(item);
-                      const needsAmount =
-                        item.is_applicable &&
-                        Number(item.planned_amount) <= 0 &&
-                        item.payment_type !== "deposit";
+                      const canEditPlanned = item.is_applicable && canManageMandatory;
+                      const editingPlanned = editingPlannedId === item.id;
                       const plannedValue = plannedEdits[item.id] ?? item.planned_amount;
+                      const paying = mandatoryPayForm?.paymentId === item.id;
 
                       return (
                         <tr key={item.id}>
@@ -2079,11 +2132,11 @@ export default function ClientDetailPage() {
                           <td data-label="План">
                             {item.payment_type === "court_fee" && !item.is_applicable ? (
                               <span className="text-muted">Не требуется</span>
-                            ) : needsAmount && canManageMandatory ? (
-                              <div className="flex items-center gap-2">
+                            ) : canEditPlanned && (editingPlanned || Number(item.planned_amount) <= 0) ? (
+                              <div className="flex flex-wrap items-center gap-2">
                                 <Input
                                   type="number"
-                                  min={1}
+                                  min={Number(item.paid_amount)}
                                   step={1}
                                   className="max-w-[120px]"
                                   value={plannedValue}
@@ -2101,14 +2154,50 @@ export default function ClientDetailPage() {
                                 >
                                   OK
                                 </Button>
+                                {editingPlanned && Number(item.planned_amount) > 0 ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingPlannedId(null);
+                                      setPlannedEdits((prev) => {
+                                        const next = { ...prev };
+                                        delete next[item.id];
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    Отмена
+                                  </Button>
+                                ) : null}
                               </div>
                             ) : (
-                              formatMoney(item.planned_amount)
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span>{formatMoney(item.planned_amount)}</span>
+                                {canEditPlanned ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingPlannedId(item.id);
+                                      setPlannedEdits({
+                                        ...plannedEdits,
+                                        [item.id]: String(Math.round(Number(item.planned_amount))),
+                                      });
+                                    }}
+                                  >
+                                    Изменить
+                                  </Button>
+                                ) : null}
+                              </div>
                             )}
                           </td>
                           <td data-label="Оплачено">{formatMoney(item.paid_amount)}</td>
                           <td data-label="Остаток">
                             {item.is_applicable ? formatMoney(rest) : "—"}
+                          </td>
+                          <td data-label="Дата оплаты">
+                            {item.paid_date ? formatDate(item.paid_date) : "—"}
                           </td>
                           <td data-label="Статус">
                             <Badge tone={scheduleTone(item.status)}>
@@ -2130,16 +2219,64 @@ export default function ClientDetailPage() {
                                 </label>
                               )}
                               {item.is_applicable && rest > 0 && Number(item.planned_amount) > 0 ? (
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  disabled={mandatoryPayingId === item.id}
-                                  onClick={() => handleMandatoryPay(item)}
-                                >
-                                  {mandatoryPayingId === item.id
-                                    ? "Сохранение..."
-                                    : "Внести платёж"}
-                                </Button>
+                                paying ? (
+                                  <div className="flex min-w-[200px] flex-col gap-2">
+                                    <FormField label="Сумма">
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        max={rest}
+                                        value={mandatoryPayForm.amount}
+                                        onChange={(e) =>
+                                          setMandatoryPayForm({
+                                            ...mandatoryPayForm,
+                                            amount: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </FormField>
+                                    <FormField label="Дата платежа">
+                                      <Input
+                                        type="date"
+                                        value={mandatoryPayForm.payment_date}
+                                        onChange={(e) =>
+                                          setMandatoryPayForm({
+                                            ...mandatoryPayForm,
+                                            payment_date: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </FormField>
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        disabled={mandatoryPayingId === item.id}
+                                        onClick={() => handleMandatoryPay(item)}
+                                      >
+                                        {mandatoryPayingId === item.id
+                                          ? "Сохранение..."
+                                          : "Записать"}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        disabled={mandatoryPayingId === item.id}
+                                        onClick={() => setMandatoryPayForm(null)}
+                                      >
+                                        Отмена
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => openMandatoryPayForm(item)}
+                                  >
+                                    Внести платёж
+                                  </Button>
+                                )
                               ) : item.is_applicable && item.status === "paid" ? (
                                 <span className="text-xs text-status-success-text">Оплачено</span>
                               ) : null}

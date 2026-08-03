@@ -418,7 +418,7 @@ export default function DashboardPage() {
             id="dash-profit"
             tone="profit"
             title="Прибыль"
-            description="Итог: рассрочка + касса сбора − обязательные − расходы"
+            description="Итог: рассрочка + касса сбора − обязательные (по дате внесения) − расходы"
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <StatCard
