@@ -10,7 +10,6 @@ import {
   buildClientListQuery,
   clientDetailHref,
   parseClientListFilters,
-  sanitizeClientListReturnHref,
   type ClientListSortField,
   type CollectionViewFilter,
 } from "@/lib/client-list-filters";
