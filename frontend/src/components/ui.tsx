@@ -8,6 +8,7 @@ import { PHONE_PREFIX, applyPhoneInput } from "@/lib/phone";
 import { applyPassportInput, PASSPORT_PLACEHOLDER } from "@/lib/passport";
 import type { Workspace } from "@/lib/types";
 import { WORKSPACE_LABELS } from "@/lib/workspace";
+import { DatePicker, MonthPicker } from "@/components/date-picker";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
@@ -172,15 +173,105 @@ export function ActionMenuItem({
   );
 }
 
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+        aria-label="Закрыть"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-hover"
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="modal-title" className="text-sm font-semibold text-foreground">
+              {title}
+            </h2>
+            {description ? <p className="mt-0.5 text-xs text-muted">{description}</p> : null}
+          </div>
+          <button
+            type="button"
+            className="interactive shrink-0 rounded-md px-2 py-1 text-lg leading-none text-muted hover:bg-surface-muted hover:text-foreground"
+            onClick={onClose}
+            aria-label="Закрыть"
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function Input({
   className,
   type,
   onWheel,
+  value,
+  onChange,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement>) {
+  if (type === "date") {
+    return (
+      <DatePicker
+        className={className}
+        value={typeof value === "string" ? value : undefined}
+        onChange={onChange}
+        {...props}
+      />
+    );
+  }
+  if (type === "month") {
+    return (
+      <MonthPicker
+        className={className}
+        value={typeof value === "string" ? value : undefined}
+        onChange={onChange}
+        {...props}
+      />
+    );
+  }
+
   return (
     <input
       type={type}
+      value={value}
+      onChange={onChange}
       className={cn(
         "interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20",
         type === "number" &&
@@ -197,6 +288,8 @@ export function Input({
     />
   );
 }
+
+export { DatePicker, MonthPicker } from "@/components/date-picker";
 
 export function PhoneInput({
   className,

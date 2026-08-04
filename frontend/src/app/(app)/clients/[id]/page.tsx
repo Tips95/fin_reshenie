@@ -15,6 +15,7 @@ import {
   FormField,
   Input,
   LoadingState,
+  Modal,
   PageHeader,
   PhoneInput,
   SectionTitle,
@@ -23,6 +24,7 @@ import {
   Toast,
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
+import { sanitizeClientListReturnHref } from "@/lib/client-list-filters";
 import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
 import {
@@ -37,10 +39,7 @@ import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryP
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 import { cn } from "@/lib/cn";
 
-type ClientNavSection = {
-  id: string;
-  label: string;
-};
+type ClientCardTab = "overview" | "payments" | "documents" | "journal";
 
 const CLIENT_SECTION_CLASS = "client-section-anchor";
 
@@ -68,6 +67,17 @@ type ToastState = {
   message: string;
   tone: "success" | "error" | "info";
 };
+
+function useClientListReturnHref(): string {
+  const [href, setHref] = useState("/clients/contracts");
+  useEffect(() => {
+    const ret = sanitizeClientListReturnHref(
+      new URLSearchParams(window.location.search).get("return"),
+    );
+    if (ret) setHref(ret);
+  }, []);
+  return href;
+}
 
 function getScheduleEditValues(
   item: PaymentScheduleItem,
@@ -160,6 +170,7 @@ export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const listBackHref = useClientListReturnHref();
   const [client, setClient] = useState<ClientDetail | ClientBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -231,6 +242,10 @@ export default function ClientDetailPage() {
   const [paymentDateEdits, setPaymentDateEdits] = useState<Record<string, string>>({});
   const [savingPaymentDateId, setSavingPaymentDateId] = useState<string | null>(null);
   const [deletingClient, setDeletingClient] = useState(false);
+  const [activeTab, setActiveTab] = useState<ClientCardTab>("overview");
+  const [tariffOpen, setTariffOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [claimModalOpen, setClaimModalOpen] = useState(false);
 
   const showToast = useCallback((message: string, tone: ToastState["tone"] = "success") => {
     setToast({ message, tone });
@@ -573,6 +588,7 @@ export default function ClientDetailPage() {
       comment: "",
     });
     await refreshClient();
+    setPaymentModalOpen(false);
     if (
       paidFirstMonth &&
       isDetail(client) &&
@@ -1111,53 +1127,6 @@ export default function ClientDetailPage() {
     { value: "completed", label: "Завершение" },
   ];
 
-  const jumpToSection = useCallback((sectionId: string) => {
-    if (sectionId === "section-schedule") {
-      setScheduleOpen(true);
-    }
-    window.requestAnimationFrame(() => {
-      const target = document.getElementById(sectionId);
-      if (!target) {
-        return;
-      }
-      const summary = target.querySelector<HTMLButtonElement>("button.collapsible-summary");
-      if (summary?.getAttribute("aria-expanded") === "false") {
-        summary.click();
-      }
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
-
-  const clientNavSections = useMemo(() => {
-    if (!client || !isDetail(client)) {
-      return [] as ClientNavSection[];
-    }
-
-    const detail = client;
-    const isBankruptcy = client.engagement_stage === "bankruptcy";
-    const docCollection = detail.document_collection ?? null;
-    const sections: ClientNavSection[] = [];
-
-    if (canRecordSchedulePayment && isBankruptcy) {
-      sections.push({ id: "section-payment", label: "Платёж" });
-    }
-    if (canEditClient) {
-      sections.push({ id: "section-client", label: "Данные" });
-    }
-    if (canEditClient && docCollection) {
-      sections.push({ id: "section-doc", label: "Сбор документов" });
-    }
-    if (isBankruptcy) {
-      if (isOwner) {
-        sections.push({ id: "section-mandatory", label: "Обязательные" });
-      }
-      sections.push({ id: "section-schedule", label: "График" });
-      sections.push({ id: "section-payments", label: "История" });
-    }
-
-    return sections;
-  }, [client, canEditClient, canRecordSchedulePayment, isOwner]);
-
   async function handleClaimClient() {
     if (!client || !user) return;
     setCardSaving("claim");
@@ -1165,6 +1134,7 @@ export default function ClientDetailPage() {
       const updated = await clientsApi.update(client.id, { assigned_manager_id: user.id });
       setClient((current) => (current ? { ...current, ...updated } : current));
       showToast("Клиент закреплён за вами");
+      setClaimModalOpen(false);
     } catch (error) {
       showToast(
         error instanceof ApiRequestError ? error.message : "Не удалось закрепить клиента",
@@ -1276,7 +1246,7 @@ export default function ClientDetailPage() {
       if (!wasAutoInstallment) {
         setScheduleOpen(true);
         showToast("Клиент переведён на банкротство. Составьте график вручную.", "info");
-        window.requestAnimationFrame(() => jumpToSection("section-schedule"));
+        setActiveTab("payments");
       } else {
         showToast("Клиент переведён на банкротство, график создан по тарифу");
       }
@@ -1298,7 +1268,7 @@ export default function ClientDetailPage() {
       <div className="page-stack">
         <PageHeader
           title="Карточка клиента"
-          back={<BackLink href="/clients">К списку клиентов</BackLink>}
+          back={<BackLink href={listBackHref}>К списку клиентов</BackLink>}
         />
         <Card>
           <EmptyState>{loadError}</EmptyState>
@@ -1317,6 +1287,21 @@ export default function ClientDetailPage() {
   const detail = isDetail(client) ? client : null;
   const isBankruptcy = client.engagement_stage === "bankruptcy";
   const docCollection = detail?.document_collection ?? null;
+
+  const clientTabs: Array<{ id: ClientCardTab; label: string }> = [
+    { id: "overview", label: "Обзор" },
+  ];
+  if (detail && isBankruptcy) {
+    clientTabs.push({ id: "payments", label: "Платежи" });
+  }
+  if ((canEditClient && docCollection) || (isBankruptcy && canManageMandatory)) {
+    clientTabs.push({ id: "documents", label: "Документы" });
+  }
+  if (canEditClient && detail) {
+    clientTabs.push({ id: "journal", label: "Журнал" });
+  }
+  const effectiveTab = clientTabs.some((tab) => tab.id === activeTab) ? activeTab : "overview";
+
   const schedule = detail?.payment_schedule ?? [];
   const mandatory = detail?.mandatory_payments ?? [];
   const schedulePlannedTotal = schedule.reduce(
@@ -1387,68 +1372,54 @@ export default function ClientDetailPage() {
       ? formatScheduleMismatchMessage(effectiveScheduleContract, draftPlannedTotal)
       : "";
 
-  function renderManualPaymentForm() {
-    if (!canRecordSchedulePayment || !detail || !isBankruptcy) {
-      return null;
-    }
-
+  function renderPaymentFormContent() {
     return (
-      <Card
-        id="section-payment"
-        variant="accent"
-        className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-status-success-solid")}
-      >
-        <SectionTitle
-          title="Зафиксировать платёж"
-          description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
-        />
-        <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
-          <FormField label="Месяц графика">
-            <Select
-              value={paymentForm.payment_schedule_id}
-              onChange={(e) => handleMonthSelect(e.target.value)}
-            >
-              <option value="">Автораспределение по графику</option>
-              {schedule.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.month_number} — {formatDate(item.due_date)} (
-                  {formatMoney(item.planned_amount)}, остаток{" "}
-                  {formatMoney(remainingAmount(item))})
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Дата платежа">
-            <Input
-              type="date"
-              value={paymentForm.payment_date}
-              onChange={(e) =>
-                setPaymentForm({ ...paymentForm, payment_date: e.target.value })
-              }
-              required
-            />
-          </FormField>
-          <FormField label="Сумма">
-            <Input
-              inputMode="decimal"
-              placeholder="Сумма"
-              value={paymentForm.amount}
-              onChange={(e) =>
-                setPaymentForm({ ...paymentForm, amount: filterDecimalInput(e.target.value) })
-              }
-              required
-            />
-          </FormField>
+      <form onSubmit={handlePayment} className="grid gap-2 md:grid-cols-2">
+        <FormField label="Месяц графика">
+          <Select
+            value={paymentForm.payment_schedule_id}
+            onChange={(e) => handleMonthSelect(e.target.value)}
+          >
+            <option value="">Автораспределение по графику</option>
+            {schedule.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.month_number} — {formatDate(item.due_date)} (
+                {formatMoney(item.planned_amount)}, остаток {formatMoney(remainingAmount(item))})
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="Дата платежа">
           <Input
-            placeholder="Комментарий"
-            value={paymentForm.comment}
-            onChange={(e) => setPaymentForm({ ...paymentForm, comment: e.target.value })}
+            type="date"
+            value={paymentForm.payment_date}
+            onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
+            required
           />
-          <Button type="submit" className="md:col-span-2">
-            Сохранить платёж
+        </FormField>
+        <FormField label="Сумма">
+          <Input
+            inputMode="decimal"
+            placeholder="Сумма"
+            value={paymentForm.amount}
+            onChange={(e) =>
+              setPaymentForm({ ...paymentForm, amount: filterDecimalInput(e.target.value) })
+            }
+            required
+          />
+        </FormField>
+        <Input
+          placeholder="Комментарий"
+          value={paymentForm.comment}
+          onChange={(e) => setPaymentForm({ ...paymentForm, comment: e.target.value })}
+        />
+        <div className="flex flex-wrap gap-2 md:col-span-2">
+          <Button type="submit">Сохранить платёж</Button>
+          <Button type="button" variant="secondary" onClick={() => setPaymentModalOpen(false)}>
+            Отмена
           </Button>
-        </form>
-      </Card>
+        </div>
+      </form>
     );
   }
 
@@ -1460,9 +1431,19 @@ export default function ClientDetailPage() {
       <PageHeader
         title={formatShortName(client.full_name)}
         subtitle={`${statusLabel(client.status)} · ${engagementStageLabel(client.engagement_stage)}`}
-        back={<BackLink href="/clients">К списку клиентов</BackLink>}
+        back={<BackLink href={listBackHref}>К списку клиентов</BackLink>}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {canClaimClient ? (
+              <Button type="button" variant="secondary" onClick={() => setClaimModalOpen(true)}>
+                Принять в работу
+              </Button>
+            ) : null}
+            {canRecordSchedulePayment && isBankruptcy ? (
+              <Button type="button" onClick={() => setPaymentModalOpen(true)}>
+                Зафиксировать платёж
+              </Button>
+            ) : null}
             {whatsappUrl ? (
               <a
                 href={whatsappUrl}
@@ -1512,7 +1493,25 @@ export default function ClientDetailPage() {
         }
       />
 
-      {detail && isBankruptcy ? (
+      {clientTabs.length > 1 ? (
+        <div className="flex flex-wrap gap-2">
+          {clientTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setActiveTab(tab.id);
+                if (tab.id === "payments") setScheduleOpen(true);
+              }}
+              className={effectiveTab === tab.id ? "tab-pill-active" : "tab-pill-inactive"}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {effectiveTab === "overview" && detail && isBankruptcy ? (
         <Card className="p-2.5">
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 xl:grid-cols-5">
             <div>
@@ -1575,42 +1574,7 @@ export default function ClientDetailPage() {
         </Card>
       ) : null}
 
-      {clientNavSections.length > 0 ? (
-        <div className="sticky top-0 z-10 -mx-page-x border-b border-border bg-surface/95 px-page-x py-1.5 shadow-soft backdrop-blur lg:-mx-3">
-          <nav className="client-section-nav" aria-label="Разделы карточки клиента">
-            {clientNavSections.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                className="client-section-nav-btn"
-                onClick={() => jumpToSection(section.id)}
-              >
-                {section.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      ) : null}
-
-      {renderManualPaymentForm()}
-
-      {canClaimClient && (
-        <Card variant="accent">
-          <SectionTitle
-            title="Клиент не закреплён"
-            description="Нераспределённые клиенты с этапа сбора можно принять в работу"
-          />
-          <Button
-            type="button"
-            disabled={cardSaving === "claim"}
-            onClick={handleClaimClient}
-          >
-            {cardSaving === "claim" ? "Закрепление..." : "Принять в работу"}
-          </Button>
-        </Card>
-      )}
-
-      {canEditClient && (
+      {effectiveTab === "overview" && canEditClient ? (
         <Card
           id="section-client"
           className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-chrome")}
@@ -1781,11 +1745,56 @@ export default function ClientDetailPage() {
                   )}
                 </div>
             )}
+
+            {isBankruptcy && detail?.matched_tier ? (
+              <div className="rounded-md border border-border bg-surface-muted">
+                <button
+                  type="button"
+                  className="interactive flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs"
+                  onClick={() => setTariffOpen((open) => !open)}
+                  aria-expanded={tariffOpen}
+                >
+                  <span>
+                    <span className="text-muted">Подобранный тариф: </span>
+                    <span className="font-medium text-foreground">
+                      {formatMoney(detail.matched_tier.min_amount)} –{" "}
+                      {formatMoney(detail.matched_tier.max_amount)} ·{" "}
+                      {detail.matched_tier.total_months} мес. ·{" "}
+                      {formatMoney(detail.matched_tier.total_cost)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-muted">{tariffOpen ? "▲" : "▼"}</span>
+                </button>
+                {tariffOpen ? (
+                  <div className="grid gap-2 border-t border-border px-3 py-2 text-sm md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <p className="text-muted">Диапазон долга</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {formatMoney(detail.matched_tier.min_amount)} –{" "}
+                        {formatMoney(detail.matched_tier.max_amount)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted">Стоимость по тарифу</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {formatMoney(detail.matched_tier.total_cost)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted">Срок</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {detail.matched_tier.total_months} мес.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </Card>
-      )}
+      ) : null}
 
-      {canEditClient && isDetail(client) && docCollection && (
+      {effectiveTab === "documents" && canEditClient && isDetail(client) && docCollection ? (
         <Card
           id="section-doc"
           variant="accent"
@@ -2025,9 +2034,9 @@ export default function ClientDetailPage() {
             </form>
           )}
         </Card>
-      )}
+      ) : null}
 
-      {detail && !isBankruptcy && (
+      {effectiveTab === "overview" && detail && !isBankruptcy ? (
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Дата договора" value={formatDate(client.contract_date)} tone="brand" />
           <StatCard label="Статус" value={statusLabel(client.status)} tone="default" />
@@ -2037,48 +2046,9 @@ export default function ClientDetailPage() {
             tone="warning"
           />
         </div>
-      )}
+      ) : null}
 
-      {detail && isBankruptcy && (
-        <>
-          {detail.matched_tier && (
-            <CollapsibleCard
-              id="section-tariff"
-              className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-border-strong")}
-              title="Подобранный тариф"
-              description="Справочные данные тарифа — раскройте при необходимости"
-              defaultOpen={false}
-            >
-              <div className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <p className="text-muted">Диапазон долга</p>
-                  <p className="mt-1 font-medium text-foreground">
-                    {formatMoney(detail.matched_tier.min_amount)} –{" "}
-                    {formatMoney(detail.matched_tier.max_amount)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted">Стоимость по тарифу (справочно)</p>
-                  <p className="mt-1 font-medium text-foreground">
-                    {formatMoney(detail.matched_tier.total_cost)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted">Срок</p>
-                  <p className="mt-1 font-medium text-foreground">
-                    {detail.matched_tier.total_months} мес.
-                  </p>
-                </div>
-              </div>
-              {detail.installment_plan && (
-                <p className="mt-3 text-xs text-muted">
-                  График с {formatDate(detail.installment_plan.start_date)}. Для старых клиентов
-                  суммы месяцев можно менять вручную — тариф только отправная точка.
-                </p>
-              )}
-            </CollapsibleCard>
-          )}
-
+      {effectiveTab === "documents" && detail && isBankruptcy && canManageMandatory ? (
           <CollapsibleCard
             id="section-mandatory"
             className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-status-warning-solid")}
@@ -2290,7 +2260,10 @@ export default function ClientDetailPage() {
               </div>
             )}
           </CollapsibleCard>
+      ) : null}
 
+      {effectiveTab === "payments" && detail && isBankruptcy ? (
+        <>
           <CollapsibleCard
             id="section-schedule"
             className={cn(CLIENT_SECTION_CLASS, "border-t-4 border-t-brand-600")}
@@ -2938,12 +2911,14 @@ export default function ClientDetailPage() {
               </div>
             )}
           </Card>
+        </>
+      ) : null}
 
-          {canEditClient && (
+      {effectiveTab === "journal" && canEditClient ? (
             <CollapsibleCard
               title="История изменений карточки"
-              description="Служебный журнал правок — раскройте при необходимости"
-              defaultOpen={false}
+              description="Изменения по этому клиенту. Общий журнал по организации — в разделе «Журнал изменений»."
+              defaultOpen
               badge={
                 auditEntries.length > 0 ? (
                   <Badge tone="default">{auditEntries.length}</Badge>
@@ -2997,9 +2972,32 @@ export default function ClientDetailPage() {
                 </div>
               )}
             </CollapsibleCard>
-          )}
-        </>
-      )}
+      ) : null}
+
+      <Modal
+        open={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        title="Зафиксировать платёж"
+        description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
+      >
+        {renderPaymentFormContent()}
+      </Modal>
+
+      <Modal
+        open={claimModalOpen}
+        onClose={() => setClaimModalOpen(false)}
+        title="Принять клиента в работу"
+        description="Нераспределённые клиенты с этапа сбора можно закрепить за собой"
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" disabled={cardSaving === "claim"} onClick={handleClaimClient}>
+            {cardSaving === "claim" ? "Закрепление..." : "Принять в работу"}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setClaimModalOpen(false)}>
+            Отмена
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

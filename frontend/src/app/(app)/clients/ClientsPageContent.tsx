@@ -2,10 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Badge, Button, Card, EmptyState, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, StatCard, Toast } from "@/components/ui";
 import { ApiRequestError, clientsApi, exportsApi, getDuplicateClientId, usersApi } from "@/lib/api-client";
+import {
+  buildClientListQuery,
+  clientDetailHref,
+  parseClientListFilters,
+  sanitizeClientListReturnHref,
+  type ClientListSortField,
+  type CollectionViewFilter,
+} from "@/lib/client-list-filters";
 import { formatDate, formatMoney, formatMonthLabel, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
@@ -13,7 +21,7 @@ import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequ
 import type { Client, ClientBrief, ClientDueMonthSummary, ClientStatus, ProcedureStage, User } from "@/lib/types";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
-type SortField = "full_name" | "contract_date" | "debt_amount" | "status" | "overdue" | "created_at";
+type SortField = ClientListSortField;
 type SortDir = "asc" | "desc";
 
 const PROCEDURE_OPTIONS: Array<{ value: ProcedureStage; label: string }> = [
@@ -64,7 +72,6 @@ function SortableTh({
 }
 
 type ClientWorkspace = "collection" | "contracts";
-type CollectionViewFilter = "active" | "paid" | "converted" | "all";
 
 const COLLECTION_VIEW_OPTIONS: Array<{ value: CollectionViewFilter; label: string }> = [
   { value: "active", label: "В работе" },
@@ -103,29 +110,21 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const isCollectionView = workspace === "collection";
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const filters = useMemo(() => parseClientListFilters(searchParams), [searchParams]);
+  const listReturnUrl = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
+  const [nameDraft, setNameDraft] = useState(filters.name);
+  const [phoneDraft, setPhoneDraft] = useState(filters.phone);
   const [clients, setClients] = useState<Array<Client | ClientBrief>>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [overdueFilter, setOverdueFilter] = useState(
-    searchParams.get("overdue") === "true",
-  );
-  const [procedureStageFilter, setProcedureStageFilter] = useState(
-    () => searchParams.get("procedure_stage") ?? "",
-  );
-  const [managerFilter, setManagerFilter] = useState("");
-  const [phoneSearch, setPhoneSearch] = useState("");
-  const [nameSearch, setNameSearch] = useState("");
-  const [contractMonth, setContractMonth] = useState("");
-  const [dueMonth, setDueMonth] = useState(() => {
-    if (workspace === "contracts") {
-      const now = new Date();
-      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    }
-    return "";
-  });
+  const [totalClients, setTotalClients] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [dueMonthSummary, setDueMonthSummary] = useState<ClientDueMonthSummary | null>(null);
   const [managers, setManagers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -138,12 +137,6 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortField>("created_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [page, setPage] = useState(1);
-  const [totalClients, setTotalClients] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [collectionView, setCollectionView] = useState<CollectionViewFilter>("active");
   const [savingField, setSavingField] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -153,50 +146,50 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     assigned_manager_id: "",
   });
 
-  const filterKey = useMemo(
-    () =>
-      JSON.stringify({
-        statusFilter,
-        overdueFilter,
-        procedureStageFilter,
-        managerFilter,
-        phoneSearch,
-        nameSearch,
-        contractMonth,
-        dueMonth,
-        sortBy,
-        sortDir,
-        collectionView,
-        engagementStage: workspaceConfig.engagementStage,
-      }),
-    [
-      statusFilter,
-      overdueFilter,
-      procedureStageFilter,
-      managerFilter,
-      phoneSearch,
-      nameSearch,
-      contractMonth,
-      dueMonth,
-      sortBy,
-      sortDir,
-      collectionView,
-      workspaceConfig.engagementStage,
-    ],
+  const updateFilters = useCallback(
+    (patch: Partial<typeof filters>, options?: { resetPage?: boolean }) => {
+      const next = { ...filters, ...patch };
+      const onlyPage = Object.keys(patch).length === 1 && "page" in patch;
+      if (options?.resetPage !== false && !onlyPage) {
+        next.page = 1;
+      }
+      const query = buildClientListQuery(next);
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [filters, pathname, router],
   );
-  const prevFilterKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    setNameDraft(filters.name);
+    setPhoneDraft(filters.phone);
+  }, [filters.name, filters.phone]);
+
+  const searchDraftKey = useRef<string | null>(null);
+  useEffect(() => {
+    const draftKey = `${nameDraft}\0${phoneDraft}`;
+    if (searchDraftKey.current === null) {
+      searchDraftKey.current = draftKey;
+      return;
+    }
+    if (searchDraftKey.current === draftKey) return;
+
+    const timer = window.setTimeout(() => {
+      searchDraftKey.current = draftKey;
+      const patch: Partial<typeof filters> = {
+        name: nameDraft,
+        phone: phoneDraft,
+      };
+      if ((nameDraft.trim() || phoneDraft.trim()) && filters.due_month) {
+        patch.due_month = "";
+      }
+      updateFilters(patch);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [nameDraft, phoneDraft, filters.due_month, updateFilters]);
 
   useEffect(() => {
     if (!user) return;
-
-    const filtersChanged =
-      prevFilterKey.current !== null && prevFilterKey.current !== filterKey;
-    prevFilterKey.current = filterKey;
-
-    if (filtersChanged && page !== 1) {
-      setPage(1);
-      return;
-    }
 
     let cancelled = false;
 
@@ -205,19 +198,19 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       setLoadError(null);
       try {
         const data = await clientsApi.list({
-          status: isCollectionView ? statusFilter || undefined : undefined,
-          overdue: overdueFilter || undefined,
-          procedure_stage: isCollectionView ? undefined : procedureStageFilter || undefined,
+          status: isCollectionView ? filters.status || undefined : undefined,
+          overdue: filters.overdue || undefined,
+          procedure_stage: isCollectionView ? undefined : filters.procedure_stage || undefined,
           engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
-          collection_view: isCollectionView ? collectionView : undefined,
-          manager_id: managerFilter || undefined,
-          phone: phoneSearch.trim() || undefined,
-          name: nameSearch.trim() || undefined,
-          contract_month: contractMonth || undefined,
-          due_month: dueMonth || undefined,
-          sort_by: sortBy,
-          sort_dir: sortDir,
-          page,
+          collection_view: isCollectionView ? filters.collection_view : undefined,
+          manager_id: filters.manager_id || undefined,
+          phone: filters.phone.trim() || undefined,
+          name: filters.name.trim() || undefined,
+          contract_month: filters.contract_month || undefined,
+          due_month: filters.due_month || undefined,
+          sort_by: filters.sort_by,
+          sort_dir: filters.sort_dir,
+          page: filters.page,
           page_size: CLIENTS_PAGE_SIZE,
         });
         if (cancelled) return;
@@ -239,22 +232,22 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     };
   }, [
     user,
-    page,
-    filterKey,
     reloadKey,
     isCollectionView,
-    statusFilter,
-    overdueFilter,
-    procedureStageFilter,
     workspaceConfig.engagementStage,
-    collectionView,
-    managerFilter,
-    phoneSearch,
-    nameSearch,
-    contractMonth,
-    dueMonth,
-    sortBy,
-    sortDir,
+    searchParams,
+    filters.status,
+    filters.overdue,
+    filters.procedure_stage,
+    filters.collection_view,
+    filters.manager_id,
+    filters.phone,
+    filters.name,
+    filters.contract_month,
+    filters.due_month,
+    filters.sort_by,
+    filters.sort_dir,
+    filters.page,
   ]);
 
   const reloadClients = useCallback(() => {
@@ -313,7 +306,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           message: clientId ? (
             <span>
               {message}{" "}
-              <Link href={`/clients/${clientId}`} className="font-medium underline underline-offset-2">
+              <Link href={clientDetailHref(clientId, listReturnUrl)} className="font-medium underline underline-offset-2">
                 Открыть карточку
               </Link>
             </span>
@@ -334,12 +327,11 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const canSeeClientAmounts = user?.role === "owner" || user?.role === "manager";
 
   function handleSort(field: SortField) {
-    if (sortBy === field) {
-      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    if (filters.sort_by === field) {
+      updateFilters({ sort_dir: filters.sort_dir === "asc" ? "desc" : "asc" });
       return;
     }
-    setSortBy(field);
-    setSortDir("asc");
+    updateFilters({ sort_by: field, sort_dir: "asc" });
   }
 
   async function handleClaimClient(clientId: string) {
@@ -386,17 +378,17 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     setExportError(null);
     try {
       await exportsApi.clients({
-        status: isCollectionView ? statusFilter || undefined : undefined,
-        overdue: overdueFilter || undefined,
+        status: isCollectionView ? filters.status || undefined : undefined,
+        overdue: filters.overdue || undefined,
         engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
-        collection_view: isCollectionView ? collectionView : undefined,
-        manager_id: managerFilter || undefined,
-        phone: phoneSearch.trim() || undefined,
-        name: nameSearch.trim() || undefined,
-        contract_month: contractMonth || undefined,
-        due_month: dueMonth || undefined,
-        sort_by: sortBy,
-        sort_dir: sortDir,
+        collection_view: isCollectionView ? filters.collection_view : undefined,
+        manager_id: filters.manager_id || undefined,
+        phone: filters.phone.trim() || undefined,
+        name: filters.name.trim() || undefined,
+        contract_month: filters.contract_month || undefined,
+        due_month: filters.due_month || undefined,
+        sort_by: filters.sort_by,
+        sort_dir: filters.sort_dir,
       });
     } catch (error) {
       setExportError(
@@ -435,9 +427,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             <button
               key={option.value}
               type="button"
-              onClick={() => setCollectionView(option.value)}
+              onClick={() => updateFilters({ collection_view: option.value })}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
-                collectionView === option.value
+                filters.collection_view === option.value
                   ? "bg-status-warning-solid text-white shadow-soft"
                   : "bg-surface text-muted ring-1 ring-border hover:bg-surface-muted"
               }`}
@@ -453,7 +445,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         subtitle={
           loading
             ? workspaceConfig.subtitle
-            : `${workspaceConfig.subtitle} · ${totalClients} всего${totalPages > 1 ? ` · стр. ${page}/${totalPages}` : ""}`
+            : `${workspaceConfig.subtitle} · ${totalClients} всего${totalPages > 1 ? ` · стр. ${filters.page}/${totalPages}` : ""}`
         }
         action={
           <div className="flex flex-wrap gap-2">
@@ -480,27 +472,21 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <label className="mb-0.5 block text-xs text-muted">Поиск по ФИО</label>
               <Input
                 placeholder="Иванов Иван"
-                value={nameSearch}
-                onChange={(e) => {
-                  setNameSearch(e.target.value);
-                  if (e.target.value.trim() && dueMonth) setDueMonth("");
-                }}
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
               />
             </div>
             <div className="min-w-0">
               <label className="mb-0.5 block text-xs text-muted">Поиск по телефону</label>
               <Input
                 placeholder="+7 928 000-00-00"
-                value={phoneSearch}
-                onChange={(e) => {
-                  setPhoneSearch(e.target.value);
-                  if (e.target.value.trim() && dueMonth) setDueMonth("");
-                }}
+                value={phoneDraft}
+                onChange={(e) => setPhoneDraft(e.target.value)}
               />
             </div>
           </div>
 
-          {(nameSearch.trim() || phoneSearch.trim()) && (
+          {(nameDraft.trim() || phoneDraft.trim()) && (
             <p className="text-[11px] text-muted">
               Поиск по всей компании: фильтры месяца и раздела временно не мешают находить клиента.
             </p>
@@ -511,8 +497,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <div className="min-w-[140px] flex-1 sm:w-[160px] sm:flex-none">
                 <label className="mb-0.5 block text-xs text-muted">Статус</label>
                 <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  value={filters.status}
+                  onChange={(e) => updateFilters({ status: e.target.value })}
                 >
                   <option value="">Все</option>
                   <option value="active">Активен</option>
@@ -526,8 +512,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <label className="mb-0.5 block text-xs text-muted">Месяц договора</label>
               <Input
                 type="month"
-                value={contractMonth}
-                onChange={(e) => setContractMonth(e.target.value)}
+                value={filters.contract_month}
+                onChange={(e) => updateFilters({ contract_month: e.target.value })}
               />
             </div>
             {!isCollectionView && (
@@ -535,8 +521,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                 <label className="mb-0.5 block text-xs text-muted">Платёж в месяце</label>
                 <Input
                   type="month"
-                  value={dueMonth}
-                  onChange={(e) => setDueMonth(e.target.value)}
+                  value={filters.due_month}
+                  onChange={(e) => updateFilters({ due_month: e.target.value })}
                 />
               </div>
             )}
@@ -544,8 +530,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <div className="min-w-[140px] flex-1 sm:w-[170px] sm:flex-none">
                 <label className="mb-0.5 block text-xs text-muted">Этап процедуры</label>
                 <Select
-                  value={procedureStageFilter}
-                  onChange={(e) => setProcedureStageFilter(e.target.value)}
+                  value={filters.procedure_stage}
+                  onChange={(e) => updateFilters({ procedure_stage: e.target.value })}
                 >
                   <option value="">Все этапы</option>
                   {PROCEDURE_OPTIONS.map((option) => (
@@ -560,8 +546,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <label className="flex h-[30px] items-center gap-2 px-1 text-xs text-foreground">
                 <input
                   type="checkbox"
-                  checked={overdueFilter}
-                  onChange={(e) => setOverdueFilter(e.target.checked)}
+                  checked={filters.overdue}
+                  onChange={(e) => updateFilters({ overdue: e.target.checked })}
                 />
                 Только с просрочкой
               </label>
@@ -570,8 +556,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
               <div className="min-w-[140px] flex-1 sm:w-[180px] sm:flex-none">
                 <label className="mb-0.5 block text-xs text-muted">Менеджер</label>
                 <Select
-                  value={managerFilter}
-                  onChange={(e) => setManagerFilter(e.target.value)}
+                  value={filters.manager_id}
+                  onChange={(e) => updateFilters({ manager_id: e.target.value })}
                 >
                   <option value="">Все</option>
                   {managers.map((manager) => (
@@ -586,7 +572,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         </div>
       </Card>
 
-      {!isCollectionView && dueMonth && dueMonthSummary ? (
+      {!isCollectionView && filters.due_month && dueMonthSummary ? (
         <Card variant="accent">
           <SectionTitle
             title={`Рассрочка за ${formatMonthLabel(dueMonthSummary.month)}`}
@@ -684,7 +670,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   <>
                     {" "}
                     <Link
-                      href={`/clients/${createError.clientId}`}
+                      href={clientDetailHref(createError.clientId, listReturnUrl)}
                       className="font-medium underline underline-offset-2"
                     >
                       Открыть карточку
@@ -747,7 +733,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       isOverdue && "mobile-client-card-overdue",
                     )}
                   >
-                    <Link href={`/clients/${client.id}`} className="block">
+                    <Link href={clientDetailHref(client.id, listReturnUrl)} className="block">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p
@@ -774,7 +760,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                         <span>Договор: {formatDate(client.contract_date)}</span>
-                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && dueMonth ? (
+                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && filters.due_month ? (
                           <>
                             <span className="font-medium text-foreground">
                               План: {client.month_planned ? formatMoney(client.month_planned) : "—"}
@@ -796,7 +782,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                             <span>Платежей ост.: {client.payments_remaining ?? "—"}</span>
                           </>
                         ) : null}
-                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && !dueMonth && client.contract_total ? (
+                        {canSeeClientAmounts && !isCollectionView && isFullClient(client) && !filters.due_month && client.contract_total ? (
                           <span className="font-medium text-foreground">
                             {formatMoney(client.contract_total)}
                           </span>
@@ -850,19 +836,19 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   <SortableTh
                     label="Фамилия и имя"
                     field="full_name"
-                    sortBy={sortBy}
-                    sortDir={sortDir}
+                    sortBy={filters.sort_by}
+                    sortDir={filters.sort_dir}
                     onSort={handleSort}
                   />
                   <th>Телефон</th>
                   <SortableTh
                     label="Дата договора"
                     field="contract_date"
-                    sortBy={sortBy}
-                    sortDir={sortDir}
+                    sortBy={filters.sort_by}
+                    sortDir={filters.sort_dir}
                     onSort={handleSort}
                   />
-                  {canSeeClientAmounts && !isCollectionView && dueMonth && (
+                  {canSeeClientAmounts && !isCollectionView && filters.due_month && (
                     <>
                       <th className="font-semibold text-foreground">План месяца</th>
                       <th className="font-semibold text-foreground">Оплачено</th>
@@ -870,7 +856,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       <th className="font-semibold text-foreground">Платежей ост.</th>
                     </>
                   )}
-                  {canSeeClientAmounts && !isCollectionView && !dueMonth && (
+                  {canSeeClientAmounts && !isCollectionView && !filters.due_month && (
                     <th className="font-semibold text-foreground">Сумма договора</th>
                   )}
                   {canAssignManager && <th>Менеджер</th>}
@@ -879,16 +865,16 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   <SortableTh
                     label="Статус"
                     field="status"
-                    sortBy={sortBy}
-                    sortDir={sortDir}
+                    sortBy={filters.sort_by}
+                    sortDir={filters.sort_dir}
                     onSort={handleSort}
                   />
                   {canSeeClientAmounts && !isCollectionView && (
                     <SortableTh
                       label="Просрочка"
                       field="overdue"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
+                      sortBy={filters.sort_by}
+                      sortDir={filters.sort_dir}
                       onSort={handleSort}
                     />
                   )}
@@ -907,7 +893,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   >
                     <td>
                       <Link
-                        href={`/clients/${client.id}`}
+                        href={clientDetailHref(client.id, listReturnUrl)}
                         className={`link-brand ${
                           isOverdue ? "text-status-danger-text hover:text-status-danger-solid" : ""
                         }`}
@@ -935,7 +921,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         formatDate(client.contract_date)
                       )}
                     </td>
-                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && dueMonth && (
+                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && filters.due_month && (
                       <>
                         <td className="font-medium text-foreground">
                           {client.month_planned ? formatMoney(client.month_planned) : "—"}
@@ -957,7 +943,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         </td>
                       </>
                     )}
-                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && !dueMonth && (
+                    {canSeeClientAmounts && !isCollectionView && isFullClient(client) && !filters.due_month && (
                       <td className="font-medium text-foreground">
                         {client.contract_total
                           ? formatMoney(client.contract_total)
@@ -1112,11 +1098,11 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         )}
         {!loading && clients.length > 0 && (
           <Pagination
-            page={page}
+            page={filters.page}
             pageSize={CLIENTS_PAGE_SIZE}
             total={totalClients}
             totalPages={totalPages}
-            onPageChange={setPage}
+            onPageChange={(nextPage) => updateFilters({ page: nextPage }, { resetPage: false })}
           />
         )}
       </Card>
