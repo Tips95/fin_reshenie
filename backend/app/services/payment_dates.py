@@ -10,7 +10,7 @@ from app.models.installment_plan import InstallmentPlan
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.services.payment_sync import sync_client_payment_schedules
-from app.services.schedule_dates import effective_due_date, find_schedule_by_payment_month
+from app.services.schedule_dates import find_schedule_by_payment_month
 from app.services.schedule_rebuild import rebuild_schedule_dates_from_contract
 
 
@@ -71,9 +71,8 @@ def _align_schedule_payment_dates(db: Session, client_id: UUID) -> int:
         if schedule is None:
             continue
 
-        target_date = effective_due_date(schedule)
-        if payment.payment_date != target_date:
-            payment.payment_date = target_date
+        if payment.payment_schedule_id is None:
+            payment.payment_schedule_id = schedule.id
             updated += 1
 
     return updated

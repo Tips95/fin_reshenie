@@ -30,6 +30,10 @@ export function formatAmountInput(value: string | number): string {
   return String(Math.round(amount));
 }
 
+export function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function formatShortName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 2) return fullName.trim();

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { sanitizeClientListReturnHref } from "@/lib/client-list-filters";
-import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel } from "@/lib/format";
+import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel, todayIsoDate } from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
 import {
   filterDecimalInput,
@@ -181,13 +181,13 @@ export default function ClientDetailPage() {
   const [paymentForm, setPaymentForm] = useState({
     payment_schedule_id: "",
     amount: "",
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: todayIsoDate(),
     comment: "",
   });
   const [refundForm, setRefundForm] = useState({
     payment_schedule_id: "",
     amount: "",
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: todayIsoDate(),
     comment: "",
   });
   const [mandatoryPayingId, setMandatoryPayingId] = useState<string | null>(null);
@@ -338,9 +338,24 @@ export default function ClientDetailPage() {
 
   useEffect(() => {
     if (!client) return;
-    setPaymentForm((prev) => ({ ...prev, payment_date: client.contract_date }));
-    setRefundForm((prev) => ({ ...prev, payment_date: client.contract_date }));
+    const today = todayIsoDate();
+    setPaymentForm({
+      payment_schedule_id: "",
+      amount: "",
+      payment_date: today,
+      comment: "",
+    });
+    setRefundForm({
+      payment_schedule_id: "",
+      amount: "",
+      payment_date: today,
+      comment: "",
+    });
     setDocCollectionPaymentDate(client.contract_date);
+  }, [client?.id]);
+
+  useEffect(() => {
+    if (!client) return;
     setConvertForm((prev) => ({
       ...prev,
       contract_date: client.contract_date,
@@ -391,7 +406,6 @@ export default function ClientDetailPage() {
       ...paymentForm,
       payment_schedule_id: scheduleId,
       amount: item ? String(remainingAmount(item)) : "",
-      payment_date: item ? effectiveDueDate(item) : paymentForm.payment_date,
     });
   }
 
@@ -403,7 +417,6 @@ export default function ClientDetailPage() {
       ...refundForm,
       payment_schedule_id: scheduleId,
       amount: item ? String(Number(item.paid_amount)) : "",
-      payment_date: item?.paid_date || (item ? effectiveDueDate(item) : refundForm.payment_date),
     });
   }
 
@@ -430,7 +443,7 @@ export default function ClientDetailPage() {
     setRefundForm({
       payment_schedule_id: "",
       amount: "",
-      payment_date: client.contract_date,
+      payment_date: todayIsoDate(),
       comment: "",
     });
     refreshClient();
@@ -484,7 +497,7 @@ export default function ClientDetailPage() {
     if (!client) return;
     if (
       !window.confirm(
-        "Перестроить график от даты договора и перераспределить платежи по месяцам? Используйте для старых клиентов с нестандартными суммами.",
+        "Перестроить график от даты договора и привязать платежи к месяцам? Даты поступления в кассу не меняются. Только для старых клиентов с нестандартными суммами.",
       )
     ) {
       return;
@@ -584,7 +597,7 @@ export default function ClientDetailPage() {
     setPaymentForm({
       payment_schedule_id: "",
       amount: "",
-      payment_date: client.contract_date,
+      payment_date: todayIsoDate(),
       comment: "",
     });
     await refreshClient();
@@ -610,7 +623,7 @@ export default function ClientDetailPage() {
         client_id: client.id,
         payment_schedule_id: item.id,
         amount: amount.toFixed(2),
-        payment_date: effectiveDueDate(item),
+        payment_date: todayIsoDate(),
         comment: `Оплата за ${item.month_number} месяц`,
       });
       await refreshClient();
@@ -669,7 +682,7 @@ export default function ClientDetailPage() {
     setMandatoryPayForm({
       paymentId: item.id,
       amount: rest > 0 ? String(Math.round(rest)) : "",
-      payment_date: new Date().toISOString().slice(0, 10),
+      payment_date: todayIsoDate(),
     });
   }
 
@@ -1389,13 +1402,17 @@ export default function ClientDetailPage() {
             ))}
           </Select>
         </FormField>
-        <FormField label="Дата платежа">
+        <FormField label="Дата поступления в кассу">
           <Input
             type="date"
             value={paymentForm.payment_date}
             onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
             required
           />
+          <p className="mt-1 text-xs text-muted">
+            Когда деньги реально пришли — от этого зависит доход в отчёте за месяц. Месяц графика
+            выбирается отдельно.
+          </p>
         </FormField>
         <FormField label="Сумма">
           <Input
@@ -1440,7 +1457,13 @@ export default function ClientDetailPage() {
               </Button>
             ) : null}
             {canRecordSchedulePayment && isBankruptcy ? (
-              <Button type="button" onClick={() => setPaymentModalOpen(true)}>
+              <Button
+                type="button"
+                onClick={() => {
+                  setPaymentForm((prev) => ({ ...prev, payment_date: todayIsoDate() }));
+                  setPaymentModalOpen(true);
+                }}
+              >
                 Зафиксировать платёж
               </Button>
             ) : null}
@@ -2833,7 +2856,7 @@ export default function ClientDetailPage() {
               title="История платежей"
               description={
                 isOwner
-                  ? "Даты влияют на доход по месяцам. Платёж без месяца графика попадает в месяц по дате платежа."
+                  ? "Дата поступления в кассу определяет месяц в отчёте. Месяц графика — за какой платёж по рассрочке закрывается строка."
                   : undefined
               }
               action={
@@ -2978,7 +3001,7 @@ export default function ClientDetailPage() {
         open={paymentModalOpen}
         onClose={() => setPaymentModalOpen(false)}
         title="Зафиксировать платёж"
-        description="Дата по умолчанию — дата договора или выбранного месяца графика. Указывайте месяц, когда клиент реально платил."
+        description="Выберите месяц графика (за какой платёж по рассрочке) и дату поступления денег в кассу. При опоздании месяцы будут разными — это нормально."
       >
         {renderPaymentFormContent()}
       </Modal>
