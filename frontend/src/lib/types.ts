@@ -281,6 +281,7 @@ export interface DashboardSummary {
   collection_in_progress: number;
   expected_this_month: string;
   collected_this_month: string;
+  cash_received_this_month: string;
   overdue_amount: string;
   total_remainder: string;
   total_collected: string;

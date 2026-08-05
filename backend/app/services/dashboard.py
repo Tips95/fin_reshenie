@@ -204,6 +204,7 @@ def get_dashboard_summary(
             collection_in_progress=collection_in_progress,
             expected_this_month=Decimal("0.00"),
             collected_this_month=Decimal("0.00"),
+            cash_received_this_month=Decimal("0.00"),
             overdue_amount=Decimal("0.00"),
             total_remainder=Decimal("0.00"),
             total_collected=Decimal("0.00"),
@@ -290,6 +291,9 @@ def get_dashboard_summary(
             date_to=month_end,
         )
     )
+    cash_received_this_month = (
+        collected_this_month + document_collection_this_month.collection_cash
+    )
     contracts_signed_this_month = count_contracts_signed_in_period(
         db,
         client_ids,
@@ -319,6 +323,7 @@ def get_dashboard_summary(
         collection_in_progress=collection_in_progress,
         expected_this_month=expected_this_month,
         collected_this_month=collected_this_month,
+        cash_received_this_month=cash_received_this_month,
         overdue_amount=overdue_amount,
         total_remainder=total_remainder,
         total_collected=total_collected,

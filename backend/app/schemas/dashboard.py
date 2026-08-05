@@ -40,6 +40,7 @@ class DashboardSummary(BaseModel):
     collection_in_progress: int = 0
     expected_this_month: Decimal
     collected_this_month: Decimal
+    cash_received_this_month: Decimal
     overdue_amount: Decimal
     total_remainder: Decimal
     total_collected: Decimal

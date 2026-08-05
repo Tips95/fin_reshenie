@@ -283,10 +283,10 @@ export default function DashboardPage() {
                 tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
               />
               <StatCard
-                label={`Получено за ${monthLabel}`}
-                value={formatMoney(summary.collected_this_month)}
+                label={`Поступило в кассу за ${monthLabel}`}
+                value={formatMoney(summary.cash_received_this_month)}
                 tone="success"
-                hint="Платежи по рассрочке"
+                hint="Рассрочка + сбор документов"
               />
               <StatCard
                 label="Сумма просрочки"

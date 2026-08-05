@@ -351,7 +351,7 @@ export default function ClientDetailPage() {
       payment_date: today,
       comment: "",
     });
-    setDocCollectionPaymentDate(client.contract_date);
+    setDocCollectionPaymentDate(today);
   }, [client?.id]);
 
   useEffect(() => {
@@ -1202,7 +1202,7 @@ export default function ClientDetailPage() {
     try {
       await documentCollectionApi.recordPayment(
         client.id,
-        docCollectionPaymentDate || client.contract_date,
+        docCollectionPaymentDate || todayIsoDate(),
       );
       await refreshClient();
       showToast("Оплата сбора документов зафиксирована");
@@ -1959,7 +1959,7 @@ export default function ClientDetailPage() {
           </div>
           {!isBankruptcy && canRecordDocCollectionPayment && docCollection.status !== "paid" && (
             <div className="mt-4 flex flex-wrap items-end gap-3">
-              <FormField label="Дата оплаты сбора">
+              <FormField label="Дата поступления в кассу">
                 <Input
                   type="date"
                   value={docCollectionPaymentDate}
