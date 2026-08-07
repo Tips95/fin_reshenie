@@ -441,12 +441,18 @@ export interface RetailClient {
   organization_id: string;
   full_name: string;
   phone: string;
-  passport: string;
-  address: string;
-  guarantor_full_name: string;
-  guarantor_phone: string;
-  guarantor_passport: string;
+  passport: string | null;
+  address: string | null;
+  guarantor_full_name: string | null;
+  guarantor_phone: string | null;
+  guarantor_passport: string | null;
   contracts_count: number;
+  purchase_total: string;
+  revenue_total: string;
+  collected_total: string;
+  expected_profit: string;
+  collected_profit: string;
+  remainder_total: string;
   has_passport_pdf: boolean;
   passport_pdf_filename: string | null;
   has_guarantor_passport_pdf: boolean;
@@ -495,6 +501,7 @@ export interface RetailContractBrief {
   investor_name: string;
   client_name: string;
   product_name: string;
+  purchase_price: string;
   product_price: string;
   term_months: number;
   markup_percent: string;
@@ -506,6 +513,9 @@ export interface RetailContractBrief {
   status: RetailContractStatus;
   collected_total: string;
   remainder_total: string;
+  expected_profit: string;
+  collected_profit: string;
+  markup_amount: string;
   has_overdue: boolean;
   has_signed_contract_pdf: boolean;
   signed_contract_pdf_filename: string | null;
@@ -522,9 +532,12 @@ export interface InvestorSummaryItem {
   investor_name: string;
   investment_amount: string;
   contracts_count: number;
+  purchase_total: string;
   total_amount: string;
   collected_total: string;
   remainder_total: string;
+  expected_profit: string;
+  collected_profit: string;
   overdue_count: number;
 }
 
@@ -532,9 +545,17 @@ export interface RetailDashboardSummary {
   contracts_count: number;
   active_count: number;
   overdue_count: number;
+  purchase_total: string;
   total_amount: string;
   collected_total: string;
   remainder_total: string;
+  expected_profit: string;
+  collected_profit: string;
   down_payment_total: string;
   investors: InvestorSummaryItem[];
+}
+
+export interface RetailDealResponse {
+  client: RetailClient;
+  contract: RetailContractDetail;
 }

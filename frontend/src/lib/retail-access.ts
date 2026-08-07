@@ -10,3 +10,11 @@ export function isRetailStaff(user: User | null | undefined): boolean {
 export function isRetailOwner(user: User | null | undefined): boolean {
   return user?.role === "owner";
 }
+
+/** Любой пользователь товарной рассрочки, включая инвестора. */
+export function canManageRetailDeals(user: User | null | undefined): boolean {
+  return Boolean(
+    user &&
+      (RETAIL_STAFF_ROLES.includes(user.role) || user.role === "investor"),
+  );
+}

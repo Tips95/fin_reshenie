@@ -268,13 +268,13 @@ export default function RetailContractDetailPage() {
       />
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Цена товара" value={formatMoney(contract.product_price)} tone="default" />
-        <StatCard label="Наценка" value={`${contract.markup_percent}%`} tone="brand" />
-        <StatCard label="Итого" value={formatMoney(contract.total_amount)} tone="default" />
-        <StatCard label="Первоначальный взнос" value={formatMoney(contract.down_payment)} tone="warning" />
-        <StatCard label="В рассрочку" value={formatMoney(contract.financed_amount)} tone="default" />
-        <StatCard label="Ежемесячно" value={formatMoney(contract.monthly_payment)} tone="default" />
+        <StatCard label="Закупка" value={formatMoney(contract.purchase_price)} tone="brand" />
+        <StatCard label="Цена для клиента" value={formatMoney(contract.product_price)} tone="default" />
+        <StatCard label="Наценка" value={formatMoney(contract.markup_amount)} hint={`${contract.markup_percent}%`} />
+        <StatCard label="Клиент вернёт" value={formatMoney(contract.total_amount)} tone="default" />
         <StatCard label="Получено" value={formatMoney(contract.collected_total)} tone="success" />
+        <StatCard label="Прибыль по сделке" value={formatMoney(contract.expected_profit)} tone="success" />
+        <StatCard label="Прибыль получена" value={formatMoney(contract.collected_profit)} tone="success" />
         <StatCard label="Остаток" value={formatMoney(contract.remainder_total)} tone="warning" />
       </div>
 
@@ -298,15 +298,16 @@ export default function RetailContractDetailPage() {
       </Card>
 
       <Card>
-        <SectionTitle title="График платежей" />
+        <SectionTitle title="График платежей" description="Срок — когда должен платить; дата оплаты — когда деньги реально пришли" />
         <div className="overflow-x-auto">
           <table className="data-table table-cards">
             <thead>
               <tr>
                 <th>Месяц</th>
-                <th>Дата</th>
+                <th>Срок</th>
                 <th>План</th>
                 <th>Оплачено</th>
+                <th>Дата оплаты</th>
                 <th>Статус</th>
               </tr>
             </thead>
@@ -314,9 +315,12 @@ export default function RetailContractDetailPage() {
               {contract.payment_schedule.map((item) => (
                 <tr key={item.id}>
                   <td data-label="Месяц">{item.month_number}</td>
-                  <td data-label="Дата">{formatDate(item.due_date)}</td>
+                  <td data-label="Срок">{formatDate(item.due_date)}</td>
                   <td data-label="План">{formatMoney(item.planned_amount)}</td>
                   <td data-label="Оплачено">{formatMoney(item.paid_amount)}</td>
+                  <td data-label="Дата оплаты">
+                    {item.paid_date ? formatDate(item.paid_date) : "—"}
+                  </td>
                   <td data-label="Статус">{item.status}</td>
                 </tr>
               ))}

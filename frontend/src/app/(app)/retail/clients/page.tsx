@@ -36,7 +36,7 @@ import {
   validateRequiredDate,
 } from "@/lib/validation";
 import type { RetailClient, RetailTermRate, User } from "@/lib/types";
-import { isRetailOwner, isRetailStaff } from "@/lib/retail-access";
+import { isRetailOwner, isRetailStaff, canManageRetailDeals } from "@/lib/retail-access";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 export default function RetailClientsPage() {
@@ -44,6 +44,7 @@ export default function RetailClientsPage() {
   const { user } = useAuth();
   const isOwner = isRetailOwner(user);
   const canManage = isRetailStaff(user);
+  const canCreateDeal = canManageRetailDeals(user);
   const [clients, setClients] = useState<RetailClient[]>([]);
   const [investors, setInvestors] = useState<User[]>([]);
   const [rates, setRates] = useState<RetailTermRate[]>([]);
@@ -72,6 +73,7 @@ export default function RetailClientsPage() {
     retail_client_id: "",
     investor_id: "",
     product_name: "",
+    purchase_price: "",
     product_price: "",
     term_months: "6",
     down_payment: "",
@@ -167,7 +169,8 @@ export default function RetailClientsPage() {
       retail_client_id: contractForm.retail_client_id ? null : "Выберите клиента",
       investor_id: contractForm.investor_id ? null : "Выберите инвестора",
       product_name: contractForm.product_name.trim() ? null : "Укажите название товара",
-      product_price: validatePositiveAmount(contractForm.product_price, { label: "Цена товара" }),
+      purchase_price: validatePositiveAmount(contractForm.purchase_price, { label: "Закупка" }),
+      product_price: validatePositiveAmount(contractForm.product_price, { label: "Цена для клиента" }),
       down_payment: validatePositiveAmount(contractForm.down_payment, {
         allowZero: true,
         label: "Первоначальный взнос",
@@ -219,28 +222,38 @@ export default function RetailClientsPage() {
         title={canManage ? "Клиенты" : "Мои клиенты"}
         subtitle={
           canManage
-            ? "Откройте карточку клиента для документов и договоров"
-            : "Клиенты по вашим договорам. Создание — у руководителя и сотрудников"
+            ? "Полная форма с документами. Для быстрого оформления используйте «Новая сделка»."
+            : "Ваши клиенты по сделкам. Новую сделку можно оформить самостоятельно."
         }
         action={
-          canManage ? (
+          canCreateDeal ? (
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setShowClientForm((v) => !v)}>
-                {showClientForm ? "Скрыть форму" : "Новый клиент"}
-              </Button>
-              <Button onClick={() => setShowContractForm((v) => !v)}>
-                {showContractForm ? "Скрыть договор" : "Новый договор"}
-              </Button>
+              <Link href="/retail/deals/new">
+                <Button>Новая сделка</Button>
+              </Link>
+              {canManage ? (
+                <>
+                  <Button variant="secondary" onClick={() => setShowClientForm((v) => !v)}>
+                    {showClientForm ? "Скрыть форму" : "Новый клиент"}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setShowContractForm((v) => !v)}>
+                    {showContractForm ? "Скрыть договор" : "Новый договор"}
+                  </Button>
+                </>
+              ) : null}
             </div>
           ) : undefined
         }
       />
 
-      {!canManage && (
+      {!canManage && canCreateDeal && (
         <Card variant="accent">
           <p className="text-sm text-muted">
-            Как инвестор вы видите только клиентов по своим договорам. Новых клиентов и договоров
-            создаёт команда компании и назначает их вам.
+            Оформляйте сделки сами: клиент, закупочная цена и рассрочка — в разделе{" "}
+            <Link href="/retail/deals/new" className="link-brand font-semibold">
+              Новая сделка
+            </Link>
+            .
           </p>
         </Card>
       )}
@@ -414,7 +427,21 @@ export default function RetailClientsPage() {
                 required
               />
             </FormField>
-            <FormField label="Цена товара" error={contractFormErrors.product_price}>
+            <FormField label="Закупочная цена" error={contractFormErrors.purchase_price}>
+              <Input
+                inputMode="decimal"
+                placeholder="40000"
+                value={contractForm.purchase_price}
+                onChange={(e) =>
+                  setContractForm({
+                    ...contractForm,
+                    purchase_price: filterDecimalInput(e.target.value),
+                  })
+                }
+                required
+              />
+            </FormField>
+            <FormField label="Цена для клиента" error={contractFormErrors.product_price}>
               <Input
                 inputMode="decimal"
                 placeholder="50000"
@@ -479,9 +506,10 @@ export default function RetailClientsPage() {
                 <tr>
                   <th>ФИО</th>
                   <th>Телефон</th>
-                  <th>Паспорт</th>
-                  <th>Поручитель</th>
-                  <th>Документы</th>
+                  <th className="text-right">Закупка</th>
+                  <th className="text-right">К возврату</th>
+                  <th className="text-right">Получено</th>
+                  <th className="text-right">Прибыль</th>
                   <th>Договоров</th>
                   {isOwner && <th>Действие</th>}
                 </tr>
@@ -495,12 +523,17 @@ export default function RetailClientsPage() {
                       </Link>
                     </td>
                     <td data-label="Телефон">{client.phone}</td>
-                    <td data-label="Паспорт" className="whitespace-nowrap">{client.passport}</td>
-                    <td data-label="Поручитель">{formatShortName(client.guarantor_full_name)}</td>
-                    <td data-label="Документы" className="text-xs text-muted">
-                      {client.has_passport_pdf ? "Клиент ✓" : "Клиент —"}
-                      {" · "}
-                      {client.has_guarantor_passport_pdf ? "Поруч. ✓" : "Поруч. —"}
+                    <td data-label="Закупка" className="text-right tabular-nums">
+                      {formatMoney(client.purchase_total)}
+                    </td>
+                    <td data-label="К возврату" className="text-right tabular-nums">
+                      {formatMoney(client.revenue_total)}
+                    </td>
+                    <td data-label="Получено" className="text-right tabular-nums text-status-success-text">
+                      {formatMoney(client.collected_total)}
+                    </td>
+                    <td data-label="Прибыль" className="text-right tabular-nums">
+                      {formatMoney(client.collected_profit)}
                     </td>
                     <td data-label="Договоров">{client.contracts_count}</td>
                     {isOwner && (

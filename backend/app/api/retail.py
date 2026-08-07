@@ -22,6 +22,8 @@ from app.schemas.retail import (
     RetailContractCreate,
     RetailContractDetail,
     RetailDashboardSummary,
+    RetailDealCreate,
+    RetailDealResponse,
     RetailOverdueLogCreate,
     RetailOverdueLogResponse,
     RetailPaymentCreate,
@@ -45,7 +47,13 @@ from app.services.retail_access import (
     get_retail_contract,
 )
 from app.services.retail_contracts import create_retail_contract, sync_contract_status
-from app.services.retail_dashboard import build_contract_brief, get_retail_dashboard
+from app.services.retail_dashboard import (
+    _contracts_for_clients,
+    build_client_response,
+    build_contract_brief,
+    get_retail_dashboard,
+)
+from app.services.retail_deals import create_retail_client, create_retail_deal, resolve_investor_id
 from app.services.retail_deletion import hard_delete_retail_client, hard_delete_retail_contract
 from app.services.file_storage import (
     delete_storage_key,
@@ -75,14 +83,8 @@ require_retail_staff = require_roles(
 )
 
 
-def _client_contracts_count(db: Session, user: User, client_id: UUID) -> int:
-    stmt = select(func.count()).where(
-        RetailContract.retail_client_id == client_id,
-        RetailContract.is_deleted.is_(False),
-    )
-    if user.role == UserRole.INVESTOR:
-        stmt = stmt.where(RetailContract.investor_id == user.id)
-    return db.scalar(stmt) or 0
+def _serialize_client(db: Session, user: User, client: RetailClient) -> RetailClientResponse:
+    return RetailClientResponse(**build_client_response(db, user, client))
 
 
 def _ensure_investor_client_access(db: Session, user: User, client_id: UUID) -> None:
@@ -97,29 +99,6 @@ def _ensure_investor_client_access(db: Session, user: User, client_id: UUID) -> 
     )
     if not has_access:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к клиенту")
-
-
-def _serialize_client(db: Session, user: User, client: RetailClient) -> RetailClientResponse:
-    passport_pdf_path = getattr(client, "passport_pdf_path", None)
-    passport_pdf_filename = getattr(client, "passport_pdf_filename", None)
-    guarantor_passport_pdf_path = getattr(client, "guarantor_passport_pdf_path", None)
-    guarantor_passport_pdf_filename = getattr(client, "guarantor_passport_pdf_filename", None)
-    return RetailClientResponse(
-        id=client.id,
-        organization_id=client.organization_id,
-        full_name=client.full_name,
-        phone=client.phone,
-        passport=format_passport_display(client.passport),
-        address=client.address,
-        guarantor_full_name=client.guarantor_full_name,
-        guarantor_phone=client.guarantor_phone,
-        guarantor_passport=format_passport_display(client.guarantor_passport),
-        contracts_count=_client_contracts_count(db, user, client.id),
-        has_passport_pdf=bool(passport_pdf_path),
-        passport_pdf_filename=passport_pdf_filename,
-        has_guarantor_passport_pdf=bool(guarantor_passport_pdf_path),
-        guarantor_passport_pdf_filename=guarantor_passport_pdf_filename,
-    )
 
 
 @router.get("/dashboard/summary", response_model=RetailDashboardSummary)
@@ -170,28 +149,41 @@ def list_clients(
             )
         )
     clients = list(db.scalars(stmt.order_by(RetailClient.full_name)))
-    return [_serialize_client(db, current_user, client) for client in clients]
+    client_ids = [client.id for client in clients]
+    contracts_by_client = {}
+    if client_ids:
+        contracts_by_client = _contracts_for_clients(db, current_user, client_ids)
+    return [
+        RetailClientResponse(
+            **build_client_response(
+                db,
+                current_user,
+                client,
+                contracts_by_client.get(client.id, []),
+            )
+        )
+        for client in clients
+    ]
 
 
 @router.post("/clients", response_model=RetailClientResponse, status_code=status.HTTP_201_CREATED)
 def create_client(
     payload: RetailClientCreate,
-    current_user: User = Depends(require_retail_staff),
+    current_user: User = Depends(require_retail_user),
     db: Session = Depends(get_db),
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
-    client = RetailClient(
-        organization_id=current_user.organization_id,
-        full_name=payload.full_name.strip(),
-        phone=payload.phone.strip(),
+    client = create_retail_client(
+        db,
+        current_user,
+        full_name=payload.full_name,
+        phone=payload.phone,
         passport=payload.passport,
-        address=payload.address.strip(),
-        guarantor_full_name=payload.guarantor_full_name.strip(),
-        guarantor_phone=payload.guarantor_phone.strip(),
+        address=payload.address,
+        guarantor_full_name=payload.guarantor_full_name,
+        guarantor_phone=payload.guarantor_phone,
         guarantor_passport=payload.guarantor_passport,
     )
-    db.add(client)
-    db.flush()
     log_audit(
         db,
         user=current_user,
@@ -455,19 +447,58 @@ def list_contracts(
     return result
 
 
+@router.post("/deals", response_model=RetailDealResponse, status_code=status.HTTP_201_CREATED)
+def create_deal(
+    payload: RetailDealCreate,
+    current_user: User = Depends(require_retail_user),
+    db: Session = Depends(get_db),
+) -> RetailDealResponse:
+    ensure_retail_organization(db, current_user)
+    client, contract = create_retail_deal(db, current_user, payload)
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_client",
+        entity_id=client.id,
+        action=AuditAction.CREATE,
+    )
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="retail_contract",
+        entity_id=contract.id,
+        action=AuditAction.CREATE,
+    )
+    db.commit()
+    contract = get_retail_contract(db, contract_id=contract.id, organization_id=current_user.organization_id)
+    return RetailDealResponse(
+        client=RetailClientResponse(**build_client_response(db, current_user, client, [contract])),
+        contract=RetailContractDetail(
+            **build_contract_brief(contract),
+            payment_schedule=[
+                RetailPaymentScheduleResponse.model_validate(item) for item in contract.payment_schedule
+            ],
+            payments=[],
+            overdue_logs=[],
+        ),
+    )
+
+
 @router.post("/contracts", response_model=RetailContractDetail, status_code=status.HTTP_201_CREATED)
 def create_contract(
     payload: RetailContractCreate,
-    current_user: User = Depends(require_retail_staff),
+    current_user: User = Depends(require_retail_user),
     db: Session = Depends(get_db),
 ) -> RetailContractDetail:
     ensure_retail_organization(db, current_user)
+    investor_id = resolve_investor_id(current_user, payload.investor_id)
     contract = create_retail_contract(
         db,
         current_user,
         retail_client_id=payload.retail_client_id,
-        investor_id=payload.investor_id,
+        investor_id=investor_id,
         product_name=payload.product_name,
+        purchase_price=payload.purchase_price,
         product_price=payload.product_price,
         term_months=payload.term_months,
         down_payment=payload.down_payment,

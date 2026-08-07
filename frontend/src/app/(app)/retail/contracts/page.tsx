@@ -88,8 +88,10 @@ export default function RetailContractsPage() {
                   <th>Товар</th>
                   <th>Инвестор</th>
                   <th>Срок</th>
-                  <th>Итого</th>
+                  <th>Закупка</th>
+                  <th>К возврату</th>
                   <th>Получено</th>
+                  <th>Прибыль</th>
                   <th>Остаток</th>
                   <th>Статус</th>
                 </tr>
@@ -115,8 +117,10 @@ export default function RetailContractsPage() {
                     </td>
                     <td data-label="Инвестор">{item.investor_name}</td>
                     <td data-label="Срок">{item.term_months} мес.</td>
-                    <td data-label="Итого">{formatMoney(item.total_amount)}</td>
+                    <td data-label="Закупка">{formatMoney(item.purchase_price)}</td>
+                    <td data-label="К возврату">{formatMoney(item.total_amount)}</td>
                     <td data-label="Получено">{formatMoney(item.collected_total)}</td>
+                    <td data-label="Прибыль">{formatMoney(item.collected_profit)}</td>
                     <td data-label="Остаток">{formatMoney(item.remainder_total)}</td>
                     <td data-label="Статус">
                       <Badge tone={statusTone(item.status)}>{statusText(item.status)}</Badge>

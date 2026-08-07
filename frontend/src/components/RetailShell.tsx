@@ -13,6 +13,12 @@ import { useAuth } from "@/modules/auth/AuthProvider";
 
 const retailNavItems = [
   { href: "/retail", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
+  {
+    href: "/retail/deals/new",
+    label: "Новая сделка",
+    icon: "＋",
+    shortLabel: "Сделка",
+  },
   { href: "/retail/contracts", label: "Договоры", icon: "◎", shortLabel: "Договоры" },
   {
     href: "/retail/clients",
@@ -55,6 +61,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith("/retail/contracts")) return "Договоры";
   if (pathname.startsWith("/retail/clients/")) return "Клиент";
   if (pathname.startsWith("/retail/clients")) return "Клиенты";
+  if (pathname.startsWith("/retail/deals")) return "Новая сделка";
   if (pathname.startsWith("/retail/capital")) return "Мой вклад";
   if (pathname.startsWith("/retail/investors")) return "Инвесторы";
   if (pathname.startsWith("/retail/users")) return "Команда";

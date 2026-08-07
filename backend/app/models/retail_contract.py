@@ -32,6 +32,7 @@ class RetailContract(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
     )
     product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     product_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     term_months: Mapped[int] = mapped_column(Integer, nullable=False)
     markup_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)

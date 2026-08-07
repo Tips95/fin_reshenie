@@ -100,15 +100,27 @@ def create_retail_contract(
     retail_client_id,
     investor_id,
     product_name: str,
+    purchase_price: Decimal,
     product_price: Decimal,
     term_months: int,
     down_payment: Decimal,
     contract_date: date,
 ) -> RetailContract:
-    if user.role not in (UserRole.OWNER,):
+    if user.role not in (
+        UserRole.OWNER,
+        UserRole.MANAGER,
+        UserRole.CALL_CENTER,
+        UserRole.INVESTOR,
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Создавать договоры может только администратор",
+            detail="Нет прав на создание договора",
+        )
+
+    if user.role == UserRole.INVESTOR and investor_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Инвестор может создавать договоры только на себя",
         )
 
     get_retail_client(db, client_id=retail_client_id, organization_id=user.organization_id)
@@ -117,6 +129,12 @@ def create_retail_contract(
         investor_id=investor_id,
         organization_id=user.organization_id,
     )
+
+    if purchase_price <= Decimal("0.00"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Закупочная цена должна быть больше нуля",
+        )
 
     markup_percent = get_markup_percent(db, user.organization_id, term_months)
     total_amount, financed_amount, monthly_payment, _ = calculate_contract_amounts(
@@ -132,6 +150,7 @@ def create_retail_contract(
         investor_id=investor.id,
         created_by_id=user.id,
         product_name=product_name.strip(),
+        purchase_price=money(purchase_price),
         product_price=money(product_price),
         term_months=term_months,
         markup_percent=markup_percent,

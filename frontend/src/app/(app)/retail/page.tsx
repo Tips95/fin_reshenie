@@ -42,7 +42,7 @@ export default function RetailDashboardPage() {
       <div className="page-stack">
         <PageHeader
           title="Товарная рассрочка"
-          subtitle={user?.role === "owner" ? "Сводка по всем инвесторам" : "Мои договоры и касса"}
+          subtitle={user?.role === "owner" ? "Сводка по всем инвесторам" : "Мои сделки и касса"}
         />
         <Card variant="accent">
           <p className="text-sm text-status-danger-text">{error || "Не удалось загрузить дашборд"}</p>
@@ -55,61 +55,90 @@ export default function RetailDashboardPage() {
   }
 
   const isEmpty = data.contracts_count === 0;
+  const isInvestor = user?.role === "investor";
 
   return (
     <div className="page-stack">
       <PageHeader
         title="Товарная рассрочка"
-        subtitle={user?.role === "owner" ? "Сводка по всем инвесторам" : "Мои договоры и касса"}
+        subtitle={
+          user?.role === "owner"
+            ? "Закупка → рассрочка → возврат с наценкой"
+            : "Ваши сделки: сколько вложено, сколько уже вернулось"
+        }
+        action={
+          <Link href="/retail/deals/new">
+            <Button type="button">Новая сделка</Button>
+          </Link>
+        }
       />
 
       {isEmpty && (
-        <p className="alert-warning">
-          {user?.role === "owner"
-            ? "Договоров пока нет. Перейдите в «Клиенты», создайте клиента и договор, назначьте инвестора."
-            : "У вас пока нет договоров. Администратор создаёт клиентов и назначает договоры инвесторам — после этого они появятся здесь."}
-        </p>
+        <Card variant="accent">
+          <p className="text-sm text-muted">
+            {isInvestor
+              ? "Сделок пока нет. Нажмите «Новая сделка» — укажите клиента, закупочную цену и условия рассрочки."
+              : "Сделок пока нет. Оформите первую через «Новая сделка» или раздел «Клиенты»."}
+          </p>
+        </Card>
       )}
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Договоров" value={data.contracts_count} tone="brand" />
-        <StatCard label="Активных" value={data.active_count} tone="success" />
+        <StatCard label="Вложено в закупки" value={formatMoney(data.purchase_total)} tone="brand" />
+        <StatCard
+          label="Клиенты должны вернуть"
+          value={formatMoney(data.total_amount)}
+          hint="Сумма всех договоров"
+        />
+        <StatCard label="Уже получено" value={formatMoney(data.collected_total)} tone="success" />
+        <StatCard label="Ещё ждём" value={formatMoney(data.remainder_total)} tone="warning" />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Прибыль по сделкам"
+          value={formatMoney(data.expected_profit)}
+          tone="success"
+          hint="Если все доплатят"
+        />
+        <StatCard
+          label="Прибыль получена"
+          value={formatMoney(data.collected_profit)}
+          tone="success"
+          hint="Пропорционально поступлениям"
+        />
+        <StatCard label="Активных договоров" value={data.active_count} tone="default" />
         <StatCard label="Просрочка" value={data.overdue_count} tone="danger" />
-        <StatCard label="К оплате" value={formatMoney(data.remainder_total)} tone="warning" />
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Сумма договоров" value={formatMoney(data.total_amount)} tone="default" />
-        <StatCard label="Получено" value={formatMoney(data.collected_total)} tone="success" />
-        <StatCard label="Первоначальные взносы" value={formatMoney(data.down_payment_total)} tone="default" />
-      </div>
-
-      {user?.role === "investor" && (
+      {isInvestor && (
         <Card>
-          <SectionTitle title="Мой вклад" description="Сумма, которую вы инвестируете в договоры" />
+          <SectionTitle title="Мой вклад" description="Сумма, которую вы готовы финансировать" />
           <p className="text-lg font-bold text-foreground">
             {formatMoney(user.investment_amount ?? "0")}
           </p>
           <Link href="/retail/capital" className="mt-2 inline-block">
-            <Button type="button">Изменить сумму вклада</Button>
+            <Button type="button" variant="secondary">
+              Изменить сумму вклада
+            </Button>
           </Link>
         </Card>
       )}
 
       {user?.role === "owner" && data.investors.length > 0 && (
         <Card>
-          <SectionTitle title="Инвесторы" description="Каждый финансирует свои договоры" />
+          <SectionTitle title="Инвесторы" description="Вложения, возврат и прибыль по каждому" />
           <div className="overflow-x-auto">
             <table className="data-table table-cards">
               <thead>
                 <tr>
                   <th>Инвестор</th>
-                  <th>Вклад</th>
-                  <th>Договоров</th>
-                  <th>Сумма</th>
+                  <th>Закупки</th>
+                  <th>К возврату</th>
                   <th>Получено</th>
+                  <th>Прибыль</th>
                   <th>Остаток</th>
-                  <th>Просрочка</th>
+                  <th>Проср.</th>
                 </tr>
               </thead>
               <tbody>
@@ -117,13 +146,14 @@ export default function RetailDashboardPage() {
                   <tr key={item.investor_id}>
                     <td data-label="Инвестор" className="font-medium text-foreground">
                       {item.investor_name}
+                      <p className="text-xs text-muted">{item.contracts_count} дог.</p>
                     </td>
-                    <td data-label="Вклад">{formatMoney(item.investment_amount)}</td>
-                    <td data-label="Договоров">{item.contracts_count}</td>
-                    <td data-label="Сумма">{formatMoney(item.total_amount)}</td>
+                    <td data-label="Закупки">{formatMoney(item.purchase_total)}</td>
+                    <td data-label="К возврату">{formatMoney(item.total_amount)}</td>
                     <td data-label="Получено">{formatMoney(item.collected_total)}</td>
+                    <td data-label="Прибыль">{formatMoney(item.collected_profit)}</td>
                     <td data-label="Остаток">{formatMoney(item.remainder_total)}</td>
-                    <td data-label="Просрочка">
+                    <td data-label="Проср.">
                       <Badge tone={item.overdue_count > 0 ? "danger" : "success"}>
                         {item.overdue_count}
                       </Badge>
@@ -139,37 +169,19 @@ export default function RetailDashboardPage() {
       <Card>
         <SectionTitle title="Быстрые действия" />
         <div className="flex flex-wrap gap-2">
-          <Link href="/retail/contracts">
-            <Button type="button">Договоры</Button>
+          <Link href="/retail/deals/new">
+            <Button type="button">Новая сделка</Button>
           </Link>
-          {user?.role === "investor" && (
-            <>
-              <Link href="/retail/clients">
-                <Button type="button" variant="secondary">
-                  Мои клиенты
-                </Button>
-              </Link>
-              <Link href="/retail/capital">
-                <Button type="button" variant="secondary">
-                  Мой вклад
-                </Button>
-              </Link>
-            </>
-          )}
-          {user?.role === "owner" && (
-            <>
-              <Link href="/retail/clients">
-                <Button type="button" variant="secondary">
-                  Клиенты
-                </Button>
-              </Link>
-              <Link href="/retail/investors">
-                <Button type="button" variant="secondary">
-                  Инвесторы
-                </Button>
-              </Link>
-            </>
-          )}
+          <Link href="/retail/contracts">
+            <Button type="button" variant="secondary">
+              Договоры
+            </Button>
+          </Link>
+          <Link href="/retail/clients">
+            <Button type="button" variant="secondary">
+              {isInvestor ? "Мои клиенты" : "Клиенты"}
+            </Button>
+          </Link>
         </div>
       </Card>
     </div>

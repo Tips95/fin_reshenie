@@ -29,22 +29,42 @@ class TestRetailCalculations:
 
 
 class TestRetailContractCreation:
-    def test_investor_cannot_create_contract(self):
+    def test_investor_can_create_contract_for_self(self, monkeypatch):
         user = SimpleNamespace(id=uuid4(), organization_id=uuid4(), role=UserRole.INVESTOR)
-        db = SimpleNamespace()
-        with pytest.raises(HTTPException) as exc:
-            create_retail_contract(
-                db,
-                user,
-                retail_client_id=uuid4(),
-                investor_id=uuid4(),
-                product_name="Телефон",
-                product_price=Decimal("100000"),
-                term_months=6,
-                down_payment=Decimal("10000"),
-                contract_date=date.today(),
-            )
-        assert exc.value.status_code == 403
+        investor = SimpleNamespace(id=user.id)
+        contract = SimpleNamespace(id=uuid4())
+
+        monkeypatch.setattr(
+            "app.services.retail_contracts.get_retail_client",
+            lambda *_args, **_kwargs: SimpleNamespace(),
+        )
+        monkeypatch.setattr(
+            "app.services.retail_contracts.get_organization_investor",
+            lambda *_args, **_kwargs: investor,
+        )
+        monkeypatch.setattr(
+            "app.services.retail_contracts.get_markup_percent",
+            lambda *_args, **_kwargs: Decimal("30.00"),
+        )
+        monkeypatch.setattr(
+            "app.services.retail_contracts.build_payment_schedule",
+            lambda **_kwargs: [],
+        )
+
+        db = SimpleNamespace(add=lambda *_args, **_kwargs: None, flush=lambda: None, add_all=lambda *_args: None)
+        created = create_retail_contract(
+            db,
+            user,
+            retail_client_id=uuid4(),
+            investor_id=user.id,
+            product_name="Телефон",
+            purchase_price=Decimal("80000"),
+            product_price=Decimal("100000"),
+            term_months=6,
+            down_payment=Decimal("10000"),
+            contract_date=date.today(),
+        )
+        assert created.purchase_price == Decimal("80000.00")
 
 
 class TestRetailPaymentCreate:

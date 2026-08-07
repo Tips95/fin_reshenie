@@ -25,6 +25,7 @@ import type {
   RetailContractBrief,
   RetailClient,
   RetailDashboardSummary,
+  RetailDealResponse,
   RetailTermRate,
   Workspace,
   Organization,
@@ -268,6 +269,8 @@ export const retailApi = {
   getClient: (id: string) => apiFetch<RetailClient>(`/retail/clients/${id}`),
   createClient: (data: Record<string, unknown>) =>
     apiFetch<RetailClient>("/retail/clients", { method: "POST", body: JSON.stringify(data) }),
+  createDeal: (data: Record<string, unknown>) =>
+    apiFetch<RetailDealResponse>("/retail/deals", { method: "POST", body: JSON.stringify(data) }),
   updateClient: (id: string, data: Record<string, unknown>) =>
     apiFetch<RetailClient>(`/retail/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteClient: (id: string) => apiFetch<void>(`/retail/clients/${id}`, { method: "DELETE" }),
