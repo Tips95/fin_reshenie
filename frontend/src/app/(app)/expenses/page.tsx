@@ -25,8 +25,15 @@ import {
   formatMonthLabel,
   statusLabel,
 } from "@/lib/format";
-import type { ExpenseCategory, ExpenseGroup, ExpensePayment, OperatingExpense } from "@/lib/types";
+import type { ExpenseCategory, ExpenseGroup, ExpensePayment, OneTimeExpense, OperatingExpense } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
+
+const emptyOneTimeForm = {
+  name: "",
+  amount: "",
+  expense_date: new Date().toISOString().slice(0, 10),
+  comment: "",
+};
 
 const emptyForm = {
   name: "",
@@ -358,8 +365,11 @@ export default function ExpensesPage() {
   const router = useRouter();
   const [expenses, setExpenses] = useState<OperatingExpense[]>([]);
   const [payments, setPayments] = useState<ExpensePayment[]>([]);
+  const [oneTimeExpenses, setOneTimeExpenses] = useState<OneTimeExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
+  const [oneTimeForm, setOneTimeForm] = useState(emptyOneTimeForm);
+  const [oneTimeSaving, setOneTimeSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -380,12 +390,14 @@ export default function ExpensesPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [expenseData, paymentData] = await Promise.all([
+      const [expenseData, paymentData, oneTimeData] = await Promise.all([
         expensesApi.list(),
         expensesApi.listPayments(),
+        expensesApi.listOneTime({ period_month: periodMonth }),
       ]);
       setExpenses(expenseData);
       setPayments(paymentData);
+      setOneTimeExpenses(oneTimeData);
     } finally {
       setLoading(false);
     }
@@ -396,7 +408,7 @@ export default function ExpensesPage() {
       void loadData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role]);
+  }, [user?.role, periodMonth]);
 
   function normalizeAmount(value: string): string {
     const parsed = Number(value);
@@ -404,6 +416,47 @@ export default function ExpensesPage() {
       throw new Error("Укажите сумму больше 0");
     }
     return Math.round(parsed).toFixed(2);
+  }
+
+  async function handleCreateOneTime(event: React.FormEvent) {
+    event.preventDefault();
+    setOneTimeSaving(true);
+    setError(null);
+    try {
+      await expensesApi.createOneTime({
+        name: oneTimeForm.name.trim(),
+        amount: normalizeAmount(oneTimeForm.amount),
+        period_month: monthToPeriodDate(periodMonth),
+        expense_date: oneTimeForm.expense_date,
+        comment: oneTimeForm.comment.trim() || null,
+      });
+      setOneTimeForm({
+        ...emptyOneTimeForm,
+        expense_date: new Date().toISOString().slice(0, 10),
+      });
+      loadData();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError || err instanceof Error
+          ? err.message
+          : "Не удалось добавить разовый расход",
+      );
+    } finally {
+      setOneTimeSaving(false);
+    }
+  }
+
+  async function handleDeleteOneTime(id: string, name: string) {
+    if (!window.confirm(`Удалить разовый расход «${name}»?`)) return;
+    setError(null);
+    try {
+      await expensesApi.deleteOneTime(id);
+      loadData();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError ? err.message : "Не удалось удалить разовый расход",
+      );
+    }
   }
 
   async function handleCreate(event: React.FormEvent) {
@@ -553,6 +606,8 @@ export default function ExpensesPage() {
   const salaryTotal = salaryExpenses.reduce((sum, item) => sum + Number(item.amount), 0);
   const productionTotal = productionExpenses.reduce((sum, item) => sum + Number(item.amount), 0);
   const totalMonthly = salaryTotal + productionTotal;
+  const oneTimeMonthTotal = oneTimeExpenses.reduce((sum, item) => sum + Number(item.amount), 0);
+  const totalWithOneTime = totalMonthly + oneTimeMonthTotal;
 
   const paymentByExpenseId = useMemo(() => {
     const map = new Map<string, ExpensePayment>();
@@ -614,11 +669,107 @@ export default function ExpensesPage() {
         />
         <StatCard
           label="Итого в месяц"
-          value={formatMoney(totalMonthly)}
+          value={formatMoney(totalWithOneTime)}
           tone="danger"
-          hint={`${activeExpenses.length} активных статей`}
+          hint={`${activeExpenses.length} статей + ${oneTimeExpenses.length} разовых`}
         />
       </div>
+
+      <Card variant="accent">
+        <SectionTitle
+          title={`Разовые расходы · ${formatMonthLabel(periodMonth)}`}
+          description="Дополнительные траты только за выбранный месяц — попадают в чистую прибыль на дашборде"
+        />
+        <form onSubmit={handleCreateOneTime} className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          <Input
+            placeholder="Название расхода"
+            value={oneTimeForm.name}
+            onChange={(e) => setOneTimeForm({ ...oneTimeForm, name: e.target.value })}
+            required
+          />
+          <Input
+            placeholder="Сумма"
+            type="number"
+            min={1}
+            step={1}
+            value={oneTimeForm.amount}
+            onChange={(e) => setOneTimeForm({ ...oneTimeForm, amount: e.target.value })}
+            required
+          />
+          <Input
+            type="date"
+            value={oneTimeForm.expense_date}
+            onChange={(e) => setOneTimeForm({ ...oneTimeForm, expense_date: e.target.value })}
+            required
+          />
+          <Input
+            placeholder="Комментарий (необязательно)"
+            value={oneTimeForm.comment}
+            onChange={(e) => setOneTimeForm({ ...oneTimeForm, comment: e.target.value })}
+          />
+          <Button type="submit" disabled={oneTimeSaving}>
+            {oneTimeSaving ? "Сохранение..." : "Добавить"}
+          </Button>
+        </form>
+        <div className="mt-3">
+          {loading ? (
+            <LoadingState text="Загрузка..." />
+          ) : oneTimeExpenses.length === 0 ? (
+            <EmptyState>Разовых расходов за этот месяц пока нет</EmptyState>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table table-cards text-xs">
+                <thead>
+                  <tr>
+                    <th>Название</th>
+                    <th className="text-right">Сумма</th>
+                    <th>Дата оплаты</th>
+                    <th>Комментарий</th>
+                    <th>Кто добавил</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {oneTimeExpenses.map((item) => (
+                    <tr key={item.id}>
+                      <td data-label="Название" className="font-medium text-foreground">
+                        {item.name}
+                      </td>
+                      <td data-label="Сумма" className="text-right font-semibold text-status-danger-text">
+                        {formatMoney(item.amount)}
+                      </td>
+                      <td data-label="Дата оплаты">{formatDate(item.expense_date)}</td>
+                      <td data-label="Комментарий" className="text-muted">
+                        {item.comment || "—"}
+                      </td>
+                      <td data-label="Кто добавил" className="text-muted">
+                        {item.created_by_name ?? "—"}
+                      </td>
+                      <td data-label="">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => handleDeleteOneTime(item.id, item.name)}
+                        >
+                          Удалить
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="mt-3">
+          <StatCard
+            label={`Разовые за ${formatMonthLabel(periodMonth)}`}
+            value={formatMoney(oneTimeMonthTotal)}
+            tone="warning"
+            hint={`${oneTimeExpenses.length} записей`}
+          />
+        </div>
+      </Card>
 
       <Card variant="accent">
         <SectionTitle

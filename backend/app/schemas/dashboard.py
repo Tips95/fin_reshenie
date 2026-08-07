@@ -46,6 +46,8 @@ class DashboardSummary(BaseModel):
     total_collected: Decimal
     active_contract_total: Decimal
     monthly_expenses: Decimal
+    fixed_monthly_expenses: Decimal
+    one_time_expenses_this_month: Decimal
     mandatory_paid_total: MandatoryPaymentBreakdown
     mandatory_paid_this_month: MandatoryPaymentBreakdown
     document_collection_total: DocumentCollectionBreakdown

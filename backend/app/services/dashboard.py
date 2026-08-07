@@ -9,7 +9,6 @@ from app.models.client import Client
 from app.models.enums import ClientStatus, EngagementStage, TaskStatus, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.manager_task import ManagerTask
-from app.models.operating_expense import OperatingExpense
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
@@ -26,6 +25,7 @@ from app.services.document_collection_stats import (
 )
 from app.services.mandatory_payment_stats import MandatoryPaymentTotals, breakdown_from_totals, get_mandatory_paid_totals
 from app.services.client_finances import contract_totals_by_client, sum_active_contract_totals
+from app.services.expense_totals import monthly_expenses_total
 from app.services.phone import month_bounds
 from app.services.schedule_dates import effective_due_date, payment_window_end
 
@@ -56,18 +56,6 @@ def _visible_clients_stmt(user: User) -> Select:
 def _schedule_remainder(planned: Decimal, paid: Decimal) -> Decimal:
     diff = planned - paid
     return diff if diff > Decimal("0.00") else Decimal("0.00")
-
-
-def _monthly_expenses_total(db: Session, organization_id) -> Decimal:
-    expenses = list(
-        db.scalars(
-            select(OperatingExpense).where(
-                OperatingExpense.organization_id == organization_id,
-                OperatingExpense.is_active.is_(True),
-            )
-        )
-    )
-    return sum((expense.amount for expense in expenses), Decimal("0.00"))
 
 
 def _to_breakdown(totals: MandatoryPaymentTotals) -> MandatoryPaymentBreakdown:
@@ -210,6 +198,8 @@ def get_dashboard_summary(
             total_collected=Decimal("0.00"),
             active_contract_total=Decimal("0.00"),
             monthly_expenses=Decimal("0.00"),
+            fixed_monthly_expenses=Decimal("0.00"),
+            one_time_expenses_this_month=Decimal("0.00"),
             mandatory_paid_total=empty,
             mandatory_paid_this_month=empty,
             document_collection_total=empty_collection,
@@ -221,7 +211,12 @@ def get_dashboard_summary(
             overdue_clients_preview=overdue_clients_preview,
         )
 
-    monthly_expenses = _monthly_expenses_total(db, user.organization_id)
+    monthly_expenses, fixed_monthly_expenses, one_time_expenses_this_month = monthly_expenses_total(
+        db,
+        user.organization_id,
+        month_start=month_start,
+        month_end=month_end,
+    )
 
     active_contract_total = sum_active_contract_totals(db, clients)
 
@@ -329,6 +324,8 @@ def get_dashboard_summary(
         total_collected=total_collected,
         active_contract_total=active_contract_total,
         monthly_expenses=monthly_expenses,
+        fixed_monthly_expenses=fixed_monthly_expenses,
+        one_time_expenses_this_month=one_time_expenses_this_month,
         mandatory_paid_total=mandatory_paid_total,
         mandatory_paid_this_month=mandatory_paid_this_month,
         document_collection_total=document_collection_total,

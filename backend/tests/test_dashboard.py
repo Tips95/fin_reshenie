@@ -59,7 +59,6 @@ class TestDashboardSummary:
         db = MagicMock()
         db.scalars.side_effect = [
             [client],
-            [],
             [schedule],
             [payment],
         ]
@@ -105,6 +104,10 @@ class TestDashboardSummary:
         monkeypatch.setattr(
             "app.services.dashboard.count_contracts_signed_in_period",
             lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.monthly_expenses_total",
+            lambda *_args, **_kwargs: (Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
 
         summary = get_dashboard_summary(db, make_user())
@@ -287,6 +290,10 @@ class TestDashboardSummary:
         monkeypatch.setattr(
             "app.services.dashboard.count_contracts_signed_in_period",
             lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.monthly_expenses_total",
+            lambda *_args, **_kwargs: (Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
 
         summary = get_dashboard_summary(db, make_user())

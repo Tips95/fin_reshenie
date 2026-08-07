@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -8,6 +9,7 @@ from app.api.deps import require_owner
 from app.core.database import get_db
 from app.models.enums import AuditAction, ExpenseCategory, ExpenseGroup
 from app.models.expense_payment import ExpensePayment
+from app.models.one_time_expense import OneTimeExpense
 from app.models.operating_expense import OperatingExpense
 from app.models.user import User
 from app.schemas.expense_payment import (
@@ -15,6 +17,12 @@ from app.schemas.expense_payment import (
     ExpensePaymentListResponse,
     ExpensePaymentResponse,
     ExpensePaymentUpdate,
+)
+from app.schemas.one_time_expense import (
+    OneTimeExpenseCreate,
+    OneTimeExpenseListResponse,
+    OneTimeExpenseResponse,
+    OneTimeExpenseUpdate,
 )
 from app.schemas.operating_expense import (
     OperatingExpenseCreate,
@@ -63,6 +71,22 @@ def _default_expense_group(category: ExpenseCategory) -> ExpenseGroup:
     if category == ExpenseCategory.SALARY:
         return ExpenseGroup.SALARY_PROJECT
     return ExpenseGroup.PRODUCTION
+
+
+def get_organization_one_time_expense(
+    db: Session,
+    *,
+    expense_id: UUID,
+    organization_id: UUID,
+) -> OneTimeExpense:
+    expense = db.get(OneTimeExpense, expense_id)
+    if expense is None or expense.organization_id != organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Разовый расход не найден")
+    return expense
+
+
+def _normalize_period_month(value: date) -> date:
+    return value.replace(day=1)
 
 
 @router.get("", response_model=list[OperatingExpenseResponse])
@@ -270,4 +294,129 @@ def delete_operating_expense(
         old_value=True,
         new_value=False,
     )
+    db.commit()
+
+
+@router.get("/one-time", response_model=list[OneTimeExpenseListResponse])
+def list_one_time_expenses(
+    period_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> list[OneTimeExpenseListResponse]:
+    stmt = (
+        select(OneTimeExpense, User.full_name)
+        .join(User, User.id == OneTimeExpense.created_by)
+        .where(OneTimeExpense.organization_id == current_user.organization_id)
+        .order_by(OneTimeExpense.period_month.desc(), OneTimeExpense.expense_date.desc())
+    )
+    if period_month:
+        start, end = month_bounds(period_month)
+        stmt = stmt.where(
+            OneTimeExpense.period_month >= start,
+            OneTimeExpense.period_month <= end,
+        )
+
+    rows = db.execute(stmt).all()
+    return [
+        OneTimeExpenseListResponse(
+            id=expense.id,
+            name=expense.name,
+            amount=expense.amount,
+            period_month=expense.period_month,
+            expense_date=expense.expense_date,
+            comment=expense.comment,
+            created_by=expense.created_by,
+            created_at=expense.created_at,
+            created_by_name=created_by_name,
+        )
+        for expense, created_by_name in rows
+    ]
+
+
+@router.post(
+    "/one-time",
+    response_model=OneTimeExpenseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_one_time_expense(
+    payload: OneTimeExpenseCreate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> OneTimeExpense:
+    expense = OneTimeExpense(
+        organization_id=current_user.organization_id,
+        name=payload.name.strip(),
+        amount=payload.amount,
+        period_month=_normalize_period_month(payload.period_month),
+        expense_date=payload.expense_date or date.today(),
+        comment=payload.comment,
+        created_by=current_user.id,
+    )
+    db.add(expense)
+    db.flush()
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="one_time_expense",
+        entity_id=expense.id,
+        action=AuditAction.CREATE,
+    )
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+@router.patch("/one-time/{expense_id}", response_model=OneTimeExpenseResponse)
+def update_one_time_expense(
+    expense_id: UUID,
+    payload: OneTimeExpenseUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> OneTimeExpense:
+    expense = get_organization_one_time_expense(
+        db, expense_id=expense_id, organization_id=current_user.organization_id
+    )
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates and updates["name"] is not None:
+        updates["name"] = updates["name"].strip()
+    if "period_month" in updates and updates["period_month"] is not None:
+        updates["period_month"] = _normalize_period_month(updates["period_month"])
+
+    for field, value in updates.items():
+        old_value = getattr(expense, field)
+        if old_value != value:
+            log_audit(
+                db,
+                user=current_user,
+                entity_type="one_time_expense",
+                entity_id=expense.id,
+                action=AuditAction.UPDATE,
+                field_name=field,
+                old_value=old_value,
+                new_value=value,
+            )
+            setattr(expense, field, value)
+
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+@router.delete("/one-time/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_one_time_expense(
+    expense_id: UUID,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    expense = get_organization_one_time_expense(
+        db, expense_id=expense_id, organization_id=current_user.organization_id
+    )
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="one_time_expense",
+        entity_id=expense.id,
+        action=AuditAction.DELETE,
+    )
+    db.delete(expense)
     db.commit()

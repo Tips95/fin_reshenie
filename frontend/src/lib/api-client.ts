@@ -15,6 +15,7 @@ import type {
   MandatoryPayment,
   OperatingExpense,
   ExpensePayment,
+  OneTimeExpense,
   Payment,
   PaymentScheduleItem,
   PricingTier,
@@ -510,6 +511,24 @@ export const expensesApi = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  listOneTime: (params?: { period_month?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.period_month) search.set("period_month", params.period_month);
+    const query = search.toString();
+    return apiFetch<OneTimeExpense[]>(`/operating-expenses/one-time${query ? `?${query}` : ""}`);
+  },
+  createOneTime: (data: Record<string, unknown>) =>
+    apiFetch<OneTimeExpense>("/operating-expenses/one-time", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateOneTime: (id: string, data: Record<string, unknown>) =>
+    apiFetch<OneTimeExpense>(`/operating-expenses/one-time/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteOneTime: (id: string) =>
+    apiFetch<void>(`/operating-expenses/one-time/${id}`, { method: "DELETE" }),
 };
 
 export const scheduleApi = {

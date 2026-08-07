@@ -7,6 +7,7 @@ from app.models.court_deposit_tracking import CourtDepositTracking
 from app.models.document_collection import DocumentCollection
 from app.models.manager_task import ManagerTask
 from app.models.expense_payment import ExpensePayment
+from app.models.one_time_expense import OneTimeExpense
 from app.models.operating_expense import OperatingExpense
 from app.models.organization import Organization
 from app.models.payment import Payment
@@ -31,6 +32,7 @@ __all__ = [
     "InstallmentPlan",
     "ManagerTask",
     "ExpensePayment",
+    "OneTimeExpense",
     "OperatingExpense",
     "Organization",
     "Payment",

@@ -73,8 +73,8 @@ class TestAnalyticsOverview:
             lambda *_args, **_kwargs: False,
         )
         monkeypatch.setattr(
-            "app.services.analytics._monthly_expenses_total",
-            lambda *_args, **_kwargs: Decimal("415000.00"),
+            "app.services.analytics.monthly_expenses_total",
+            lambda *_args, **_kwargs: (Decimal("415000.00"), Decimal("415000.00"), Decimal("0.00")),
         )
         monkeypatch.setattr(
             "app.services.analytics.get_mandatory_paid_totals",

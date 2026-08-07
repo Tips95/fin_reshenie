@@ -527,7 +527,7 @@ export default function DashboardPage() {
                 id="dash-expenses"
                 tone="expenses"
                 title="Расходы организации"
-                description="Фиксированные ежемесячные расходы компании"
+                description="Фиксированные статьи + разовые траты за выбранный месяц"
                 action={
                   <Link
                     href="/expenses"
@@ -542,6 +542,17 @@ export default function DashboardPage() {
                     label="Расходы в месяц"
                     value={formatMoney(summary.monthly_expenses)}
                     tone="warning"
+                    hint="План + разовые"
+                  />
+                  <StatCard
+                    label="Плановые статьи"
+                    value={formatMoney(summary.fixed_monthly_expenses)}
+                    hint="Ежемесячный бюджет"
+                  />
+                  <StatCard
+                    label={`Разовые за ${monthLabel}`}
+                    value={formatMoney(summary.one_time_expenses_this_month)}
+                    tone="danger"
                   />
                 </div>
               </DashboardSection>

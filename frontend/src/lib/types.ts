@@ -287,6 +287,8 @@ export interface DashboardSummary {
   total_collected: string;
   active_contract_total: string;
   monthly_expenses: string;
+  fixed_monthly_expenses: string;
+  one_time_expenses_this_month: string;
   mandatory_paid_total: MandatoryPaymentBreakdown;
   mandatory_paid_this_month: MandatoryPaymentBreakdown;
   document_collection_total: DocumentCollectionBreakdown;
@@ -413,6 +415,18 @@ export interface ExpensePayment {
   created_at: string;
   expense_name?: string;
   expense_group?: ExpenseGroup;
+  created_by_name?: string;
+}
+
+export interface OneTimeExpense {
+  id: string;
+  name: string;
+  amount: string;
+  period_month: string;
+  expense_date: string;
+  comment: string | null;
+  created_by: string;
+  created_at: string;
   created_by_name?: string;
 }
 

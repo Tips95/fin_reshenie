@@ -23,7 +23,8 @@ from app.schemas.analytics import (
 )
 from app.schemas.dashboard import DocumentCollectionBreakdown
 from app.services.access import apply_client_visibility_filter, client_has_overdue_payments
-from app.services.dashboard import _monthly_expenses_total, _schedule_remainder
+from app.services.dashboard import _schedule_remainder
+from app.services.expense_totals import monthly_expenses_total
 from app.services.document_collection_stats import (
     count_contracts_signed_in_period,
     get_document_collection_paid_totals,
@@ -199,10 +200,19 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
         plan_total_by_client,
     )
 
-    monthly_expenses = _monthly_expenses_total(db, user.organization_id)
+    monthly_expenses = Decimal("0.00")
     today = date.today()
     periods = _month_periods(months, today)
     range_start = periods[0][1]
+    current_month_start = today.replace(day=1)
+    _, current_month_end_day = monthrange(today.year, today.month)
+    current_month_end = today.replace(day=current_month_end_day)
+    monthly_expenses, _, _ = monthly_expenses_total(
+        db,
+        user.organization_id,
+        month_start=current_month_start,
+        month_end=current_month_end,
+    )
 
     collected_by_month: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
     expected_by_month: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
@@ -246,16 +256,22 @@ def get_analytics_overview(db: Session, user: User, *, months: int = 6) -> Analy
             date_from=period_start,
             date_to=period_end,
         )
+        period_expenses, _, _ = monthly_expenses_total(
+            db,
+            user.organization_id,
+            month_start=period_start,
+            month_end=period_end,
+        )
         trends.append(
             MonthlyTrendPoint(
                 month=month_key,
                 collected=collected_by_month[month_key],
                 expected=expected_by_month[month_key],
-                expenses=monthly_expenses,
+                expenses=period_expenses,
                 mandatory_paid=mandatory_totals.total,
                 net_profit=collected_by_month[month_key]
                 + collection_totals.collection_cash
-                - monthly_expenses
+                - period_expenses
                 - mandatory_totals.total,
                 payments_count=payments_count_by_month[month_key],
                 collections_paid_count=collection_totals.paid_count,
