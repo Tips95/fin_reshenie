@@ -63,6 +63,9 @@ def create_retail_deal(
         phone=payload.phone,
         passport=payload.passport,
         address=payload.address,
+        guarantor_full_name=payload.guarantor_full_name,
+        guarantor_phone=payload.guarantor_phone,
+        guarantor_passport=payload.guarantor_passport,
     )
     contract = create_retail_contract(
         db,

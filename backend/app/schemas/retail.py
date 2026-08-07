@@ -140,6 +140,11 @@ class RetailContractCreate(BaseModel):
 class RetailDealCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     phone: str = Field(min_length=1, max_length=32)
+    passport: str = Field(min_length=1, max_length=64)
+    address: str = Field(min_length=1)
+    guarantor_full_name: str = Field(min_length=1, max_length=255)
+    guarantor_phone: str = Field(min_length=1, max_length=32)
+    guarantor_passport: str = Field(min_length=1, max_length=64)
     product_name: str = Field(min_length=1, max_length=255)
     purchase_price: Decimal = Field(gt=0)
     product_price: Decimal = Field(gt=0)
@@ -147,31 +152,25 @@ class RetailDealCreate(BaseModel):
     down_payment: Decimal = Field(ge=0, default=Decimal("0.00"))
     contract_date: date
     investor_id: UUID | None = None
-    passport: str | None = Field(default=None, max_length=64)
-    address: str | None = None
 
-    @field_validator("full_name")
+    @field_validator("full_name", "guarantor_full_name")
     @classmethod
     def check_full_name(cls, value: str) -> str:
         return validate_full_name(value)
 
-    @field_validator("phone")
+    @field_validator("phone", "guarantor_phone")
     @classmethod
     def check_phone(cls, value: str) -> str:
         return validate_phone_required(value)
 
-    @field_validator("passport")
+    @field_validator("passport", "guarantor_passport")
     @classmethod
-    def check_passport(cls, value: str | None) -> str | None:
-        if value is None or not value.strip():
-            return None
+    def check_passport(cls, value: str) -> str:
         return validate_passport(value)
 
     @field_validator("address")
     @classmethod
-    def check_address(cls, value: str | None) -> str | None:
-        if value is None or not value.strip():
-            return None
+    def check_address(cls, value: str) -> str:
         return validate_address(value)
 
 

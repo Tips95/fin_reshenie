@@ -74,7 +74,7 @@ export default function LoginPage() {
             <Input
               value={loginValue}
               onChange={(e) => setLoginValue(e.target.value)}
-              placeholder={workspace === "legal" ? "admin@reshenie.local" : "admin@retail.local"}
+              placeholder="email@company.ru"
               required
             />
           </div>
@@ -102,12 +102,6 @@ export default function LoginPage() {
           <Link href={`/register?workspace=${workspace}`} className="link-brand font-medium">
             Зарегистрировать компанию
           </Link>
-        </p>
-
-        <p className="mt-3 text-[11px] text-muted">
-          {workspace === "legal"
-            ? "Демо: admin@reshenie.local / admin123"
-            : "Админ: admin@retail.local / admin123 · Инвестор: investor1@retail.local / investor123"}
         </p>
       </Card>
 
