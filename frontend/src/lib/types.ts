@@ -212,6 +212,12 @@ export interface PricingTierSummary {
   total_months: number;
 }
 
+export interface MandatoryPaymentRecord {
+  id: string;
+  amount: string;
+  payment_date: string;
+}
+
 export interface MandatoryPayment {
   id: string;
   client_id: string;
@@ -222,6 +228,7 @@ export interface MandatoryPayment {
   status: MandatoryPaymentStatus;
   is_applicable: boolean;
   comment: string | null;
+  payment_records?: MandatoryPaymentRecord[];
 }
 
 export interface DocumentCollection {

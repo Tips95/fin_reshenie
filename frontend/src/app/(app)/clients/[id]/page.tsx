@@ -161,6 +161,21 @@ function mandatoryRemaining(item: MandatoryPayment): number {
   return diff > 0 ? diff : 0;
 }
 
+function firstUnpaidScheduleId(schedule: PaymentScheduleItem[]): string {
+  const item = schedule.find((row) => remainingAmount(row) > 0);
+  return item?.id ?? "";
+}
+
+function scheduleMonthLabel(
+  schedule: PaymentScheduleItem[],
+  paymentScheduleId: string | null,
+): string | null {
+  if (!paymentScheduleId) return "Авто";
+  const item = schedule.find((row) => row.id === paymentScheduleId);
+  if (!item) return null;
+  return `${item.month_number} · ${formatDate(item.due_date)}`;
+}
+
 function mandatoryTypeHint(type: string): string {
   if (type === "court_fee") return "Включите, если пошлина нужна, и укажите сумму";
   return "Укажите плановую сумму вручную";
@@ -196,6 +211,9 @@ export default function ClientDetailPage() {
     amount: string;
     payment_date: string;
   } | null>(null);
+  const [deletingMandatoryRecordId, setDeletingMandatoryRecordId] = useState<string | null>(null);
+  const [savingMandatoryRecordDateId, setSavingMandatoryRecordDateId] = useState<string | null>(null);
+  const [mandatoryRecordDateEdits, setMandatoryRecordDateEdits] = useState<Record<string, string>>({});
   const [plannedEdits, setPlannedEdits] = useState<Record<string, string>>({});
   const [editingPlannedId, setEditingPlannedId] = useState<string | null>(null);
   const [editingPhone, setEditingPhone] = useState(false);
@@ -396,6 +414,20 @@ export default function ClientDetailPage() {
 
   function isDetail(data: ClientDetail | ClientBrief | null): data is ClientDetail {
     return data !== null && "debt_amount" in data;
+  }
+
+  function openPaymentModal() {
+    if (!isDetail(client)) return;
+    const today = todayIsoDate();
+    const scheduleId = firstUnpaidScheduleId(client.payment_schedule);
+    const scheduleItem = client.payment_schedule.find((row) => row.id === scheduleId);
+    setPaymentForm({
+      payment_schedule_id: scheduleId,
+      amount: scheduleItem ? String(remainingAmount(scheduleItem)) : "",
+      payment_date: today,
+      comment: "",
+    });
+    setPaymentModalOpen(true);
   }
 
   function handleMonthSelect(scheduleId: string) {
@@ -684,6 +716,53 @@ export default function ClientDetailPage() {
       amount: rest > 0 ? String(Math.round(rest)) : "",
       payment_date: todayIsoDate(),
     });
+  }
+
+  async function handleDeleteMandatoryRecord(paymentId: string, recordId: string) {
+    if (!client) return;
+    if (!window.confirm("Удалить эту запись о внесении? Сумма будет пересчитана.")) return;
+
+    setDeletingMandatoryRecordId(recordId);
+    try {
+      await mandatoryPaymentsApi.deleteRecord(client.id, paymentId, recordId);
+      setMandatoryRecordDateEdits((current) => {
+        const next = { ...current };
+        delete next[recordId];
+        return next;
+      });
+      await refreshClient();
+      showToast("Запись удалена");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось удалить запись",
+        "error",
+      );
+    } finally {
+      setDeletingMandatoryRecordId(null);
+    }
+  }
+
+  async function handleUpdateMandatoryRecordDate(paymentId: string, recordId: string) {
+    if (!client) return;
+    const paymentDate = mandatoryRecordDateEdits[recordId];
+    if (!paymentDate) {
+      showToast("Укажите дату", "error");
+      return;
+    }
+
+    setSavingMandatoryRecordDateId(recordId);
+    try {
+      await mandatoryPaymentsApi.updateRecordDate(client.id, paymentId, recordId, paymentDate);
+      await refreshClient();
+      showToast("Дата обновлена");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось обновить дату",
+        "error",
+      );
+    } finally {
+      setSavingMandatoryRecordDateId(null);
+    }
   }
 
   async function handleSavePlannedAmount(item: MandatoryPayment) {
@@ -1393,7 +1472,7 @@ export default function ClientDetailPage() {
             value={paymentForm.payment_schedule_id}
             onChange={(e) => handleMonthSelect(e.target.value)}
           >
-            <option value="">Автораспределение по графику</option>
+            <option value="">Старейший неоплаченный месяц</option>
             {schedule.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.month_number} — {formatDate(item.due_date)} (
@@ -1410,8 +1489,8 @@ export default function ClientDetailPage() {
             required
           />
           <p className="mt-1 text-xs text-muted">
-            Когда деньги реально пришли — от этого зависит доход в отчёте за месяц. Месяц графика
-            выбирается отдельно.
+            Дата поступления в кассу — месяц дохода в отчёте. Месяц графика — за какой платёж
+            закрывается строка (можно выбрать просроченный месяц).
           </p>
         </FormField>
         <FormField label="Сумма">
@@ -1457,13 +1536,7 @@ export default function ClientDetailPage() {
               </Button>
             ) : null}
             {canRecordSchedulePayment && isBankruptcy ? (
-              <Button
-                type="button"
-                onClick={() => {
-                  setPaymentForm((prev) => ({ ...prev, payment_date: todayIsoDate() }));
-                  setPaymentModalOpen(true);
-                }}
-              >
+              <Button type="button" onClick={openPaymentModal}>
                 Зафиксировать платёж
               </Button>
             ) : null}
@@ -2111,7 +2184,8 @@ export default function ClientDetailPage() {
                       const paying = mandatoryPayForm?.paymentId === item.id;
 
                       return (
-                        <tr key={item.id}>
+                        <Fragment key={item.id}>
+                          <tr>
                           <td data-label="Платёж">
                             <div>
                               <p className="font-medium text-foreground">
@@ -2229,7 +2303,7 @@ export default function ClientDetailPage() {
                                         }
                                       />
                                     </FormField>
-                                    <FormField label="Дата платежа">
+                                    <FormField label="Дата поступления в кассу">
                                       <Input
                                         type="date"
                                         value={mandatoryPayForm.payment_date}
@@ -2276,6 +2350,81 @@ export default function ClientDetailPage() {
                             </td>
                           )}
                         </tr>
+                        {(item.payment_records?.length ?? 0) > 0 ? (
+                          <tr>
+                            <td colSpan={canManageMandatory ? 7 : 6} className="bg-surface/60">
+                              <div className="space-y-2 py-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                                  История внесений
+                                </p>
+                                <div className="space-y-2">
+                                  {item.payment_records!.map((record) => (
+                                    <div
+                                      key={record.id}
+                                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                                    >
+                                      <div>
+                                        <p className="font-medium text-foreground">
+                                          {formatMoney(record.amount)}
+                                        </p>
+                                        <p className="text-xs text-muted">
+                                          Месяц в отчёте: {formatDate(record.payment_date)}
+                                        </p>
+                                      </div>
+                                      {canManageMandatory ? (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <Input
+                                            type="date"
+                                            className="w-[150px]"
+                                            value={
+                                              mandatoryRecordDateEdits[record.id] ??
+                                              record.payment_date
+                                            }
+                                            onChange={(e) =>
+                                              setMandatoryRecordDateEdits((current) => ({
+                                                ...current,
+                                                [record.id]: e.target.value,
+                                              }))
+                                            }
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            disabled={
+                                              savingMandatoryRecordDateId === record.id ||
+                                              (mandatoryRecordDateEdits[record.id] ??
+                                                record.payment_date) === record.payment_date
+                                            }
+                                            onClick={() =>
+                                              handleUpdateMandatoryRecordDate(item.id, record.id)
+                                            }
+                                          >
+                                            {savingMandatoryRecordDateId === record.id
+                                              ? "..."
+                                              : "Дата"}
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="danger"
+                                            disabled={deletingMandatoryRecordId === record.id}
+                                            onClick={() =>
+                                              handleDeleteMandatoryRecord(item.id, record.id)
+                                            }
+                                          >
+                                            {deletingMandatoryRecordId === record.id
+                                              ? "..."
+                                              : "Удалить"}
+                                          </Button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -2893,20 +3042,28 @@ export default function ClientDetailPage() {
                       <p className="text-sm text-muted">
                         {payment.comment ? payment.comment : "Без комментария"}
                       </p>
+                      <p className="text-xs text-muted">
+                        Касса: {formatDate(payment.payment_date)}
+                        {" · "}
+                        График:{" "}
+                        {scheduleMonthLabel(schedule, payment.payment_schedule_id) ?? "—"}
+                      </p>
                     </div>
                     {isOwner && (
                       <div className="flex flex-wrap items-center gap-2">
-                        <Input
-                          type="date"
-                          className="w-[150px]"
-                          value={paymentDateEdits[payment.id] ?? payment.payment_date}
-                          onChange={(e) =>
-                            setPaymentDateEdits((current) => ({
-                              ...current,
-                              [payment.id]: e.target.value,
-                            }))
-                          }
-                        />
+                        <FormField label="Дата кассы">
+                          <Input
+                            type="date"
+                            className="w-[150px]"
+                            value={paymentDateEdits[payment.id] ?? payment.payment_date}
+                            onChange={(e) =>
+                              setPaymentDateEdits((current) => ({
+                                ...current,
+                                [payment.id]: e.target.value,
+                              }))
+                            }
+                          />
+                        </FormField>
                         <Button
                           type="button"
                           variant="secondary"

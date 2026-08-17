@@ -42,7 +42,7 @@ class TestScheduleRebuild:
 
 
 class TestPaymentSyncMonthMatch:
-    def test_applies_unlinked_payment_to_matching_month(self, monkeypatch):
+    def test_applies_unlinked_payment_to_oldest_unpaid_month(self, monkeypatch):
         schedules = [
             SimpleNamespace(
                 id=SCHEDULE_FEB,
@@ -69,7 +69,7 @@ class TestPaymentSyncMonthMatch:
             client_id=CLIENT_ID,
             payment_schedule_id=None,
             amount=Decimal("30000.00"),
-            payment_date=date(2024, 3, 5),
+            payment_date=date(2024, 4, 5),
             is_refund=False,
             is_deleted=False,
         )
@@ -81,8 +81,8 @@ class TestPaymentSyncMonthMatch:
 
         sync_client_payment_schedules(db, CLIENT_ID)
 
-        assert schedules[0].paid_amount == Decimal("0.00")
-        assert schedules[1].paid_amount == Decimal("30000.00")
+        assert schedules[0].paid_amount == Decimal("20000.00")
+        assert schedules[1].paid_amount == Decimal("10000.00")
 
 
 class TestRealignClientLegacyFinances:

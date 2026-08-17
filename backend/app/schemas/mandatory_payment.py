@@ -7,6 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.enums import MandatoryPaymentStatus, MandatoryPaymentType
 
 
+class MandatoryPaymentRecordResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    amount: Decimal
+    payment_date: date
+
+
 class MandatoryPaymentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -19,6 +27,7 @@ class MandatoryPaymentResponse(BaseModel):
     status: MandatoryPaymentStatus
     is_applicable: bool
     comment: str | None
+    payment_records: list[MandatoryPaymentRecordResponse] = []
 
 
 class MandatoryPaymentUpdate(BaseModel):
@@ -31,3 +40,7 @@ class MandatoryPaymentRecord(BaseModel):
     amount: Decimal = Field(gt=0, decimal_places=2)
     payment_date: date
     comment: str | None = None
+
+
+class MandatoryPaymentRecordUpdate(BaseModel):
+    payment_date: date

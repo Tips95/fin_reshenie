@@ -8,6 +8,28 @@ from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRec
 from app.models.enums import MandatoryPaymentStatus, MandatoryPaymentType
 
 
+def build_mandatory_payment_response(item: ClientMandatoryPayment):
+    from app.schemas.mandatory_payment import MandatoryPaymentRecordResponse, MandatoryPaymentResponse
+
+    records = sorted(
+        item.payment_records,
+        key=lambda record: (record.payment_date, record.created_at),
+        reverse=True,
+    )
+    return MandatoryPaymentResponse(
+        id=item.id,
+        client_id=item.client_id,
+        payment_type=item.payment_type,
+        planned_amount=item.planned_amount,
+        paid_amount=item.paid_amount,
+        paid_date=item.paid_date,
+        status=item.status,
+        is_applicable=item.is_applicable,
+        comment=item.comment,
+        payment_records=[MandatoryPaymentRecordResponse.model_validate(record) for record in records],
+    )
+
+
 def create_default_mandatory_payments(client_id) -> list[ClientMandatoryPayment]:
     return [
         ClientMandatoryPayment(
@@ -59,6 +81,40 @@ def apply_mandatory_payment(
         item.status = MandatoryPaymentStatus.PENDING
         item.paid_date = None
 
+    return record
+
+
+def recalculate_mandatory_payment_from_records(item: ClientMandatoryPayment) -> None:
+    records = sorted(item.payment_records, key=lambda record: (record.payment_date, record.created_at))
+    item.paid_amount = sum((record.amount for record in records), Decimal("0.00"))
+    item.paid_date = records[-1].payment_date if records else None
+    refresh_mandatory_payment_status(item)
+
+
+def delete_mandatory_payment_record(
+    db: Session,
+    item: ClientMandatoryPayment,
+    record_id,
+) -> None:
+    record = next((entry for entry in item.payment_records if entry.id == record_id), None)
+    if record is None:
+        raise ValueError("record_not_found")
+    item.payment_records = [entry for entry in item.payment_records if entry.id != record_id]
+    db.delete(record)
+    db.flush()
+    recalculate_mandatory_payment_from_records(item)
+
+
+def update_mandatory_payment_record_date(
+    item: ClientMandatoryPayment,
+    record_id,
+    payment_date: date,
+) -> ClientMandatoryPaymentRecord:
+    record = next((entry for entry in item.payment_records if entry.id == record_id), None)
+    if record is None:
+        raise ValueError("record_not_found")
+    record.payment_date = payment_date
+    recalculate_mandatory_payment_from_records(item)
     return record
 
 

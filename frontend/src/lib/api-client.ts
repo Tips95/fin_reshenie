@@ -582,6 +582,24 @@ export const mandatoryPaymentsApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  deleteRecord: (clientId: string, paymentId: string, recordId: string) =>
+    apiFetch<MandatoryPayment>(
+      `/clients/${clientId}/mandatory-payments/${paymentId}/records/${recordId}`,
+      { method: "DELETE" },
+    ),
+  updateRecordDate: (
+    clientId: string,
+    paymentId: string,
+    recordId: string,
+    payment_date: string,
+  ) =>
+    apiFetch<MandatoryPayment>(
+      `/clients/${clientId}/mandatory-payments/${paymentId}/records/${recordId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ payment_date }),
+      },
+    ),
 };
 
 export const installmentApi = {

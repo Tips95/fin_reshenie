@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
 from app.core.database import get_db
@@ -37,7 +37,6 @@ from app.services.access import (
 from app.services.audit import log_audit
 from app.services.client_list import ClientSortField, CollectionViewFilter, SortDirection, paginate_clients, query_clients
 from app.schemas.installment_plan import InstallmentPlanResponse
-from app.schemas.mandatory_payment import MandatoryPaymentResponse
 from app.schemas.payment import PaymentAlignResult, PaymentResponse
 from app.schemas.payment_schedule import PaymentScheduleResponse
 from app.services.installment_schedule import create_payment_schedule_models
@@ -49,7 +48,7 @@ from app.services.client_duplicates import (
     phone_has_minimum_digits,
 )
 from app.services.funnel import try_ensure_first_payment_task_for_manager_client
-from app.services.mandatory_payments import create_default_mandatory_payments
+from app.services.mandatory_payments import build_mandatory_payment_response, create_default_mandatory_payments
 from app.services.document_collection import (
     create_document_collection,
     get_document_collection,
@@ -113,6 +112,7 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
     mandatory_payments = list(
         db.scalars(
             select(ClientMandatoryPayment)
+            .options(selectinload(ClientMandatoryPayment.payment_records))
             .where(ClientMandatoryPayment.client_id == client.id)
             .order_by(ClientMandatoryPayment.payment_type)
         )
@@ -135,7 +135,7 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
         matched_tier=matched_tier,
         payments=[PaymentResponse.model_validate(p) for p in payments],
         mandatory_payments=[
-            MandatoryPaymentResponse.model_validate(item) for item in mandatory_payments
+            build_mandatory_payment_response(item) for item in mandatory_payments
         ],
         document_collection=doc_collection_response,
     )
