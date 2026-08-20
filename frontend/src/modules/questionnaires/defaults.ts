@@ -166,6 +166,11 @@ export function questionnaireToForm(item: Questionnaire): QuestionnaireFormValue
   };
 }
 
+function trimmedOrNull(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export function formToPayload(form: QuestionnaireFormValue): Record<string, unknown> {
   const phone = form.phone.trim() === PHONE_PREFIX ? "" : form.phone.trim();
   const married = hasSpouse(form);
@@ -175,41 +180,41 @@ export function formToPayload(form: QuestionnaireFormValue): Record<string, unkn
     client_id: form.client_id,
     full_name: form.full_name.trim(),
     phone,
-    registration_region: form.registration_region.trim() || null,
-    service_cost: form.service_cost.trim() || null,
+    registration_region: trimmedOrNull(form.registration_region),
+    service_cost: trimmedOrNull(form.service_cost),
     filled_date: form.filled_date || null,
     fake_income_documents: form.fake_income_documents,
-    bank_accounts: form.bank_accounts.trim() || null,
+    bank_accounts: trimmedOrNull(form.bank_accounts),
     has_guarantee_or_collateral: form.has_guarantee_or_collateral,
     is_married: form.is_married,
     divorce_info: married
       ? null
       : form.was_divorced === false
         ? "Нет"
-        : form.divorce_info.trim() || null,
-    dependents: form.dependents.trim() || null,
-    income_debtor: form.income_debtor.trim() || null,
-    income_spouse: married ? form.income_spouse.trim() || null : null,
-    income_destination: form.income_destination.trim() || null,
+        : trimmedOrNull(form.divorce_info),
+    dependents: trimmedOrNull(form.dependents),
+    income_debtor: trimmedOrNull(form.income_debtor),
+    income_spouse: married ? trimmedOrNull(form.income_spouse) : null,
+    income_destination: trimmedOrNull(form.income_destination),
     has_property_encumbrance: anyProperty ? form.has_property_encumbrance : false,
     property_encumbrance_details:
       anyProperty && form.has_property_encumbrance
-        ? form.property_encumbrance_details.trim() || null
+        ? trimmedOrNull(form.property_encumbrance_details)
         : null,
     has_recent_property_deals: form.has_recent_property_deals,
     recent_property_deals_details: form.has_recent_property_deals
-      ? form.recent_property_deals_details.trim() || null
+      ? trimmedOrNull(form.recent_property_deals_details)
       : null,
     property_debtor:
-      form.has_property_debtor === false ? ABSENT_LABEL : form.property_debtor.trim() || null,
+      form.has_property_debtor === false ? ABSENT_LABEL : trimmedOrNull(form.property_debtor),
     property_spouse: spouseProperty
       ? form.has_property_spouse === false
         ? ABSENT_LABEL
-        : form.property_spouse.trim() || null
+        : trimmedOrNull(form.property_spouse)
       : null,
     has_weapon: form.has_weapon,
-    weapon_details: form.has_weapon ? form.weapon_details.trim() || null : null,
-    notes: form.notes.trim() || null,
+    weapon_details: form.has_weapon ? trimmedOrNull(form.weapon_details) : null,
+    notes: trimmedOrNull(form.notes),
     debts: form.debts.map((row) => ({
       creditor: row.creditor,
       origin_date: row.origin_date || null,
