@@ -327,7 +327,6 @@ export function QuestionnaireForm({
                   <div data-field={`debt_${index}_origin_date`}>
                     <FormField
                       label="Возникновение"
-                      required
                       error={errors[`debt_${index}_origin_date`]}
                     >
                       <Input
@@ -368,7 +367,6 @@ export function QuestionnaireForm({
                   <div data-field={`debt_${index}_overdue_start_date`}>
                     <FormField
                       label="Просрочка с"
-                      required
                       error={errors[`debt_${index}_overdue_start_date`]}
                     >
                       <Input
@@ -489,12 +487,12 @@ export function QuestionnaireForm({
               </div>
             ) : null}
             <div data-field="income_destination">
-              <FormField label="Куда поступают выплаты" required error={errors.income_destination}>
+              <FormField label="Куда поступают выплаты" error={errors.income_destination}>
                 <Input
                   className={fieldClass}
                   value={value.income_destination ?? ""}
                   onChange={(event) => patch({ income_destination: event.target.value })}
-                  placeholder="Сбер, Т-Банк..."
+                  placeholder="Если помнит: Сбер, Т-Банк..."
                 />
               </FormField>
             </div>

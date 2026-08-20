@@ -259,9 +259,7 @@ export function validateQuestionnaireForm(form: QuestionnaireFormValue): Record<
 
   form.debts.forEach((row, index) => {
     if (!row.creditor.trim()) errors[`debt_${index}_creditor`] = "Укажите кредитора";
-    if (!row.origin_date) errors[`debt_${index}_origin_date`] = "Укажите дату";
     if (!row.monthly_payment.trim()) errors[`debt_${index}_monthly_payment`] = "Укажите платёж";
-    if (!row.overdue_start_date) errors[`debt_${index}_overdue_start_date`] = "Укажите дату";
     if (!row.debt_amount.trim()) errors[`debt_${index}_debt_amount`] = "Укажите долг";
   });
 
@@ -294,8 +292,6 @@ export function validateQuestionnaireForm(form: QuestionnaireFormValue): Record<
     const incomeSpouseError = requiredText(form.income_spouse, "Укажите доход супруга(и) или «нет»");
     if (incomeSpouseError) errors.income_spouse = incomeSpouseError;
   }
-  const destinationError = requiredText(form.income_destination, "Укажите, куда поступают выплаты");
-  if (destinationError) errors.income_destination = destinationError;
 
   const debtorPropertyChoice = requiredChoice(form.has_property_debtor);
   if (debtorPropertyChoice) errors.has_property_debtor = debtorPropertyChoice;
