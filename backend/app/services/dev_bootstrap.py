@@ -87,18 +87,37 @@ def backfill_mandatory_payments(db: Session) -> int:
     return created
 
 
+def _add_missing_columns(table: str, columns: list[tuple[str, str]]) -> None:
+    inspector = inspect(engine)
+    if not inspector.has_table(table):
+        return
+    existing = {column["name"] for column in inspector.get_columns(table)}
+    with engine.begin() as conn:
+        for name, ddl in columns:
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
 def ensure_schema_updates() -> None:
     """Добавляет новые колонки в существующую локальную SQLite без полного сброса."""
     inspector = inspect(engine)
-    if not inspector.has_table("payments"):
-        return
+    if inspector.has_table("payments"):
+        columns = {column["name"] for column in inspector.get_columns("payments")}
+        if "is_refund" not in columns:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE payments ADD COLUMN is_refund BOOLEAN NOT NULL DEFAULT 0")
+                )
 
-    columns = {column["name"] for column in inspector.get_columns("payments")}
-    if "is_refund" not in columns:
-        with engine.begin() as conn:
-            conn.execute(
-                text("ALTER TABLE payments ADD COLUMN is_refund BOOLEAN NOT NULL DEFAULT 0")
-            )
+    _add_missing_columns(
+        "client_questionnaires",
+        [
+            ("property_debtor", "TEXT"),
+            ("property_spouse", "TEXT"),
+            ("has_weapon", "BOOLEAN"),
+            ("weapon_details", "TEXT"),
+        ],
+    )
 
 
 def bootstrap() -> None:

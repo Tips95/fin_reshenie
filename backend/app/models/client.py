@@ -89,3 +89,4 @@ class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         back_populates="client"
     )
     manager_tasks: Mapped[list["ManagerTask"]] = relationship(back_populates="client")
+    questionnaires: Mapped[list["ClientQuestionnaire"]] = relationship(back_populates="client")

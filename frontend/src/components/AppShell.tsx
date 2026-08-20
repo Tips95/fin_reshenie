@@ -16,6 +16,13 @@ import { useAuth } from "@/modules/auth/AuthProvider";
 const navItems = [
   { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
   {
+    href: "/questionnaires",
+    label: "Анкеты",
+    icon: "▤",
+    shortLabel: "Анкеты",
+    roles: ["owner", "manager"],
+  },
+  {
     href: "/clients/collection",
     label: "Сбор документов",
     icon: "◫",
@@ -67,6 +74,7 @@ const navItems = [
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
+  if (pathname.startsWith("/questionnaires")) return "Анкеты";
   if (pathname.startsWith("/clients/collection")) return "Сбор документов";
   if (pathname.startsWith("/clients/contracts")) return "Договоры";
   if (pathname.startsWith("/clients/")) return "Карточка клиента";
@@ -110,8 +118,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mobilePrimary = ["/", "/clients/contracts", "/tasks", "/settings"].filter((href) =>
     visibleNav.some((item) => item.href === href),
   );
+  if (visibleNav.some((item) => item.href === "/questionnaires")) {
+    mobilePrimary.splice(1, 0, "/questionnaires");
+  }
   if (features.document_collection && !mobilePrimary.includes("/clients/collection")) {
-    mobilePrimary.splice(1, 0, "/clients/collection");
+    mobilePrimary.splice(mobilePrimary.includes("/questionnaires") ? 2 : 1, 0, "/clients/collection");
   }
 
   return (

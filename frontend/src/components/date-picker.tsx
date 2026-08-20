@@ -72,15 +72,58 @@ function todayParts(): ParsedDate {
   return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
 }
 
-function formatDisplayDate(value: string | undefined): string {
+function formatRuDate(value: string | undefined): string {
   const parsed = parseIsoDate(value);
-  if (!parsed) return "Выберите дату";
-  const date = new Date(parsed.year, parsed.month - 1, parsed.day);
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(date);
+  if (!parsed) return "";
+  return `${String(parsed.day).padStart(2, "0")}.${String(parsed.month).padStart(2, "0")}.${parsed.year}`;
+}
+
+function isRealDate(year: number, month: number, day: number): boolean {
+  if (year < 1950 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function expandYear(year: number): number {
+  if (year >= 100) return year;
+  return year >= 50 ? 1900 + year : 2000 + year;
+}
+
+/** Пустая строка, ISO-дата или null, если ввод ещё неполный/некорректный. */
+function parseFlexibleDate(raw: string): string | "" | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+
+  const iso = parseIsoDate(trimmed);
+  if (iso && isRealDate(iso.year, iso.month, iso.day)) {
+    return toIsoDate(iso);
+  }
+
+  const dotted = /^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/.exec(trimmed);
+  if (dotted) {
+    const day = Number(dotted[1]);
+    const month = Number(dotted[2]);
+    const year = expandYear(Number(dotted[3]));
+    if (isRealDate(year, month, day)) {
+      return toIsoDate({ year, month, day });
+    }
+    return null;
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 8) {
+    const day = Number(digits.slice(0, 2));
+    const month = Number(digits.slice(2, 4));
+    const year = Number(digits.slice(4, 8));
+    if (isRealDate(year, month, day)) {
+      return toIsoDate({ year, month, day });
+    }
+    return null;
+  }
+
+  return null;
 }
 
 function formatDisplayMonth(value: string | undefined): string {
@@ -197,6 +240,7 @@ export function DatePicker({
   required,
   id,
   name,
+  placeholder,
 }: PickerBaseProps) {
   const { open, setOpen, rootRef } = usePopover();
   const selected = parseIsoDate(value);
@@ -204,6 +248,8 @@ export function DatePicker({
   const initialView = selected ?? today;
   const [viewYear, setViewYear] = useState(initialView.year);
   const [viewMonth, setViewMonth] = useState(initialView.month);
+  const [typed, setTyped] = useState(() => formatRuDate(value));
+  const focusedRef = useRef(false);
 
   useEffect(() => {
     const parsed = parseIsoDate(value);
@@ -211,12 +257,17 @@ export function DatePicker({
       setViewYear(parsed.year);
       setViewMonth(parsed.month);
     }
+    if (!focusedRef.current) {
+      setTyped(formatRuDate(value));
+    }
   }, [value]);
 
   const days = useMemo(() => buildCalendarDays(viewYear, viewMonth), [viewYear, viewMonth]);
 
   function pickDay(day: number) {
-    emitChange(onChange, toIsoDate({ year: viewYear, month: viewMonth, day }));
+    const next = toIsoDate({ year: viewYear, month: viewMonth, day });
+    emitChange(onChange, next);
+    setTyped(formatRuDate(next));
     setOpen(false);
   }
 
@@ -226,20 +277,74 @@ export function DatePicker({
     setViewMonth(date.getMonth() + 1);
   }
 
+  function commitTyped(raw: string) {
+    const parsed = parseFlexibleDate(raw);
+    if (parsed === "") {
+      emitChange(onChange, "");
+      setTyped("");
+      return;
+    }
+    if (parsed) {
+      emitChange(onChange, parsed);
+      setTyped(formatRuDate(parsed));
+      return;
+    }
+    setTyped(formatRuDate(value));
+  }
+
+  function handleTypedChange(next: string) {
+    const cleaned = next.replace(/[^\d.\-/]/g, "").slice(0, 10);
+    setTyped(cleaned);
+    const parsed = parseFlexibleDate(cleaned);
+    if (parsed === "") {
+      emitChange(onChange, "");
+      return;
+    }
+    if (parsed) {
+      emitChange(onChange, parsed);
+    }
+  }
+
   return (
     <div ref={rootRef} className={cn("relative", className)}>
-      <button
-        type="button"
-        id={id}
-        disabled={disabled}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        className={triggerClassName}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span className={cn("truncate", !value && "text-muted")}>{formatDisplayDate(value)}</span>
-        <CalendarIcon className="h-4 w-4 shrink-0 text-brand-600" />
-      </button>
+      <div className="flex items-stretch gap-1">
+        <input
+          type="text"
+          autoComplete="off"
+          id={id}
+          disabled={disabled}
+          required={required}
+          placeholder={placeholder || "дд.мм.гггг"}
+          value={typed}
+          aria-label="Дата, можно ввести вручную"
+          className="interactive min-h-[40px] w-full rounded-md border border-border bg-surface px-2 py-1 text-sm shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-[32px] lg:text-xs"
+          onFocus={() => {
+            focusedRef.current = true;
+          }}
+          onBlur={() => {
+            focusedRef.current = false;
+            commitTyped(typed);
+          }}
+          onChange={(event) => handleTypedChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitTyped(typed);
+            }
+          }}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label="Открыть календарь"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className="interactive flex w-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-brand-600 shadow-soft hover:border-brand-600 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => setOpen((current) => !current)}
+        >
+          <CalendarIcon className="h-4 w-4" />
+        </button>
+      </div>
       {name ? <input type="hidden" name={name} value={value} required={required} /> : null}
       {open ? (
         <div
@@ -316,7 +421,9 @@ export function DatePicker({
               type="button"
               className="interactive text-xs font-medium text-brand-700 hover:text-brand-600"
               onClick={() => {
-                emitChange(onChange, toIsoDate(today));
+                const next = toIsoDate(today);
+                emitChange(onChange, next);
+                setTyped(formatRuDate(next));
                 setViewYear(today.year);
                 setViewMonth(today.month);
                 setOpen(false);
@@ -330,6 +437,7 @@ export function DatePicker({
                 className="interactive text-xs font-medium text-muted hover:text-foreground"
                 onClick={() => {
                   emitChange(onChange, "");
+                  setTyped("");
                   setOpen(false);
                 }}
               >

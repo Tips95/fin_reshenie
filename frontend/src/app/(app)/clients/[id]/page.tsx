@@ -23,7 +23,7 @@ import {
   StatCard,
   Toast,
 } from "@/components/ui";
-import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, scheduleApi, usersApi } from "@/lib/api-client";
+import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, questionnairesApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { sanitizeClientListReturnHref } from "@/lib/client-list-filters";
 import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel, todayIsoDate } from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
@@ -236,6 +236,8 @@ export default function ClientDetailPage() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [questionnaireId, setQuestionnaireId] = useState<string | null>(null);
+  const [questionnaireOpening, setQuestionnaireOpening] = useState(false);
   const [managers, setManagers] = useState<User[]>([]);
   const [cardSaving, setCardSaving] = useState<string | null>(null);
   const [docCollectionSaving, setDocCollectionSaving] = useState(false);
@@ -307,6 +309,22 @@ export default function ClientDetailPage() {
       cancelled = true;
     };
   }, [user, fetchClient, reloadKey]);
+
+  useEffect(() => {
+    if (!user || user.role === "call_center") return;
+    let cancelled = false;
+    questionnairesApi
+      .list({ client_id: params.id })
+      .then((items) => {
+        if (!cancelled) setQuestionnaireId(items[0]?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setQuestionnaireId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, params.id, reloadKey]);
 
   const reloadClient = useCallback(() => {
     setReloadKey((value) => value + 1);
@@ -1203,6 +1221,32 @@ export default function ClientDetailPage() {
     isManager &&
     !client?.assigned_manager_id &&
     client?.engagement_stage === "document_collection";
+  const canOpenQuestionnaire = canEditClient;
+
+  async function handleOpenQuestionnaire() {
+    if (!client) return;
+    setQuestionnaireOpening(true);
+    try {
+      if (questionnaireId) {
+        router.push(`/questionnaires/${questionnaireId}`);
+        return;
+      }
+      const created = await questionnairesApi.create({
+        full_name: client.full_name,
+        phone: client.phone,
+        client_id: client.id,
+      });
+      setQuestionnaireId(created.id);
+      router.push(`/questionnaires/${created.id}`);
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось открыть анкету",
+        "error",
+      );
+    } finally {
+      setQuestionnaireOpening(false);
+    }
+  }
 
   const STATUS_OPTIONS: Array<{ value: ClientStatus; label: string }> = [
     { value: "active", label: "Активен" },
@@ -1530,6 +1574,16 @@ export default function ClientDetailPage() {
         back={<BackLink href={listBackHref}>К списку клиентов</BackLink>}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {canOpenQuestionnaire ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={questionnaireOpening}
+                onClick={() => void handleOpenQuestionnaire()}
+              >
+                {questionnaireOpening ? "Анкета..." : questionnaireId ? "Анкета" : "Заполнить анкету"}
+              </Button>
+            ) : null}
             {canClaimClient ? (
               <Button type="button" variant="secondary" onClick={() => setClaimModalOpen(true)}>
                 Принять в работу

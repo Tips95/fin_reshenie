@@ -30,6 +30,8 @@ import type {
   Workspace,
   Organization,
   User,
+  Questionnaire,
+  QuestionnaireBrief,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -449,6 +451,32 @@ export const documentCollectionApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+};
+
+export const questionnairesApi = {
+  list: (params?: { client_id?: string; search?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.client_id) search.set("client_id", params.client_id);
+    if (params?.search) search.set("search", params.search);
+    const query = search.toString();
+    return apiFetch<QuestionnaireBrief[]>(`/questionnaires${query ? `?${query}` : ""}`);
+  },
+  get: (id: string) => apiFetch<Questionnaire>(`/questionnaires/${id}`),
+  create: (data: Record<string, unknown>) =>
+    apiFetch<Questionnaire>("/questionnaires", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: Record<string, unknown>) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  remove: (id: string) => apiFetch<void>(`/questionnaires/${id}`, { method: "DELETE" }),
+  createClient: (id: string, data?: { contract_date?: string }) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}/create-client`, {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    }),
+  downloadPdf: (id: string, fallbackFilename = "anketa.pdf") =>
+    downloadFile(`/questionnaires/${id}/pdf`, fallbackFilename),
 };
 
 export const auditApi = {

@@ -16,6 +16,7 @@ from app.api import (
     payment_schedules,
     payments,
     pricing_tiers,
+    questionnaires,
     tasks,
     users,
     retail,
@@ -59,4 +60,9 @@ api_router.include_router(
     tags=["payment-schedule"],
 )
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
+api_router.include_router(
+    questionnaires.router,
+    prefix="/questionnaires",
+    tags=["questionnaires"],
+)
 api_router.include_router(retail.router, prefix="/retail", tags=["retail"])

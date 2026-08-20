@@ -562,14 +562,19 @@ export function FormField({
   label,
   children,
   error,
+  required,
 }: {
   label: string;
   children: React.ReactNode;
   error?: string | null;
+  required?: boolean;
 }) {
   return (
     <div>
-      <label className="mb-0.5 block text-xs font-medium text-muted">{label}</label>
+      <label className="mb-0.5 block text-xs font-medium text-muted">
+        {label}
+        {required ? <span className="text-brand-600"> *</span> : null}
+      </label>
       {children}
       {error ? <p className="mt-0.5 text-[11px] text-status-danger-text">{error}</p> : null}
     </div>

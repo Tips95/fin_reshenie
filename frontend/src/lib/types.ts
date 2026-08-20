@@ -566,3 +566,65 @@ export interface RetailDealResponse {
   client: RetailClient;
   contract: RetailContractDetail;
 }
+
+export interface QuestionnaireDebt {
+  creditor: string;
+  origin_date: string | null;
+  monthly_payment: string;
+  overdue_start_date: string | null;
+  debt_amount: string;
+}
+
+export interface QuestionnaireAsset {
+  key: string;
+  label: string;
+  debtor: boolean | null;
+  spouse: boolean | null;
+}
+
+export interface QuestionnaireDocumentItem {
+  key: string;
+  label: string;
+  collected: boolean | null;
+  extra_info: string;
+}
+
+export interface QuestionnaireBrief {
+  id: string;
+  organization_id: string;
+  client_id: string | null;
+  full_name: string;
+  phone: string;
+  registration_region: string | null;
+  service_cost: string | null;
+  filled_date: string | null;
+  created_by_id: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Questionnaire extends QuestionnaireBrief {
+  fake_income_documents: boolean | null;
+  bank_accounts: string | null;
+  has_guarantee_or_collateral: boolean | null;
+  is_married: boolean | null;
+  divorce_info: string | null;
+  dependents: string | null;
+  income_debtor: string | null;
+  income_spouse: string | null;
+  income_destination: string | null;
+  has_property_encumbrance: boolean | null;
+  property_encumbrance_details: string | null;
+  has_recent_property_deals: boolean | null;
+  recent_property_deals_details: string | null;
+  property_debtor: string | null;
+  property_spouse: string | null;
+  has_weapon: boolean | null;
+  weapon_details: string | null;
+  notes: string | null;
+  debts: QuestionnaireDebt[];
+  assets?: QuestionnaireAsset[];
+  documents?: QuestionnaireDocumentItem[];
+}
+
