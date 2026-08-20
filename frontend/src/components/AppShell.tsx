@@ -8,7 +8,7 @@ import { LogoMark } from "@/components/ui";
 import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { getOrganizationFeatures } from "@/lib/organization-features";
+import { canUseQuestionnaires, getOrganizationFeatures } from "@/lib/organization-features";
 import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -20,7 +20,6 @@ const navItems = [
     label: "Анкеты",
     icon: "▤",
     shortLabel: "Анкеты",
-    roles: ["owner", "manager"],
   },
   {
     href: "/clients/collection",
@@ -109,21 +108,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const companyName = user?.organization_name || WORKSPACE_LABELS.legal;
 
   const visibleNav = navItems.filter((item) => {
+    if (item.href === "/questionnaires") return canUseQuestionnaires(user);
     if (item.ownerOnly && user?.role !== "owner") return false;
     if (item.roles && !item.roles.includes(user?.role ?? "")) return false;
     if (item.feature && !features[item.feature]) return false;
     return true;
   });
 
-  const mobilePrimary = ["/", "/clients/contracts", "/tasks", "/settings"].filter((href) =>
+  const mobilePrimary = ["/", "/questionnaires", "/clients/contracts", "/tasks"].filter((href) =>
     visibleNav.some((item) => item.href === href),
   );
-  if (visibleNav.some((item) => item.href === "/questionnaires")) {
-    mobilePrimary.splice(1, 0, "/questionnaires");
-  }
-  if (features.document_collection && !mobilePrimary.includes("/clients/collection")) {
-    mobilePrimary.splice(mobilePrimary.includes("/questionnaires") ? 2 : 1, 0, "/clients/collection");
-  }
 
   return (
     <div className="min-h-screen mesh-bg">
@@ -137,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <nav className="mt-2 space-y-0.5">
+          <nav className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
             {visibleNav.map((item) => {
               const active = isNavActive(pathname, item.href);
               const badge = item.href === "/tasks" ? openTasksCount : 0;

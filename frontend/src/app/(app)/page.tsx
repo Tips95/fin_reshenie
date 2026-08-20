@@ -12,6 +12,7 @@ import type {
   DocumentCollectionBreakdown,
   MandatoryPaymentBreakdown,
 } from "@/lib/types";
+import { canUseQuestionnaires } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const DASHBOARD_SECTIONS = [
@@ -195,6 +196,7 @@ export default function DashboardPage() {
   const [showDetails, setShowDetails] = useState(false);
   const isOwner = user?.role === "owner";
   const canManageClients = isOwner || user?.role === "manager";
+  const showQuestionnaires = canUseQuestionnaires(user);
   const showOrgFinance = isOwner;
   const monthLabel = formatMonthLabel(month);
   const isCurrentMonth = month === currentMonth();
@@ -243,6 +245,11 @@ export default function DashboardPage() {
                   className="w-[150px]"
                   aria-label="Отчётный месяц"
                 />
+                {showQuestionnaires ? (
+                  <Link href="/questionnaires">
+                    <Button type="button">Анкеты</Button>
+                  </Link>
+                ) : null}
                 <Link href="/tasks">
                   <Button type="button" variant="secondary">
                     Задачи{openTasksCount > 0 ? ` (${openTasksCount})` : ""}
@@ -321,6 +328,28 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {showQuestionnaires ? (
+        <Card>
+          <SectionTitle
+            title="Анкеты"
+            action={
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href="/questionnaires/new">
+                  <Button type="button">Новая анкета</Button>
+                </Link>
+                <Link href="/questionnaires" className="text-sm font-semibold text-brand-600 hover:text-brand-700">
+                  Все анкеты →
+                </Link>
+              </div>
+            }
+          />
+          <p className="text-sm text-muted">
+            Первичный отбор на банкротство. Заполните анкету до договора — она сохранится, даже если
+            клиент ещё не заведён.
+          </p>
+        </Card>
+      ) : null}
 
       {showOrgFinance && (
         <div className="page-group">
