@@ -346,7 +346,6 @@ export function QuestionnaireForm({
                   <div data-field={`debt_${index}_monthly_payment`}>
                     <FormField
                       label="Платёж"
-                      required
                       error={errors[`debt_${index}_monthly_payment`]}
                     >
                       <Input

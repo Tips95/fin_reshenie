@@ -259,7 +259,6 @@ export function validateQuestionnaireForm(form: QuestionnaireFormValue): Record<
 
   form.debts.forEach((row, index) => {
     if (!row.creditor.trim()) errors[`debt_${index}_creditor`] = "Укажите кредитора";
-    if (!row.monthly_payment.trim()) errors[`debt_${index}_monthly_payment`] = "Укажите платёж";
     if (!row.debt_amount.trim()) errors[`debt_${index}_debt_amount`] = "Укажите долг";
   });
 
