@@ -17,7 +17,6 @@ from app.models.payment_schedule import PaymentSchedule
 from app.models.pricing_tier import PricingTier
 from app.models.user import User
 from app.schemas.client import (
-    ClientBriefResponse,
     ClientCreate,
     ClientDetailResponse,
     ClientListResponse,
@@ -282,20 +281,17 @@ def list_clients(
 
     due_month_summary = None
     month_stats_by_client: dict = {}
-    if due_month:
+    if due_month and current_user.role != UserRole.CALL_CENTER:
         due_month_summary, month_stats_by_client = compute_due_month_stats(
             db,
             [client.id for client in clients],
             due_month,
         )
 
-    if current_user.role == UserRole.CALL_CENTER:
-        items = [ClientBriefResponse.model_validate(client) for client in page_clients]
-    else:
-        items = [
-            _apply_month_stats(_to_client_response(client, db), month_stats_by_client)
-            for client in page_clients
-        ]
+    items = [
+        _apply_month_stats(_to_client_response(client, db), month_stats_by_client)
+        for client in page_clients
+    ]
 
     return ClientListResponse(
         items=items,
@@ -440,10 +436,8 @@ def get_client(
     client_id: UUID,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-) -> ClientResponse | ClientBriefResponse:
+) -> ClientResponse:
     client = ensure_client_read_access(db, current_user, client_id)
-    if current_user.role == UserRole.CALL_CENTER:
-        return ClientBriefResponse.model_validate(client)
     return _to_client_response(client, db)
 
 

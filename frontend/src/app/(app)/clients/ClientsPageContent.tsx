@@ -330,7 +330,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     if (client.engagement_stage === "bankruptcy") {
       return <Badge tone="success">На банкротстве</Badge>;
     }
-    if (canSeeClientAmounts && isFullClient(client)) {
+    if (isFullClient(client)) {
       return (
         <div className="flex flex-col gap-1">
           {client.document_collection_status === "paid" ? (
@@ -420,36 +420,37 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     }
   }
 
+  const listSubtitle = isCollectionStaff
+    ? isCollectionView
+      ? "Клиенты всех менеджеров на этапе сбора документов"
+      : "Договоры банкротства всех менеджеров"
+    : workspaceConfig.subtitle;
+
   return (
     <div className="page-stack">
       {toast && (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       )}
-      {isCollectionStaff ? null : (
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/clients/collection"
-            className={
-              isCollectionView ? "tab-pill-active bg-status-warning-bg text-status-warning-text ring-status-warning-border" : "tab-pill-inactive"
-            }
-          >
-            Сбор документов
-          </Link>
-          <Link
-            href="/clients/contracts"
-            className={!isCollectionView ? "tab-pill-active" : "tab-pill-inactive"}
-          >
-            Договоры
-          </Link>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/clients/collection"
+          className={
+            isCollectionView ? "tab-pill-active bg-status-warning-bg text-status-warning-text ring-status-warning-border" : "tab-pill-inactive"
+          }
+        >
+          Сбор документов
+        </Link>
+        <Link
+          href="/clients/contracts"
+          className={!isCollectionView ? "tab-pill-active" : "tab-pill-inactive"}
+        >
+          Договоры
+        </Link>
+      </div>
 
       {isCollectionView && (
         <div className="flex flex-wrap gap-2">
-          {(isCollectionStaff
-            ? COLLECTION_VIEW_OPTIONS.filter((option) => option.value !== "paid")
-            : COLLECTION_VIEW_OPTIONS
-          ).map((option) => (
+          {COLLECTION_VIEW_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
@@ -470,8 +471,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         title={workspaceConfig.title}
         subtitle={
           loading
-            ? workspaceConfig.subtitle
-            : `${workspaceConfig.subtitle} · ${totalClients} всего${totalPages > 1 ? ` · стр. ${filters.page}/${totalPages}` : ""}`
+            ? listSubtitle
+            : `${listSubtitle} · ${totalClients} всего${totalPages > 1 ? ` · стр. ${filters.page}/${totalPages}` : ""}`
         }
         action={
           <div className="flex flex-wrap gap-2">
@@ -542,7 +543,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                 onChange={(e) => updateFilters({ contract_month: e.target.value })}
               />
             </div>
-            {!isCollectionView && (
+            {!isCollectionView && !isCollectionStaff && (
               <div className="min-w-[140px] flex-1 sm:w-[160px] sm:flex-none">
                 <label className="mb-0.5 block text-xs text-muted">Платёж в месяце</label>
                 <Input
@@ -598,7 +599,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         </div>
       </Card>
 
-      {!isCollectionView && filters.due_month && dueMonthSummary ? (
+      {!isCollectionView && !isCollectionStaff && filters.due_month && dueMonthSummary ? (
         <Card variant="accent">
           <SectionTitle
             title={`Рассрочка за ${formatMonthLabel(dueMonthSummary.month)}`}

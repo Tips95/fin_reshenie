@@ -33,7 +33,6 @@ const navItems = [
     label: "Договоры",
     icon: "◎",
     shortLabel: "Договоры",
-    hideFor: ["call_center"],
   },
   {
     href: "/analytics",
@@ -125,7 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const mobilePrimary = (
     isCollectionStaff(user)
-      ? ["/questionnaires", "/clients/collection"]
+      ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
       : ["/", "/questionnaires", "/clients/contracts", "/tasks"]
   ).filter((href) => visibleNav.some((item) => item.href === href));
 

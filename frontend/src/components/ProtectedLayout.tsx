@@ -34,7 +34,7 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
       router.replace("/");
       return;
     }
-    if (!retailUser && isCollectionStaff(user) && (pathname === "/" || pathname.startsWith("/clients/contracts"))) {
+    if (!retailUser && isCollectionStaff(user) && pathname === "/") {
       router.replace(legalHomePath(user));
     }
   }, [loading, user, router, pathname]);
