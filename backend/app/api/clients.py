@@ -59,7 +59,6 @@ from app.services.payment_status import refresh_overdue_statuses
 from app.services.payment_dates import realign_client_legacy_finances
 from app.services.client_finances import get_client_contract_total
 from app.services.client_month_stats import compute_due_month_stats
-from app.services.payment_sync import sync_client_payment_schedules
 
 router = APIRouter()
 
@@ -76,10 +75,7 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
     matched_tier = None
 
     if plan is not None:
-        sync_client_payment_schedules(db, client.id)
-        db.flush()
         refresh_overdue_statuses(db, plan.id)
-        db.flush()
 
         installment_plan = InstallmentPlanResponse.model_validate(plan)
         payment_schedule = list(
@@ -125,7 +121,12 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
         else None
     )
 
-    base = _to_client_response(client, db)
+    base = _to_client_response(
+        client,
+        db,
+        document_collection=document_collection,
+        document_collection_loaded=True,
+    )
     return ClientDetailResponse(
         **base.model_dump(),
         installment_plan=installment_plan,
@@ -141,10 +142,17 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
     )
 
 
-def _to_client_response(client: Client, db: Session) -> ClientResponse:
+def _to_client_response(
+    client: Client,
+    db: Session,
+    document_collection=None,
+    *,
+    document_collection_loaded: bool = False,
+) -> ClientResponse:
     data = ClientResponse.model_validate(client)
     data.has_overdue = client_has_overdue_payments(db, client.id)
-    document_collection = get_document_collection(db, client.id)
+    if not document_collection_loaded:
+        document_collection = get_document_collection(db, client.id)
     if document_collection is not None:
         data.document_collection_status = document_collection.status
         data.document_collection_paid_date = document_collection.paid_date
@@ -391,7 +399,8 @@ def get_client_detail(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     client = ensure_client_read_access(db, current_user, client_id)
     detail = _build_client_detail(db, client)
-    db.commit()
+    if db.new or db.dirty or db.deleted:
+        db.commit()
     return detail
 
 

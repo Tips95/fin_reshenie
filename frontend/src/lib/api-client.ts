@@ -107,24 +107,36 @@ async function throwApiError(response: Response): Promise<never> {
   throw new ApiRequestError(parsed.message, response.status, parsed.detail);
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
 async function refreshTokens(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
+  if (refreshInFlight) return refreshInFlight;
 
-  const response = await fetch(getApiUrl("/auth/refresh"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
+  refreshInFlight = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
 
-  if (!response.ok) {
-    clearTokens();
-    return false;
+    const response = await fetch(getApiUrl("/auth/refresh"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!response.ok) {
+      clearTokens();
+      return false;
+    }
+
+    const data = (await response.json()) as TokenResponse;
+    setTokens(data.access_token, data.refresh_token);
+    return true;
+  })();
+
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
-
-  const data = (await response.json()) as TokenResponse;
-  setTokens(data.access_token, data.refresh_token);
-  return true;
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {

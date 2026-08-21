@@ -3,7 +3,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
@@ -199,19 +199,19 @@ def sync_first_payment_tasks(db: Session, user: User) -> None:
 
 
 def count_open_manager_tasks(db: Session, user: User) -> int:
-    sync_overdue_tasks(db, user)
-    sync_first_payment_tasks(db, user)
-
-    stmt = select(ManagerTask).where(
-        ManagerTask.organization_id == user.organization_id,
-        ManagerTask.status == TaskStatus.OPEN,
+    stmt = (
+        select(func.count())
+        .select_from(ManagerTask)
+        .join(Client, Client.id == ManagerTask.client_id)
+        .where(
+            ManagerTask.organization_id == user.organization_id,
+            ManagerTask.status == TaskStatus.OPEN,
+            Client.is_deleted.is_(False),
+        )
     )
     if user.role == UserRole.MANAGER:
         stmt = stmt.where(ManagerTask.assigned_manager_id == user.id)
-
-    visible_client_ids = {client.id for client in _visible_clients(db, user)}
-    tasks = list(db.scalars(stmt))
-    return sum(1 for task in tasks if task.client_id in visible_client_ids)
+    return int(db.scalar(stmt) or 0)
 
 
 def try_ensure_first_payment_task_for_manager_client(

@@ -830,9 +830,9 @@ export default function ClientDetailPage() {
     }
     setPhoneSaving(true);
     try {
-      await clientsApi.update(client.id, { phone: phoneValue.trim() });
+      const updated = await clientsApi.update(client.id, { phone: phoneValue.trim() });
+      setClient((current) => (current ? { ...current, ...updated } : current));
       setEditingPhone(false);
-      await refreshClient();
       showToast("Телефон сохранён");
     } catch (error) {
       showToast(
@@ -853,9 +853,11 @@ export default function ClientDetailPage() {
     }
     setNameSaving(true);
     try {
-      await clientsApi.update(client.id, { full_name: nameValue.trim().replace(/\s+/g, " ") });
+      const updated = await clientsApi.update(client.id, {
+        full_name: nameValue.trim().replace(/\s+/g, " "),
+      });
+      setClient((current) => (current ? { ...current, ...updated } : current));
       setEditingName(false);
-      await refreshClient();
       showToast("ФИО сохранено");
     } catch (error) {
       showToast(
@@ -1109,9 +1111,9 @@ export default function ClientDetailPage() {
   async function applyScheduleDraftChanges() {
     if (!client || !isDetail(client) || !client.installment_plan) return;
 
-    for (const id of scheduleDraft.pendingDeletes) {
-      await scheduleApi.delete(id);
-    }
+    const monthUpdates: Promise<unknown>[] = scheduleDraft.pendingDeletes.map((id) =>
+      scheduleApi.delete(id),
+    );
 
     for (const item of client.payment_schedule) {
       if (scheduleDraft.pendingDeletes.includes(item.id)) {
@@ -1129,8 +1131,12 @@ export default function ClientDetailPage() {
       }
 
       if (Object.keys(payload).length > 0) {
-        await scheduleApi.update(item.id, payload);
+        monthUpdates.push(scheduleApi.update(item.id, payload));
       }
+    }
+
+    if (monthUpdates.length > 0) {
+      await Promise.all(monthUpdates);
     }
 
     for (const add of scheduleDraft.pendingAdds) {
@@ -1144,8 +1150,8 @@ export default function ClientDetailPage() {
       });
     }
 
-    for (const id of scheduleDraft.pendingWaives) {
-      await scheduleApi.waiveOverdue(id);
+    if (scheduleDraft.pendingWaives.length > 0) {
+      await Promise.all(scheduleDraft.pendingWaives.map((id) => scheduleApi.waiveOverdue(id)));
     }
   }
 

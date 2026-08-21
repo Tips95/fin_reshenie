@@ -46,11 +46,19 @@ def build_connect_args(database_url: str) -> dict[str, object]:
 database_url = sanitize_database_url(settings.DATABASE_URL)
 connect_args = build_connect_args(settings.DATABASE_URL)
 
-engine = create_engine(
-    database_url,
-    pool_pre_ping=not database_url.startswith("sqlite"),
-    connect_args=connect_args,
-)
+engine_kwargs: dict[str, object] = {
+    "connect_args": connect_args,
+    "pool_pre_ping": not database_url.startswith("sqlite"),
+}
+if database_url.startswith("postgresql"):
+    engine_kwargs.update(
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=300,
+        pool_timeout=30,
+    )
+
+engine = create_engine(database_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
