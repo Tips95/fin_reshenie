@@ -83,7 +83,7 @@ export function statusLabel(status: string): string {
     overdue: "Просрочен",
     owner: "Руководитель",
     manager: "Менеджер",
-    call_center: "Колл-центр",
+    call_center: "Сбор документов",
     investor: "Инвестор",
     salary: "Зарплата",
     rent: "Аренда",

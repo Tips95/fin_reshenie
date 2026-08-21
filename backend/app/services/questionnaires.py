@@ -20,7 +20,7 @@ from app.schemas.questionnaire import (
     QuestionnaireResponse,
     QuestionnaireUpdate,
 )
-from app.services.access import ensure_client_write_access
+from app.services.access import ensure_client_read_access, ensure_client_write_access
 from app.services.audit import log_audit
 from app.services.client_duplicates import (
     INCOMPLETE_PHONE_MESSAGE,
@@ -78,7 +78,7 @@ def ensure_bankruptcy_org(user: User) -> None:
 
 def manager_can_access_questionnaire(item: ClientQuestionnaire, user: User) -> bool:
     """Менеджер видит свои черновики и анкеты закреплённых за ним клиентов.
-    Руководитель (администратор) видит все анкеты организации."""
+    Руководитель и сотрудник сбора документов видят все анкеты организации."""
     if user.role != UserRole.MANAGER:
         return True
     if item.created_by_id == user.id:
@@ -157,7 +157,10 @@ def _maybe_bind_client(
 ) -> UUID | None:
     if client_id is None:
         return None
-    client = ensure_client_write_access(db, user, client_id)
+    if user.role == UserRole.CALL_CENTER:
+        client = ensure_client_read_access(db, user, client_id)
+    else:
+        client = ensure_client_write_access(db, user, client_id)
     return client.id
 
 

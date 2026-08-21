@@ -8,7 +8,15 @@ export function getOrganizationFeatures(user: User | null | undefined): Organiza
   return user?.organization_features ?? DEFAULT_ORGANIZATION_FEATURES;
 }
 
+export function isCollectionStaff(user: User | null | undefined): boolean {
+  return user?.role === "call_center";
+}
+
 export function canUseQuestionnaires(user: User | null | undefined): boolean {
   const role = user?.role?.toLowerCase();
-  return role === "owner" || role === "manager";
+  return role === "owner" || role === "manager" || role === "call_center";
+}
+
+export function legalHomePath(user: User | null | undefined): string {
+  return isCollectionStaff(user) ? "/questionnaires" : "/";
 }

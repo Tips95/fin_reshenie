@@ -395,8 +395,6 @@ def get_client_detail(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> ClientDetailResponse:
-    if current_user.role == UserRole.CALL_CENTER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     client = ensure_client_read_access(db, current_user, client_id)
     detail = _build_client_detail(db, client)
     if db.new or db.dirty or db.deleted:

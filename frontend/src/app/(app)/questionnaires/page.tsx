@@ -14,6 +14,7 @@ import {
 import { ApiRequestError, questionnairesApi } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { QuestionnaireBrief } from "@/lib/types";
+import { isCollectionStaff } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 export default function QuestionnairesPage() {
@@ -23,13 +24,14 @@ export default function QuestionnairesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const canEdit = user?.role === "owner" || user?.role === "manager";
+  const canEdit = user?.role === "owner" || user?.role === "manager" || user?.role === "call_center";
+  const hideAmounts = isCollectionStaff(user);
 
   useEffect(() => {
-    if (user?.role === "call_center") {
+    if (!canEdit && user) {
       router.replace("/");
     }
-  }, [user?.role, router]);
+  }, [canEdit, user, router]);
 
   useEffect(() => {
     if (!canEdit) return;
@@ -60,7 +62,11 @@ export default function QuestionnairesPage() {
     <div className="page-stack">
       <PageHeader
         title="Анкеты клиентов"
-        subtitle="Первичный отбор на банкротство. Все заполненные анкеты сохраняются."
+        subtitle={
+          user?.role === "call_center"
+            ? "Все анкеты компании. Если клиент ещё не создан — можно начать сбор документов."
+            : "Первичный отбор на банкротство. Все заполненные анкеты сохраняются."
+        }
         action={
           <Button type="button" onClick={() => router.push("/questionnaires/new")}>
             Новая анкета
@@ -96,7 +102,7 @@ export default function QuestionnairesPage() {
                 <th>ФИО</th>
                 <th>Телефон</th>
                 <th>Регион</th>
-                <th>Стоимость</th>
+                {hideAmounts ? null : <th>Стоимость</th>}
                 <th>Дата</th>
                 <th>Клиент</th>
                 <th>Кто заполнил</th>
@@ -112,15 +118,19 @@ export default function QuestionnairesPage() {
                   </td>
                   <td data-label="Телефон">{item.phone || "—"}</td>
                   <td data-label="Регион">{item.registration_region || "—"}</td>
-                  <td data-label="Стоимость">
-                    {item.service_cost ? formatMoney(item.service_cost) : "—"}
-                  </td>
+                  {hideAmounts ? null : (
+                    <td data-label="Стоимость">
+                      {item.service_cost ? formatMoney(item.service_cost) : "—"}
+                    </td>
+                  )}
                   <td data-label="Дата">{item.filled_date ? formatDate(item.filled_date) : "—"}</td>
                   <td data-label="Клиент">
                     {item.client_id ? (
                       <Link href={`/clients/${item.client_id}`} className="link-brand">
                         Карточка
                       </Link>
+                    ) : hideAmounts ? (
+                      <span className="font-semibold text-status-warning-text">нужен сбор</span>
                     ) : (
                       "не создан"
                     )}

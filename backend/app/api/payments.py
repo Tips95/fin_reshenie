@@ -24,7 +24,7 @@ def list_payments(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[Payment]:
-    if current_user.role == UserRole.CALL_CENTER:
+    if current_user.role == UserRole.CALL_CENTER and client_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
 
     stmt = select(Payment).where(Payment.is_deleted.is_(False))
@@ -151,9 +151,6 @@ def get_payment(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> Payment:
-    if current_user.role == UserRole.CALL_CENTER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
-
     payment = db.get(Payment, payment_id)
     if payment is None or payment.is_deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Платёж не найден")

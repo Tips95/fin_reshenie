@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_owner_or_manager
 from app.core.database import get_db
-from app.models.enums import AuditAction, UserRole
+from app.models.enums import AuditAction
 from app.models.installment_plan import InstallmentPlan
 from app.models.user import User
 from app.schemas.installment_plan import InstallmentPlanCreate, InstallmentPlanResponse, InstallmentPlanUpdate
@@ -30,8 +30,6 @@ def list_installment_plans(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[InstallmentPlan]:
-    if current_user.role == UserRole.CALL_CENTER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     ensure_client_read_access(db, current_user, client_id)
     stmt = (
         select(InstallmentPlan)
@@ -115,8 +113,6 @@ def get_installment_plan(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> InstallmentPlan:
-    if current_user.role == UserRole.CALL_CENTER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     ensure_client_read_access(db, current_user, client_id)
     return get_installment_plan_for_client(db, plan_id=plan_id, client_id=client_id)
 

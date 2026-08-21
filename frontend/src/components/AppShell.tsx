@@ -8,13 +8,13 @@ import { LogoMark } from "@/components/ui";
 import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { canUseQuestionnaires, getOrganizationFeatures } from "@/lib/organization-features";
+import { canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff } from "@/lib/organization-features";
 import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
-  { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд" },
+  { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд", hideFor: ["call_center"] },
   {
     href: "/questionnaires",
     label: "Анкеты",
@@ -28,7 +28,13 @@ const navItems = [
     shortLabel: "Сбор",
     feature: "document_collection" as const,
   },
-  { href: "/clients/contracts", label: "Договоры", icon: "◎", shortLabel: "Договоры" },
+  {
+    href: "/clients/contracts",
+    label: "Договоры",
+    icon: "◎",
+    shortLabel: "Договоры",
+    hideFor: ["call_center"],
+  },
   {
     href: "/analytics",
     label: "Аналитика",
@@ -68,6 +74,7 @@ const navItems = [
   shortLabel?: string;
   ownerOnly?: boolean;
   roles?: string[];
+  hideFor?: string[];
   feature?: keyof ReturnType<typeof getOrganizationFeatures>;
 }>;
 
@@ -108,6 +115,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const companyName = user?.organization_name || WORKSPACE_LABELS.legal;
 
   const visibleNav = navItems.filter((item) => {
+    if (item.hideFor?.includes(user?.role ?? "")) return false;
     if (item.href === "/questionnaires") return canUseQuestionnaires(user);
     if (item.ownerOnly && user?.role !== "owner") return false;
     if (item.roles && !item.roles.includes(user?.role ?? "")) return false;
@@ -115,9 +123,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return true;
   });
 
-  const mobilePrimary = ["/", "/questionnaires", "/clients/contracts", "/tasks"].filter((href) =>
-    visibleNav.some((item) => item.href === href),
-  );
+  const mobilePrimary = (
+    isCollectionStaff(user)
+      ? ["/questionnaires", "/clients/collection"]
+      : ["/", "/questionnaires", "/clients/contracts", "/tasks"]
+  ).filter((href) => visibleNav.some((item) => item.href === href));
 
   return (
     <div className="min-h-screen mesh-bg">

@@ -272,11 +272,8 @@ export default function ClientDetailPage() {
   }, []);
 
   const fetchClient = useCallback(async () => {
-    if (user?.role === "call_center") {
-      return clientsApi.get(params.id);
-    }
     return clientsApi.getDetail(params.id);
-  }, [params.id, user?.role]);
+  }, [params.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -311,7 +308,7 @@ export default function ClientDetailPage() {
   }, [user, fetchClient, reloadKey]);
 
   useEffect(() => {
-    if (!user || user.role === "call_center") return;
+    if (!user) return;
     let cancelled = false;
     questionnairesApi
       .list({ client_id: params.id })
@@ -1217,7 +1214,9 @@ export default function ClientDetailPage() {
 
   const isOwner = user?.role === "owner";
   const isManager = user?.role === "manager";
+  const isCollectionStaff = user?.role === "call_center";
   const canEditClient = isOwner || isManager;
+  const canViewClientFinances = canEditClient || isCollectionStaff;
   const canEditSchedule = canEditClient;
   const canManageMandatory = isOwner;
   const canAssignManager = user?.role === "owner";
@@ -1227,7 +1226,7 @@ export default function ClientDetailPage() {
     isManager &&
     !client?.assigned_manager_id &&
     client?.engagement_stage === "document_collection";
-  const canOpenQuestionnaire = canEditClient;
+  const canOpenQuestionnaire = canEditClient || isCollectionStaff;
 
   async function handleOpenQuestionnaire() {
     if (!client) return;
@@ -1436,7 +1435,7 @@ export default function ClientDetailPage() {
   if (detail && isBankruptcy) {
     clientTabs.push({ id: "payments", label: "Платежи" });
   }
-  if ((canEditClient && docCollection) || (isBankruptcy && canManageMandatory)) {
+  if ((canViewClientFinances && docCollection) || (isBankruptcy && canManageMandatory)) {
     clientTabs.push({ id: "documents", label: "Документы" });
   }
   if (canEditClient && detail) {
@@ -1610,7 +1609,7 @@ export default function ClientDetailPage() {
                 WhatsApp
               </a>
             ) : null}
-            {isOwner || user?.role !== "call_center" ? (
+            {isOwner || !isCollectionStaff ? (
               <ActionMenu label="Действия с клиентом">
                 {user?.role !== "call_center" && (
                   <ActionMenuItem
@@ -1727,6 +1726,30 @@ export default function ClientDetailPage() {
               ) : null}
             </div>
           ) : null}
+        </Card>
+      ) : null}
+
+      {effectiveTab === "overview" && user?.role === "call_center" ? (
+        <Card>
+          <SectionTitle title="Клиент" description="Контакты для сбора документов" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="type-caption">ФИО</p>
+              <p className="field-value">{client.full_name}</p>
+            </div>
+            <div>
+              <p className="type-caption">Телефон</p>
+              <p className="field-value">{client.phone}</p>
+            </div>
+            <div>
+              <p className="type-caption">Дата</p>
+              <p className="field-value">{formatDate(client.contract_date)}</p>
+            </div>
+            <div>
+              <p className="type-caption">Этап</p>
+              <p className="field-value">{engagementStageLabel(client.engagement_stage)}</p>
+            </div>
+          </div>
         </Card>
       ) : null}
 
@@ -1950,7 +1973,7 @@ export default function ClientDetailPage() {
         </Card>
       ) : null}
 
-      {effectiveTab === "documents" && canEditClient && isDetail(client) && docCollection ? (
+      {effectiveTab === "documents" && canViewClientFinances && isDetail(client) && docCollection ? (
         <Card
           id="section-doc"
           variant="accent"
@@ -2056,7 +2079,7 @@ export default function ClientDetailPage() {
                   tone="success"
                 />
               </div>
-              {!isBankruptcy && docCollection.status === "pending" && (
+              {!isBankruptcy && canEditClient && docCollection.status === "pending" && (
                 <div className="mt-4">
                   <Button
                     type="button"
@@ -2201,6 +2224,20 @@ export default function ClientDetailPage() {
             value={engagementStageLabel(client.engagement_stage)}
             tone="warning"
           />
+          {docCollection ? (
+            <>
+              <StatCard
+                label="К оплате"
+                value={formatMoney(docCollection.total_amount)}
+                tone="success"
+              />
+              <StatCard
+                label="Сбор"
+                value={documentCollectionStatusLabel(docCollection.status)}
+                tone={docCollection.status === "paid" ? "success" : "warning"}
+              />
+            </>
+          ) : null}
         </div>
       ) : null}
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
 from app.core.database import get_db
-from app.models.enums import AuditAction, PaymentScheduleStatus, UserRole
+from app.models.enums import AuditAction, PaymentScheduleStatus
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
 from app.schemas.payment_schedule import (
@@ -283,8 +283,6 @@ def list_payment_schedule(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[PaymentSchedule]:
-    if current_user.role == UserRole.CALL_CENTER:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
     ensure_client_read_access(db, current_user, client_id)
     get_installment_plan_for_client(db, plan_id=plan_id, client_id=client_id)
     refresh_overdue_statuses(db, plan_id)
@@ -304,9 +302,6 @@ def get_payment_schedule_item(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> PaymentSchedule:
-    if current_user.role == UserRole.CALL_CENTER:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-
     schedule = db.get(PaymentSchedule, schedule_id)
     if schedule is None:
         raise HTTPException(status_code=404, detail="Платёж в графике не найден")

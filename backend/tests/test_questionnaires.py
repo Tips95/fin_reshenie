@@ -240,6 +240,33 @@ class TestQuestionnaireVisibility:
         ids = {item.id for item in list_questionnaires(db, owner)}
         assert ids == {one.id, two.id}
 
+    def test_call_center_list_includes_all_questionnaires(self, db):
+        staff = _org_user(
+            db,
+            role=UserRole.CALL_CENTER,
+            email="collection@test.local",
+            full_name="Сбор документов",
+        )
+        first = _org_user(
+            db,
+            email="first@test.local",
+            full_name="Первый",
+            organization=staff.organization,
+        )
+        second = _org_user(
+            db,
+            email="second@test.local",
+            full_name="Второй",
+            organization=staff.organization,
+        )
+        one = create_questionnaire(db, first, _minimal_payload(full_name="Клиент А"))
+        two = create_questionnaire(db, second, _minimal_payload(full_name="Клиент Б"))
+
+        ids = {item.id for item in list_questionnaires(db, staff)}
+        assert ids == {one.id, two.id}
+        loaded = get_organization_questionnaire(db, questionnaire_id=one.id, user=staff)
+        assert loaded.id == one.id
+
     def test_manager_cannot_open_other_manager_questionnaire(self, db):
         first = _org_user(db, email="first@test.local")
         second = _org_user(

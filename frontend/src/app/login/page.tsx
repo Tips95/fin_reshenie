@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { BrandFooter, Button, Card, Input, LogoLockup, WorkspaceSwitch } from "@/components/ui";
+import { legalHomePath } from "@/lib/organization-features";
 import type { Workspace } from "@/lib/types";
 import { normalizeLoginValue, validateLogin } from "@/lib/validation";
 import { WORKSPACE_LABELS, resolveWorkspace, setStoredWorkspace } from "@/lib/workspace";
@@ -22,7 +23,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace(user.organization_type === "retail" ? "/retail" : "/");
+      router.replace(user.organization_type === "retail" ? "/retail" : legalHomePath(user));
     }
   }, [loading, user, router]);
 

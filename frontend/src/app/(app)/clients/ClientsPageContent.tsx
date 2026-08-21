@@ -324,6 +324,28 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const canAssignManager = user?.role === "owner";
   const canManageProcedure = user?.role === "owner";
   const canSeeClientAmounts = user?.role === "owner" || user?.role === "manager";
+  const isCollectionStaff = user?.role === "call_center";
+
+  function collectionStageBadge(client: Client | ClientBrief) {
+    if (client.engagement_stage === "bankruptcy") {
+      return <Badge tone="success">На банкротстве</Badge>;
+    }
+    if (canSeeClientAmounts && isFullClient(client)) {
+      return (
+        <div className="flex flex-col gap-1">
+          {client.document_collection_status === "paid" ? (
+            <Badge tone="success">Оплачен сбор</Badge>
+          ) : (
+            <Badge tone="warning">Ожидает оплату</Badge>
+          )}
+          {client.document_collection_paid_date ? (
+            <span className="text-xs text-muted">{formatDate(client.document_collection_paid_date)}</span>
+          ) : null}
+        </div>
+      );
+    }
+    return <Badge tone="warning">Сбор документов</Badge>;
+  }
 
   function handleSort(field: SortField) {
     if (filters.sort_by === field) {
@@ -403,26 +425,31 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       {toast && (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       )}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href="/clients/collection"
-          className={
-            isCollectionView ? "tab-pill-active bg-status-warning-bg text-status-warning-text ring-status-warning-border" : "tab-pill-inactive"
-          }
-        >
-          Сбор документов
-        </Link>
-        <Link
-          href="/clients/contracts"
-          className={!isCollectionView ? "tab-pill-active" : "tab-pill-inactive"}
-        >
-          Договоры
-        </Link>
-      </div>
+      {isCollectionStaff ? null : (
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/clients/collection"
+            className={
+              isCollectionView ? "tab-pill-active bg-status-warning-bg text-status-warning-text ring-status-warning-border" : "tab-pill-inactive"
+            }
+          >
+            Сбор документов
+          </Link>
+          <Link
+            href="/clients/contracts"
+            className={!isCollectionView ? "tab-pill-active" : "tab-pill-inactive"}
+          >
+            Договоры
+          </Link>
+        </div>
+      )}
 
       {isCollectionView && (
         <div className="flex flex-wrap gap-2">
-          {COLLECTION_VIEW_OPTIONS.map((option) => (
+          {(isCollectionStaff
+            ? COLLECTION_VIEW_OPTIONS.filter((option) => option.value !== "paid")
+            : COLLECTION_VIEW_OPTIONS
+          ).map((option) => (
             <button
               key={option.value}
               type="button"
@@ -792,17 +819,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
                         {isCollectionView ? (
-                          isFullClient(client) ? (
-                            client.engagement_stage === "bankruptcy" ? (
-                              <Badge tone="success">На банкротстве</Badge>
-                            ) : client.document_collection_status === "paid" ? (
-                              <Badge tone="success">Оплачен сбор</Badge>
-                            ) : (
-                              <Badge tone="warning">Ожидает оплату</Badge>
-                            )
-                          ) : (
-                            <Badge tone="warning">Сбор документов</Badge>
-                          )
+                          collectionStageBadge(client)
                         ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
                           <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
                         ) : (
@@ -1001,24 +1018,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     )}
                     <td>
                       {isCollectionView ? (
-                        isFullClient(client) ? (
-                          <div className="flex flex-col gap-1">
-                            {client.engagement_stage === "bankruptcy" ? (
-                              <Badge tone="success">На банкротстве</Badge>
-                            ) : client.document_collection_status === "paid" ? (
-                              <Badge tone="success">Оплачен сбор</Badge>
-                            ) : (
-                              <Badge tone="warning">Ожидает оплату</Badge>
-                            )}
-                            {client.document_collection_paid_date && (
-                              <span className="text-xs text-muted">
-                                {formatDate(client.document_collection_paid_date)}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <Badge tone="warning">Сбор документов</Badge>
-                        )
+                        collectionStageBadge(client)
                       ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
                         <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
                       ) : canManageProcedure && editMode ? (

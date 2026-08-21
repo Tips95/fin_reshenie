@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { ApiRequestError, authApi } from "@/lib/api-client";
 import { clearTokens, isAuthenticated, setTokens } from "@/lib/auth-storage";
+import { legalHomePath } from "@/lib/organization-features";
 import type { User, Workspace } from "@/lib/types";
 
 interface RegisterPayload {
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setTokens(tokens.access_token, tokens.refresh_token);
       const me = await authApi.me();
       setUser(me);
-      router.push(workspace === "retail" ? "/retail" : "/");
+      router.push(workspace === "retail" ? "/retail" : legalHomePath(me));
     },
     [router],
   );
@@ -82,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setTokens(tokens.access_token, tokens.refresh_token);
       const me = await authApi.me();
       setUser(me);
-      router.push(workspace === "retail" ? "/retail" : "/");
+      router.push(workspace === "retail" ? "/retail" : legalHomePath(me));
     },
     [router],
   );

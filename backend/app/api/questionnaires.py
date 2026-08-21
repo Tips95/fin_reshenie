@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_owner_or_manager
+from app.api.deps import require_legal_staff
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.questionnaire import (
@@ -31,7 +31,7 @@ router = APIRouter()
 
 
 def _require_legal_staff(
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_legal_staff),
 ) -> User:
     ensure_bankruptcy_org(current_user)
     return current_user

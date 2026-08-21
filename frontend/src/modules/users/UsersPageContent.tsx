@@ -237,7 +237,7 @@ export function UsersPageContent({
         title="Команда"
         subtitle={
           excludeInvestors
-            ? "Сотрудники компании: менеджеры и колл-центр. Инвесторов добавляйте отдельно."
+            ? "Сотрудники компании: менеджеры и сбор документов. Инвесторов добавляйте отдельно."
             : "Команда организации, роли и доступ к системе"
         }
         action={
@@ -304,7 +304,7 @@ export function UsersPageContent({
               onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
             >
               <option value="manager">Менеджер</option>
-              <option value="call_center">Колл-центр</option>
+              <option value="call_center">Сбор документов</option>
               <option value="owner">Руководитель</option>
             </Select>
             <label className="flex items-center gap-2 text-sm text-foreground">
@@ -408,7 +408,7 @@ export function UsersPageContent({
                                 }
                               >
                                 <option value="manager">Менеджер</option>
-                                <option value="call_center">Колл-центр</option>
+                                <option value="call_center">Сбор документов</option>
                                 <option value="owner">Руководитель</option>
                               </Select>
                             </FormField>

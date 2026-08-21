@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { RetailShell } from "@/components/RetailShell";
 import { LoadingState } from "@/components/ui";
+import { isCollectionStaff, legalHomePath } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function isRetailPath(pathname: string): boolean {
@@ -31,6 +32,10 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
     }
     if (!retailUser && isRetailPath(pathname)) {
       router.replace("/");
+      return;
+    }
+    if (!retailUser && isCollectionStaff(user) && (pathname === "/" || pathname.startsWith("/clients/contracts"))) {
+      router.replace(legalHomePath(user));
     }
   }, [loading, user, router, pathname]);
 
