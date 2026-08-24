@@ -72,21 +72,22 @@ class TestBuildPaymentSchedule:
         total = sum((entry["planned_amount"] for entry in entries), Decimal("0.00"))
         assert total == tier.total_cost
 
-    def test_due_dates_increment_monthly_from_start_date(self):
+    def test_due_dates_first_keeps_start_subsequent_use_30th(self):
         tier = make_tier(total_months=4, remaining_months=2, remaining_payment="10000.00",
                          first_month="10000.00", second_month="10000.00", total_cost="40000.00")
-        start_date = date(2025, 8, 15)
+        start_date = date(2026, 7, 9)
 
         entries = build_payment_schedule_entries(pricing_tier=tier, start_date=start_date)
 
-        assert entries[0]["due_date"] == date(2025, 8, 15)
-        assert entries[1]["due_date"] == date(2025, 9, 15)
-        assert entries[2]["due_date"] == date(2025, 10, 15)
-        assert entries[3]["due_date"] == date(2025, 11, 15)
+        assert entries[0]["due_date"] == date(2026, 7, 9)
+        assert entries[1]["due_date"] == date(2026, 8, 30)
+        assert entries[2]["due_date"] == date(2026, 9, 30)
+        assert entries[3]["due_date"] == date(2026, 10, 30)
 
     def test_month_due_date_handles_month_end(self):
         assert _month_due_date(date(2025, 1, 31), 2) == date(2025, 2, 28)
         assert _month_due_date(date(2024, 1, 31), 2) == date(2024, 2, 29)
+        assert _month_due_date(date(2026, 7, 9), 1) == date(2026, 7, 9)
 
     def test_initial_status_pending_with_zero_paid(self):
         tier = make_tier()
@@ -137,7 +138,7 @@ class TestBuildPaymentSchedule:
         assert entries[1]["planned_amount"] == Decimal("20000.00")
         assert all(entry["planned_amount"] == Decimal("10500.00") for entry in entries[2:])
         assert total == Decimal("130000.00")
-        assert entries[-1]["due_date"] == date(2026, 5, 1)
+        assert entries[-1]["due_date"] == date(2026, 5, 30)
 
 
 class TestCreatePaymentScheduleModels:

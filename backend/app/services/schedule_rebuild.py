@@ -1,12 +1,10 @@
-from datetime import date
-
-from dateutil.relativedelta import relativedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment_schedule import PaymentSchedule
+from app.services.schedule_dates import schedule_due_date
 
 
 def rebuild_schedule_dates_from_contract(db: Session, client: Client) -> int:
@@ -29,7 +27,7 @@ def rebuild_schedule_dates_from_contract(db: Session, client: Client) -> int:
 
     updated = 0
     for schedule in schedules:
-        new_due = client.contract_date + relativedelta(months=schedule.month_number - 1)
+        new_due = schedule_due_date(client.contract_date, schedule.month_number)
         if schedule.due_date != new_due:
             schedule.due_date = new_due
             updated += 1

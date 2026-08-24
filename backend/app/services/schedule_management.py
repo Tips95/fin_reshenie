@@ -2,7 +2,6 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import PaymentScheduleStatus
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment_schedule import PaymentSchedule
+from app.services.schedule_dates import next_schedule_due_date
 
 
 def _refresh_schedule_status(schedule: PaymentSchedule) -> None:
@@ -110,7 +110,7 @@ def add_schedule_month(
 
     if due_date is None:
         if schedules:
-            due_date = schedules[-1].due_date + relativedelta(months=1)
+            due_date = next_schedule_due_date(schedules[-1].due_date)
         else:
             due_date = plan.start_date
 

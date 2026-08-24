@@ -38,7 +38,7 @@ class TestScheduleRebuild:
         assert updated == 2
         assert plan.start_date == date(2024, 2, 10)
         assert schedules[0].due_date == date(2024, 2, 10)
-        assert schedules[1].due_date == date(2024, 3, 10)
+        assert schedules[1].due_date == date(2024, 3, 30)
 
 
 class TestPaymentSyncMonthMatch:

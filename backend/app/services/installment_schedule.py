@@ -1,16 +1,12 @@
 from datetime import date
 from decimal import Decimal
 
-from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
 
 from app.models.enums import PaymentScheduleStatus
 from app.models.payment_schedule import PaymentSchedule
 from app.models.pricing_tier import PricingTier
-
-
-def _month_due_date(start_date: date, month_number: int) -> date:
-    return start_date + relativedelta(months=month_number - 1)
+from app.services.schedule_dates import schedule_due_date as _month_due_date
 
 
 def build_payment_schedule_entries(

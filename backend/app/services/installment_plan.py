@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import PaymentScheduleStatus
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment_schedule import PaymentSchedule
+from app.services.schedule_dates import next_schedule_due_date
 
 
 def _schedule_planned_total(schedules: list[PaymentSchedule]) -> Decimal:
@@ -106,7 +106,7 @@ def update_installment_plan_total_amount(
             target.paid_date = None
     else:
         last = schedules[-1]
-        due_date = last.due_date + relativedelta(months=1)
+        due_date = next_schedule_due_date(last.due_date)
         schedules.append(
             PaymentSchedule(
                 installment_plan_id=plan.id,

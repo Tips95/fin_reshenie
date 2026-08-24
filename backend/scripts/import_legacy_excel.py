@@ -24,7 +24,6 @@ from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
-from dateutil.relativedelta import relativedelta
 from openpyxl import load_workbook
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -54,6 +53,7 @@ from app.models.payment import Payment  # noqa: E402
 from app.models.payment_schedule import PaymentSchedule  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.services.mandatory_payments import create_default_mandatory_payments  # noqa: E402
+from app.services.schedule_dates import next_schedule_due_date  # noqa: E402
 
 LEGACY_COLLECTION_CUTOFF = date(2026, 6, 1)
 STRICT_DEBT_CUTOFF = date(2026, 7, 17)
@@ -331,7 +331,7 @@ def build_schedule_and_payments(
 
     if remainder is not None and remainder > 0:
         last_due = monthly_payments[-1][0] if monthly_payments else contract_date
-        next_due = last_due + relativedelta(months=1)
+        next_due = next_schedule_due_date(last_due)
         schedules.append(
             PaymentSchedule(
                 installment_plan_id=plan.id,

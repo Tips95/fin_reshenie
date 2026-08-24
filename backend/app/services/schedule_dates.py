@@ -2,10 +2,33 @@ from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 
+from dateutil.relativedelta import relativedelta
+
 from app.models.enums import PaymentScheduleStatus
 from app.models.payment_schedule import PaymentSchedule
 
 PAYMENT_WINDOW_START_DAY = 25
+# В договорах 2-й и последующие платежи — до 30-го числа месяца графика.
+SUBSEQUENT_PAYMENT_DAY = 30
+
+
+def clamp_to_month_day(year: int, month: int, day: int) -> date:
+    _, last_day = monthrange(year, month)
+    return date(year, month, min(day, last_day))
+
+
+def schedule_due_date(start_date: date, month_number: int) -> date:
+    """Дата платежа: 1-й месяц — дата договора, со 2-го — 30-е того месяца."""
+    if month_number <= 1:
+        return start_date
+    target = start_date + relativedelta(months=month_number - 1)
+    return clamp_to_month_day(target.year, target.month, SUBSEQUENT_PAYMENT_DAY)
+
+
+def next_schedule_due_date(previous_due: date) -> date:
+    """Следующий месяц графика: 30-е (или последний день февраля)."""
+    target = previous_due + relativedelta(months=1)
+    return clamp_to_month_day(target.year, target.month, SUBSEQUENT_PAYMENT_DAY)
 
 
 def effective_due_date(schedule: PaymentSchedule) -> date:

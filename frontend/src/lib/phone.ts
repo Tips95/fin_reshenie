@@ -44,10 +44,16 @@ export function ensurePhonePrefix(value: string): string {
   return limitPhoneLength(`${PHONE_PREFIX}${digits}`);
 }
 
+/** Следующий платёж графика: 30-е следующего месяца (в феврале — последний день). */
 export function addOneMonth(dateStr: string): string {
-  const date = new Date(`${dateStr}T12:00:00`);
-  date.setMonth(date.getMonth() + 1);
-  return date.toISOString().slice(0, 10);
+  const [yearStr, monthStr] = dateStr.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const lastDay = new Date(nextYear, nextMonth, 0).getDate();
+  const day = Math.min(30, lastDay);
+  return `${nextYear}-${String(nextMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 /** E.164 digits for WhatsApp Web (e.g. 79001234567). */

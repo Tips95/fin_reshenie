@@ -5,8 +5,10 @@ from types import SimpleNamespace
 from app.models.enums import PaymentScheduleStatus
 from app.services.schedule_dates import (
     is_schedule_overdue,
+    next_schedule_due_date,
     payment_window_end,
     payment_window_start,
+    schedule_due_date,
     schedule_overdue_days,
 )
 
@@ -28,6 +30,21 @@ def make_schedule(
         status=status,
         overdue_waived=overdue_waived,
     )
+
+
+class TestScheduleDueDate:
+    def test_first_month_keeps_contract_day(self):
+        assert schedule_due_date(date(2026, 7, 9), 1) == date(2026, 7, 9)
+
+    def test_subsequent_months_use_30th(self):
+        start = date(2026, 7, 9)
+        assert schedule_due_date(start, 2) == date(2026, 8, 30)
+        assert schedule_due_date(start, 3) == date(2026, 9, 30)
+        assert next_schedule_due_date(date(2026, 7, 9)) == date(2026, 8, 30)
+
+    def test_february_clamps_to_last_day(self):
+        assert schedule_due_date(date(2026, 1, 9), 2) == date(2026, 2, 28)
+        assert next_schedule_due_date(date(2026, 1, 30)) == date(2026, 2, 28)
 
 
 class TestPaymentWindow:
