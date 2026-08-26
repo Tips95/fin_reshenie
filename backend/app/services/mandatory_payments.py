@@ -105,17 +105,34 @@ def delete_mandatory_payment_record(
     recalculate_mandatory_payment_from_records(item)
 
 
+def update_mandatory_payment_record(
+    item: ClientMandatoryPayment,
+    record_id,
+    *,
+    payment_date: date | None = None,
+    amount: Decimal | None = None,
+) -> ClientMandatoryPaymentRecord:
+    record = next((entry for entry in item.payment_records if entry.id == record_id), None)
+    if record is None:
+        raise ValueError("record_not_found")
+    if amount is not None:
+        other_paid = item.paid_amount - record.amount
+        remaining = item.planned_amount - other_paid
+        if item.planned_amount > Decimal("0.00") and amount > remaining:
+            raise ValueError("amount_exceeds_remaining")
+        record.amount = amount
+    if payment_date is not None:
+        record.payment_date = payment_date
+    recalculate_mandatory_payment_from_records(item)
+    return record
+
+
 def update_mandatory_payment_record_date(
     item: ClientMandatoryPayment,
     record_id,
     payment_date: date,
 ) -> ClientMandatoryPaymentRecord:
-    record = next((entry for entry in item.payment_records if entry.id == record_id), None)
-    if record is None:
-        raise ValueError("record_not_found")
-    record.payment_date = payment_date
-    recalculate_mandatory_payment_from_records(item)
-    return record
+    return update_mandatory_payment_record(item, record_id, payment_date=payment_date)
 
 
 def refresh_mandatory_payment_status(item: ClientMandatoryPayment) -> None:

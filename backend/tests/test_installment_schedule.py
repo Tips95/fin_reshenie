@@ -141,6 +141,21 @@ class TestBuildPaymentSchedule:
         assert entries[-1]["due_date"] == date(2026, 5, 30)
 
 
+class TestDefaultPricingTiers:
+    def test_every_default_tier_builds_a_schedule(self):
+        from app.services.default_pricing_tiers import DEFAULT_PRICING_TIERS
+
+        for tier_data in DEFAULT_PRICING_TIERS:
+            tier = SimpleNamespace(**tier_data)
+            entries = build_payment_schedule_entries(
+                pricing_tier=tier,
+                start_date=date(2026, 8, 1),
+            )
+            total = sum((entry["planned_amount"] for entry in entries), Decimal("0.00"))
+            assert len(entries) == tier.total_months
+            assert total == tier.total_cost
+
+
 class TestCreatePaymentScheduleModels:
     def test_creates_payment_schedule_models(self):
         tier = make_tier(total_months=3, remaining_months=1, remaining_payment="10000.00",
@@ -270,7 +285,7 @@ class TestFindPricingTier:
 
     def test_returns_none_when_no_tier_found(self):
         db = MagicMock()
-        db.scalar.side_effect = [None, 1, None]
+        db.scalar.side_effect = [None, 1, None, None]
 
         result = find_pricing_tier(
             db,
@@ -280,6 +295,20 @@ class TestFindPricingTier:
         )
 
         assert result is None
+
+    def test_falls_back_when_contract_date_before_effective_from(self):
+        tier = make_tier(min_amount="300000.00", max_amount="400000.00", effective_from=date(2025, 1, 1))
+        db = MagicMock()
+        db.scalar.side_effect = [None, 1, None, tier]
+
+        result = find_pricing_tier(
+            db,
+            organization_id=ORG_ID,
+            debt_amount=Decimal("350000.00"),
+            contract_date=date(2024, 5, 1),
+        )
+
+        assert result is tier
 
     def test_boundary_400k_uses_lower_tier(self):
         """Ровно 400 000 ₽ — диапазон 300–400к (150к), а не 400–500к (160к)."""

@@ -124,22 +124,35 @@ def update_payment(
 
     ensure_client_write_access(db, current_user, payment.client_id)
 
-    old_date = payment.payment_date
-    payment.payment_date = payload.payment_date
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нет данных для обновления")
+
+    if "amount" in updates and payment.is_refund and payment.payment_schedule_id is not None:
+        schedule = db.get(PaymentSchedule, payment.payment_schedule_id)
+        if schedule is not None and updates["amount"] > schedule.paid_amount + payment.amount:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Сумма возврата не может превышать оплаченную по выбранному месяцу",
+            )
+
+    for field, value in updates.items():
+        old_value = getattr(payment, field)
+        if old_value != value:
+            log_audit(
+                db,
+                user=current_user,
+                entity_type="payment",
+                entity_id=payment.id,
+                action=AuditAction.UPDATE,
+                field_name=field,
+                old_value=old_value,
+                new_value=value,
+            )
+            setattr(payment, field, value)
+
     db.flush()
-
     sync_client_payment_schedules(db, payment.client_id)
-
-    log_audit(
-        db,
-        user=current_user,
-        entity_type="payment",
-        entity_id=payment.id,
-        action=AuditAction.UPDATE,
-        field_name="payment_date",
-        old_value=str(old_date),
-        new_value=str(payload.payment_date),
-    )
     db.commit()
     db.refresh(payment)
     return payment

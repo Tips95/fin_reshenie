@@ -74,18 +74,20 @@ def _pricing_tier_lookup_stmt(
     *,
     organization_id: UUID,
     debt_amount: Decimal,
-    contract_date: date,
+    contract_date: date | None = None,
 ):
+    filters = [
+        PricingTier.organization_id == organization_id,
+        PricingTier.is_active.is_(True),
+        PricingTier.min_amount >= MIN_DEBT_AMOUNT,
+        PricingTier.min_amount <= debt_amount,
+        PricingTier.max_amount >= debt_amount,
+    ]
+    if contract_date is not None:
+        filters.append(PricingTier.effective_from <= contract_date)
     return (
         select(PricingTier)
-        .where(
-            PricingTier.organization_id == organization_id,
-            PricingTier.is_active.is_(True),
-            PricingTier.min_amount >= MIN_DEBT_AMOUNT,
-            PricingTier.min_amount <= debt_amount,
-            PricingTier.max_amount >= debt_amount,
-            PricingTier.effective_from <= contract_date,
-        )
+        .where(*filters)
         .order_by(
             PricingTier.effective_from.desc(),
             PricingTier.min_amount.asc(),
@@ -148,7 +150,17 @@ def find_pricing_tier(
         return tier
 
     _ensure_default_pricing_tiers(db, organization_id)
-    return db.scalar(stmt)
+    tier = db.scalar(stmt)
+    if tier is not None:
+        return tier
+
+    # Дата договора раньше effective_from тарифов — берём актуальный диапазон по сумме.
+    return db.scalar(
+        _pricing_tier_lookup_stmt(
+            organization_id=organization_id,
+            debt_amount=debt_amount,
+        )
+    )
 
 
 def pricing_tier_not_found_message(

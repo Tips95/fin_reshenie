@@ -9,6 +9,7 @@ from app.services.document_collection import (
     convert_client_to_bankruptcy,
     create_document_collection,
     record_document_collection_payment,
+    unrecord_document_collection_payment,
     update_document_collection_amounts,
 )
 
@@ -86,6 +87,140 @@ class TestDocumentCollection:
         assert updated.notary_fee == Decimal("2500.00")
         assert updated.manager_commission == Decimal("1500.00")
         assert updated.total_amount == Decimal("16000.00")
+
+    def test_owner_can_correct_paid_collection_to_ten_thousand(self):
+        client = make_client()
+        db = MagicMock()
+        item = SimpleNamespace(
+            client_id=CLIENT_ID,
+            status=DocumentCollectionStatus.PAID,
+            paid_date=date(2026, 7, 10),
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("2000.00"),
+            manager_commission=Decimal("1000.00"),
+            total_amount=Decimal("13000.00"),
+        )
+        db.scalar.return_value = item
+
+        updated = update_document_collection_amounts(
+            db,
+            client,
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("0.00"),
+            manager_commission=Decimal("0.00"),
+            actor_role=UserRole.OWNER,
+            paid_date=date(2026, 7, 8),
+        )
+
+        assert updated.total_amount == Decimal("10000.00")
+        assert updated.notary_fee == Decimal("0.00")
+        assert updated.manager_commission == Decimal("0.00")
+        assert updated.status == DocumentCollectionStatus.PAID
+        assert updated.paid_date == date(2026, 7, 8)
+
+    def test_manager_can_correct_paid_collection_before_bankruptcy(self):
+        client = make_client()
+        db = MagicMock()
+        item = SimpleNamespace(
+            client_id=CLIENT_ID,
+            status=DocumentCollectionStatus.PAID,
+            paid_date=date(2026, 7, 10),
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("2000.00"),
+            manager_commission=Decimal("1000.00"),
+            total_amount=Decimal("13000.00"),
+        )
+        db.scalar.return_value = item
+
+        updated = update_document_collection_amounts(
+            db,
+            client,
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("0.00"),
+            manager_commission=Decimal("0.00"),
+            actor_role=UserRole.MANAGER,
+        )
+
+        assert updated.total_amount == Decimal("10000.00")
+
+    def test_manager_cannot_update_collection_after_bankruptcy(self):
+        client = make_client(EngagementStage.BANKRUPTCY)
+        db = MagicMock()
+        db.scalar.return_value = SimpleNamespace(
+            client_id=CLIENT_ID,
+            status=DocumentCollectionStatus.PAID,
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("2000.00"),
+            manager_commission=Decimal("1000.00"),
+            total_amount=Decimal("13000.00"),
+        )
+
+        try:
+            update_document_collection_amounts(
+                db,
+                client,
+                collection_fee=Decimal("10000.00"),
+                notary_fee=Decimal("0.00"),
+                manager_commission=Decimal("0.00"),
+                actor_role=UserRole.MANAGER,
+            )
+            assert False, "expected HTTPException"
+        except Exception as exc:
+            assert exc.status_code == 422
+
+    def test_owner_can_update_collection_after_bankruptcy(self):
+        client = make_client(EngagementStage.BANKRUPTCY)
+        db = MagicMock()
+        item = SimpleNamespace(
+            client_id=CLIENT_ID,
+            status=DocumentCollectionStatus.PAID,
+            paid_date=date(2026, 7, 10),
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("2000.00"),
+            manager_commission=Decimal("1000.00"),
+            total_amount=Decimal("13000.00"),
+        )
+        db.scalar.return_value = item
+
+        updated = update_document_collection_amounts(
+            db,
+            client,
+            collection_fee=Decimal("10000.00"),
+            notary_fee=Decimal("0.00"),
+            manager_commission=Decimal("0.00"),
+            actor_role=UserRole.OWNER,
+        )
+
+        assert updated.total_amount == Decimal("10000.00")
+
+    def test_unrecord_clears_paid_status(self):
+        client = make_client()
+        db = MagicMock()
+        item = SimpleNamespace(
+            client_id=CLIENT_ID,
+            status=DocumentCollectionStatus.PAID,
+            paid_date=date(2026, 7, 10),
+        )
+        db.scalar.return_value = item
+
+        updated = unrecord_document_collection_payment(db, client)
+
+        assert updated.status == DocumentCollectionStatus.PENDING
+        assert updated.paid_date is None
+
+    def test_unrecord_rejected_after_bankruptcy(self):
+        client = make_client(EngagementStage.BANKRUPTCY)
+        db = MagicMock()
+        db.scalar.return_value = SimpleNamespace(
+            status=DocumentCollectionStatus.PAID,
+            paid_date=date(2026, 7, 10),
+        )
+
+        try:
+            unrecord_document_collection_payment(db, client)
+            assert False, "expected HTTPException"
+        except Exception as exc:
+            assert exc.status_code == 422
 
     def test_convert_requires_paid_collection(self):
         client = make_client()

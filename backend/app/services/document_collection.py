@@ -62,18 +62,14 @@ def update_document_collection_amounts(
     collection_fee: Decimal,
     notary_fee: Decimal,
     manager_commission: Decimal,
+    actor_role: UserRole = UserRole.OWNER,
+    paid_date: date | None = None,
 ) -> DocumentCollection:
-    if client.engagement_stage != EngagementStage.DOCUMENT_COLLECTION:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Суммы сбора можно менять только на этапе сбора документов",
-        )
-
     item = ensure_document_collection(db, client)
-    if item.status != DocumentCollectionStatus.PENDING:
+    if actor_role != UserRole.OWNER and client.engagement_stage != EngagementStage.DOCUMENT_COLLECTION:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Суммы сбора можно менять только до фиксации оплаты",
+            detail="После перевода на банкротство суммы сбора может менять только руководитель",
         )
 
     total = collection_fee + notary_fee + manager_commission
@@ -87,6 +83,39 @@ def update_document_collection_amounts(
     item.notary_fee = notary_fee
     item.manager_commission = manager_commission
     item.total_amount = total
+
+    if paid_date is not None:
+        if item.status != DocumentCollectionStatus.PAID:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Дату оплаты можно менять только после фиксации",
+            )
+        if actor_role != UserRole.OWNER and client.engagement_stage != EngagementStage.DOCUMENT_COLLECTION:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="После перевода на банкротство дату оплаты может менять только руководитель",
+            )
+        item.paid_date = paid_date
+
+    return item
+
+
+def unrecord_document_collection_payment(db: Session, client: Client) -> DocumentCollection:
+    if client.engagement_stage != EngagementStage.DOCUMENT_COLLECTION:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нельзя снять оплату после перевода на банкротство",
+        )
+
+    item = ensure_document_collection(db, client)
+    if item.status != DocumentCollectionStatus.PAID:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Оплата сбора ещё не зафиксирована",
+        )
+
+    item.status = DocumentCollectionStatus.PENDING
+    item.paid_date = None
     return item
 
 

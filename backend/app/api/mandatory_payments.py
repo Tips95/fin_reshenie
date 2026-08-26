@@ -22,7 +22,7 @@ from app.services.mandatory_payments import (
     build_mandatory_payment_response,
     delete_mandatory_payment_record,
     refresh_mandatory_payment_status,
-    update_mandatory_payment_record_date,
+    update_mandatory_payment_record as apply_mandatory_record_update,
 )
 
 router = APIRouter()
@@ -175,22 +175,36 @@ def update_mandatory_payment_record(
 ) -> MandatoryPaymentResponse:
     ensure_client_write_access(db, current_user, client_id)
     item = _get_mandatory_payment(db, client_id=client_id, payment_id=payment_id)
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Нет данных для обновления")
     try:
-        record = update_mandatory_payment_record_date(item, record_id, payload.payment_date)
+        record = apply_mandatory_record_update(
+            item,
+            record_id,
+            payment_date=updates.get("payment_date"),
+            amount=updates.get("amount"),
+        )
     except ValueError as exc:
         if str(exc) == "record_not_found":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Запись не найдена") from exc
+        if str(exc) == "amount_exceeds_remaining":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Сумма превышает остаток по обязательному платежу",
+            ) from exc
         raise
 
-    log_audit(
-        db,
-        user=current_user,
-        entity_type="mandatory_payment_record",
-        entity_id=record.id,
-        action=AuditAction.UPDATE,
-        field_name="payment_date",
-        new_value=str(payload.payment_date),
-    )
+    for field_name, new_value in updates.items():
+        log_audit(
+            db,
+            user=current_user,
+            entity_type="mandatory_payment_record",
+            entity_id=record.id,
+            action=AuditAction.UPDATE,
+            field_name=field_name,
+            new_value=new_value,
+        )
     db.commit()
     db.refresh(item, attribute_names=["payment_records"])
     return _to_mandatory_response(item)

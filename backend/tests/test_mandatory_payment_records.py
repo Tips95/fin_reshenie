@@ -9,6 +9,7 @@ from app.services.mandatory_payments import (
     apply_mandatory_payment,
     delete_mandatory_payment_record,
     recalculate_mandatory_payment_from_records,
+    update_mandatory_payment_record,
     update_mandatory_payment_record_date,
 )
 
@@ -75,6 +76,33 @@ class TestMandatoryPaymentRecords:
 
         assert record.payment_date == date(2024, 4, 20)
         assert item.paid_date == date(2024, 4, 20)
+
+    def test_update_record_amount_recalculates_totals(self):
+        item = FakeMandatoryPayment()
+        record = FakeRecord("13000.00", date(2024, 3, 10))
+        item.payment_records = [record]
+        item.paid_amount = Decimal("13000.00")
+        item.paid_date = date(2024, 3, 10)
+        item.status = MandatoryPaymentStatus.PARTIAL
+
+        update_mandatory_payment_record(item, record.id, amount=Decimal("10000.00"))
+
+        assert record.amount == Decimal("10000.00")
+        assert item.paid_amount == Decimal("10000.00")
+        assert item.status == MandatoryPaymentStatus.PARTIAL
+
+    def test_update_record_amount_rejects_overpay(self):
+        item = FakeMandatoryPayment()
+        record = FakeRecord("10000.00", date(2024, 3, 10))
+        item.payment_records = [record]
+        item.paid_amount = Decimal("10000.00")
+        item.status = MandatoryPaymentStatus.PARTIAL
+
+        try:
+            update_mandatory_payment_record(item, record.id, amount=Decimal("30000.00"))
+            assert False, "expected ValueError"
+        except ValueError as exc:
+            assert str(exc) == "amount_exceeds_remaining"
 
     def test_apply_then_recalculate_keeps_status(self):
         item = FakeMandatoryPayment()

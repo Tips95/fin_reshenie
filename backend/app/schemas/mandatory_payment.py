@@ -43,4 +43,5 @@ class MandatoryPaymentRecord(BaseModel):
 
 
 class MandatoryPaymentRecordUpdate(BaseModel):
-    payment_date: date
+    payment_date: date | None = None
+    amount: Decimal | None = Field(default=None, gt=0, decimal_places=2)

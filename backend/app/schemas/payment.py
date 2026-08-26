@@ -15,7 +15,9 @@ class PaymentCreate(BaseModel):
 
 
 class PaymentUpdate(BaseModel):
-    payment_date: date
+    payment_date: date | None = None
+    amount: Decimal | None = Field(default=None, gt=0, decimal_places=2)
+    comment: str | None = None
 
 
 class PaymentAlignResult(BaseModel):

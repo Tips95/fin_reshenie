@@ -9,7 +9,12 @@ from app.core.database import get_db
 from app.models.enums import AuditAction
 from app.models.installment_plan import InstallmentPlan
 from app.models.user import User
-from app.schemas.installment_plan import InstallmentPlanCreate, InstallmentPlanResponse, InstallmentPlanUpdate
+from app.schemas.installment_plan import (
+    InstallmentPlanCreate,
+    InstallmentPlanFromTier,
+    InstallmentPlanResponse,
+    InstallmentPlanUpdate,
+)
 from app.services.installment_plan import update_installment_plan_total_amount
 from app.services.access import (
     ensure_client_read_access,
@@ -90,6 +95,7 @@ def create_installment_plan(
         installment_plan_id=plan.id,
     )
     db.add_all(schedules)
+    db.flush()
 
     log_audit(
         db,
@@ -97,6 +103,49 @@ def create_installment_plan(
         entity_type="installment_plan",
         entity_id=plan.id,
         action=AuditAction.CREATE,
+    )
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.post(
+    "/{client_id}/installment-plans/from-tier",
+    response_model=InstallmentPlanResponse,
+)
+def generate_installment_from_tier(
+    client_id: UUID,
+    payload: InstallmentPlanFromTier,
+    current_user: User = Depends(require_owner_or_manager),
+    db: Session = Depends(get_db),
+) -> InstallmentPlan:
+    from app.api.clients import _create_installment_for_client
+    from app.models.enums import EngagementStage
+
+    client = ensure_client_write_access(db, current_user, client_id)
+    if client.engagement_stage != EngagementStage.BANKRUPTCY:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Автоматический график доступен только клиентам на банкротстве",
+        )
+
+    client.debt_amount = payload.debt_amount
+    if payload.contract_date is not None:
+        client.contract_date = payload.contract_date
+
+    plan = _create_installment_for_client(
+        db,
+        client=client,
+        organization_id=current_user.organization_id,
+    )
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="installment_plan",
+        entity_id=plan.id,
+        action=AuditAction.CREATE,
+        field_name="from_tier",
+        new_value=payload.debt_amount,
     )
     db.commit()
     db.refresh(plan)

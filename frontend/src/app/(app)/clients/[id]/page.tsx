@@ -42,6 +42,7 @@ import { cn } from "@/lib/cn";
 type ClientCardTab = "overview" | "payments" | "documents" | "journal";
 
 const CLIENT_SECTION_CLASS = "client-section-anchor";
+const MIN_DEBT_AMOUNT = 300000;
 
 type PendingScheduleAdd = {
   tempId: string;
@@ -214,6 +215,7 @@ export default function ClientDetailPage() {
   const [deletingMandatoryRecordId, setDeletingMandatoryRecordId] = useState<string | null>(null);
   const [savingMandatoryRecordDateId, setSavingMandatoryRecordDateId] = useState<string | null>(null);
   const [mandatoryRecordDateEdits, setMandatoryRecordDateEdits] = useState<Record<string, string>>({});
+  const [mandatoryRecordAmountEdits, setMandatoryRecordAmountEdits] = useState<Record<string, string>>({});
   const [plannedEdits, setPlannedEdits] = useState<Record<string, string>>({});
   const [editingPlannedId, setEditingPlannedId] = useState<string | null>(null);
   const [editingPhone, setEditingPhone] = useState(false);
@@ -246,8 +248,10 @@ export default function ClientDetailPage() {
     collection_fee: "",
     notary_fee: "",
     manager_commission: "",
+    paid_date: "",
   });
   const [docCollectionAmountsSaving, setDocCollectionAmountsSaving] = useState(false);
+  const [docCollectionUnrecording, setDocCollectionUnrecording] = useState(false);
   const [convertSaving, setConvertSaving] = useState(false);
   const [commissionSaving, setCommissionSaving] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
@@ -257,9 +261,12 @@ export default function ClientDetailPage() {
     contract_total: "",
     contract_date: "",
   });
+  const [autoTierForm, setAutoTierForm] = useState({ debt_amount: "", contract_date: "" });
+  const [autoTierSaving, setAutoTierSaving] = useState(false);
   const [docCollectionPaymentDate, setDocCollectionPaymentDate] = useState("");
   const [aligningDates, setAligningDates] = useState(false);
   const [paymentDateEdits, setPaymentDateEdits] = useState<Record<string, string>>({});
+  const [paymentAmountEdits, setPaymentAmountEdits] = useState<Record<string, string>>({});
   const [savingPaymentDateId, setSavingPaymentDateId] = useState<string | null>(null);
   const [deletingClient, setDeletingClient] = useState(false);
   const [activeTab, setActiveTab] = useState<ClientCardTab>("overview");
@@ -393,12 +400,22 @@ export default function ClientDetailPage() {
       ...prev,
       contract_date: client.contract_date,
     }));
+    const debt = "debt_amount" in client ? Number(client.debt_amount) : 0;
+    setAutoTierForm({
+      debt_amount: debt >= MIN_DEBT_AMOUNT ? formatAmountInput(debt) : "",
+      contract_date: client.contract_date,
+    });
   }, [client?.id, client?.contract_date]);
 
   useEffect(() => {
     if (!client || !isDetail(client)) return;
     setPaymentDateEdits(
       Object.fromEntries(client.payments.map((payment) => [payment.id, payment.payment_date])),
+    );
+    setPaymentAmountEdits(
+      Object.fromEntries(
+        client.payments.map((payment) => [payment.id, formatAmountInput(payment.amount)]),
+      ),
     );
   }, [client]);
 
@@ -521,18 +538,30 @@ export default function ClientDetailPage() {
     }
   }
 
-  async function handleUpdatePaymentDate(paymentId: string) {
+  async function handleUpdatePayment(paymentId: string) {
     const paymentDate = paymentDateEdits[paymentId];
-    if (!paymentDate) return;
+    const amountRaw = paymentAmountEdits[paymentId];
+    if (!paymentDate) {
+      showToast("Укажите дату", "error");
+      return;
+    }
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("Укажите сумму платежа", "error");
+      return;
+    }
 
     setSavingPaymentDateId(paymentId);
     try {
-      await paymentsApi.update(paymentId, { payment_date: paymentDate });
+      await paymentsApi.update(paymentId, {
+        payment_date: paymentDate,
+        amount: amount.toFixed(2),
+      });
       await refreshClient();
-      showToast("Дата платежа обновлена");
+      showToast("Платёж обновлён");
     } catch (error) {
       showToast(
-        error instanceof ApiRequestError ? error.message : "Не удалось обновить дату",
+        error instanceof ApiRequestError ? error.message : "Не удалось обновить платёж",
         "error",
       );
     } finally {
@@ -757,22 +786,36 @@ export default function ClientDetailPage() {
     }
   }
 
-  async function handleUpdateMandatoryRecordDate(paymentId: string, recordId: string) {
-    if (!client) return;
+  async function handleUpdateMandatoryRecord(paymentId: string, recordId: string) {
+    if (!client || !isDetail(client)) return;
     const paymentDate = mandatoryRecordDateEdits[recordId];
-    if (!paymentDate) {
+    const amountRaw = mandatoryRecordAmountEdits[recordId];
+    const current = client.mandatory_payments
+      .flatMap((item) => item.payment_records ?? [])
+      .find((record) => record.id === recordId);
+    const nextDate = paymentDate ?? current?.payment_date;
+    const nextAmount = amountRaw ?? (current ? formatAmountInput(current.amount) : "");
+    if (!nextDate) {
       showToast("Укажите дату", "error");
+      return;
+    }
+    const amount = Number(nextAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("Укажите сумму", "error");
       return;
     }
 
     setSavingMandatoryRecordDateId(recordId);
     try {
-      await mandatoryPaymentsApi.updateRecordDate(client.id, paymentId, recordId, paymentDate);
+      await mandatoryPaymentsApi.updateRecord(client.id, paymentId, recordId, {
+        payment_date: nextDate,
+        amount: amount.toFixed(2),
+      });
       await refreshClient();
-      showToast("Дата обновлена");
+      showToast("Запись обновлена");
     } catch (error) {
       showToast(
-        error instanceof ApiRequestError ? error.message : "Не удалось обновить дату",
+        error instanceof ApiRequestError ? error.message : "Не удалось обновить запись",
         "error",
       );
     } finally {
@@ -1152,7 +1195,40 @@ export default function ClientDetailPage() {
     }
   }
 
-  async function handleSaveContractAndSchedule() {
+  async function handleGenerateFromTier() {
+    if (!client) return;
+    const debtError = validatePositiveAmount(autoTierForm.debt_amount, { label: "Сумма долга" });
+    if (debtError) {
+      showToast(debtError, "error");
+      return;
+    }
+    if (Number(autoTierForm.debt_amount) < MIN_DEBT_AMOUNT) {
+      showToast(
+        `Для автоматической рассрочки укажите сумму долга от ${MIN_DEBT_AMOUNT.toLocaleString("ru-RU")} ₽`,
+        "error",
+      );
+      return;
+    }
+
+    setAutoTierSaving(true);
+    try {
+      await installmentApi.generateFromTier(client.id, {
+        debt_amount: Number(autoTierForm.debt_amount).toFixed(2),
+        contract_date: autoTierForm.contract_date || undefined,
+      });
+      resetScheduleDraft();
+      await refreshClient();
+      setScheduleOpen(true);
+      showToast("График построен по тарифу");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось построить график по тарифу",
+        "error",
+      );
+    } finally {
+      setAutoTierSaving(false);
+    }
+  }
     if (!client || !isDetail(client) || !client.installment_plan) return;
 
     const draftPlanned = computeScheduleDraftPlannedTotal(client.payment_schedule, scheduleDraft);
@@ -1222,6 +1298,8 @@ export default function ClientDetailPage() {
   const canAssignManager = user?.role === "owner";
   const canRecordSchedulePayment = isOwner;
   const canRecordDocCollectionPayment = canEditClient;
+  const canEditDocCollectionAmounts =
+    canEditClient && (user?.role === "owner" || client?.engagement_stage !== "bankruptcy");
   const canClaimClient =
     isManager &&
     !client?.assigned_manager_id &&
@@ -1304,12 +1382,24 @@ export default function ClientDetailPage() {
 
   async function handleSaveDocCollectionAmounts() {
     if (!client || !isDetail(client) || !client.document_collection) return;
+    const total =
+      Number(docCollectionAmountForm.collection_fee || 0) +
+      Number(docCollectionAmountForm.notary_fee || 0) +
+      Number(docCollectionAmountForm.manager_commission || 0);
+    if (!Number.isFinite(total) || total <= 0) {
+      showToast("Сумма сбора должна быть больше нуля", "error");
+      return;
+    }
     setDocCollectionAmountsSaving(true);
     try {
       await documentCollectionApi.update(client.id, {
         collection_fee: Number(docCollectionAmountForm.collection_fee).toFixed(2),
         notary_fee: Number(docCollectionAmountForm.notary_fee).toFixed(2),
         manager_commission: Number(docCollectionAmountForm.manager_commission).toFixed(2),
+        paid_date:
+          client.document_collection.status === "paid" && docCollectionAmountForm.paid_date
+            ? docCollectionAmountForm.paid_date
+            : undefined,
       });
       setEditingDocCollectionAmounts(false);
       await refreshClient();
@@ -1321,6 +1411,42 @@ export default function ClientDetailPage() {
       );
     } finally {
       setDocCollectionAmountsSaving(false);
+    }
+  }
+
+  function openDocCollectionAmountEditor() {
+    if (!isDetail(client) || !client.document_collection) return;
+    const collection = client.document_collection;
+    setDocCollectionAmountForm({
+      collection_fee: formatAmountInput(collection.collection_fee),
+      notary_fee: formatAmountInput(collection.notary_fee),
+      manager_commission: formatAmountInput(collection.manager_commission),
+      paid_date: collection.paid_date ?? "",
+    });
+    setEditingDocCollectionAmounts(true);
+  }
+
+  async function handleUnrecordDocumentCollection() {
+    if (!client) return;
+    if (
+      !window.confirm(
+        "Снять фиксацию оплаты сбора? Клиент снова будет в статусе «ожидает оплату», суммы сохранятся.",
+      )
+    ) {
+      return;
+    }
+    setDocCollectionUnrecording(true);
+    try {
+      await documentCollectionApi.unrecordPayment(client.id);
+      await refreshClient();
+      showToast("Фиксация оплаты снята");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось снять фиксацию оплаты",
+        "error",
+      );
+    } finally {
+      setDocCollectionUnrecording(false);
     }
   }
 
@@ -1352,6 +1478,10 @@ export default function ClientDetailPage() {
       const debtError = validatePositiveAmount(convertForm.debt_amount, { label: "Сумма долга" });
       if (debtError) {
         setConvertError(debtError);
+        return;
+      }
+      if (Number(convertForm.debt_amount) < MIN_DEBT_AMOUNT) {
+        setConvertError(`Для автоматической рассрочки укажите сумму долга от ${MIN_DEBT_AMOUNT.toLocaleString("ru-RU")} ₽`);
         return;
       }
     } else if (convertForm.contract_total.trim()) {
@@ -1389,6 +1519,8 @@ export default function ClientDetailPage() {
         showToast("Клиент переведён на банкротство. Составьте график вручную.", "info");
         setActiveTab("payments");
       } else {
+        setScheduleOpen(true);
+        setActiveTab("payments");
         showToast("Клиент переведён на банкротство, график создан по тарифу");
       }
     } catch (error) {
@@ -1984,10 +2116,10 @@ export default function ClientDetailPage() {
             description={
               isBankruptcy
                 ? `Оплачено ${formatDate(docCollection.paid_date ?? client.contract_date)} · ${formatMoney(docCollection.total_amount)}`
-                : `Единоразовая оплата ${formatMoney(docCollection.total_amount)}`
+                : `Единоразовая оплата ${formatMoney(docCollection.total_amount)}. Суммы можно исправить после фиксации.`
             }
           />
-          {!isBankruptcy && docCollection.status === "pending" && editingDocCollectionAmounts ? (
+          {editingDocCollectionAmounts && canEditDocCollectionAmounts ? (
             <div className="page-stack">
               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <FormField label="В кассу, ₽">
@@ -2041,6 +2173,20 @@ export default function ClientDetailPage() {
                     )}
                   </p>
                 </FormField>
+                {docCollection.status === "paid" ? (
+                  <FormField label="Дата поступления в кассу">
+                    <Input
+                      type="date"
+                      value={docCollectionAmountForm.paid_date}
+                      onChange={(e) =>
+                        setDocCollectionAmountForm({
+                          ...docCollectionAmountForm,
+                          paid_date: e.target.value,
+                        })
+                      }
+                    />
+                  </FormField>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-3">
                 <Button
@@ -2056,9 +2202,10 @@ export default function ClientDetailPage() {
                   onClick={() => {
                     setEditingDocCollectionAmounts(false);
                     setDocCollectionAmountForm({
-                      collection_fee: docCollection.collection_fee,
-                      notary_fee: docCollection.notary_fee,
-                      manager_commission: docCollection.manager_commission,
+                      collection_fee: formatAmountInput(docCollection.collection_fee),
+                      notary_fee: formatAmountInput(docCollection.notary_fee),
+                      manager_commission: formatAmountInput(docCollection.manager_commission),
+                      paid_date: docCollection.paid_date ?? "",
                     });
                   }}
                 >
@@ -2067,7 +2214,6 @@ export default function ClientDetailPage() {
               </div>
             </div>
           ) : (
-            !isBankruptcy ? (
             <>
               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="К оплате" value={formatMoney(docCollection.total_amount)} tone="brand" />
@@ -2079,26 +2225,18 @@ export default function ClientDetailPage() {
                   tone="success"
                 />
               </div>
-              {!isBankruptcy && canEditClient && docCollection.status === "pending" && (
+              {canEditDocCollectionAmounts ? (
                 <div className="mt-4">
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={() => {
-                      setDocCollectionAmountForm({
-                        collection_fee: docCollection.collection_fee,
-                        notary_fee: docCollection.notary_fee,
-                        manager_commission: docCollection.manager_commission,
-                      });
-                      setEditingDocCollectionAmounts(true);
-                    }}
+                    onClick={openDocCollectionAmountEditor}
                   >
                     Изменить суммы сбора
                   </Button>
                 </div>
-              )}
+              ) : null}
             </>
-            ) : null
           )}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Badge tone={docCollection.status === "paid" ? "success" : "warning"}>
@@ -2131,6 +2269,17 @@ export default function ClientDetailPage() {
             </div>
           )}
           {!isBankruptcy && canRecordDocCollectionPayment && docCollection.status === "paid" && (
+            <>
+              <div className="mt-4">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={docCollectionUnrecording}
+                  onClick={handleUnrecordDocumentCollection}
+                >
+                  {docCollectionUnrecording ? "Снятие..." : "Снять фиксацию оплаты"}
+                </Button>
+              </div>
             <form onSubmit={handleConvertToBankruptcy} className="mt-3 space-y-3 border-t border-border pt-3">
               <SectionTitle
                 title="Перевести на банкротство"
@@ -2211,6 +2360,7 @@ export default function ClientDetailPage() {
                 {convertSaving ? "Перевод..." : "Перевести на банкротство"}
               </Button>
             </form>
+            </>
           )}
         </Card>
       ) : null}
@@ -2470,35 +2620,58 @@ export default function ClientDetailPage() {
                                       </div>
                                       {canManageMandatory ? (
                                         <div className="flex flex-wrap items-center gap-2">
-                                          <Input
-                                            type="date"
-                                            className="w-[150px]"
-                                            value={
-                                              mandatoryRecordDateEdits[record.id] ??
-                                              record.payment_date
-                                            }
-                                            onChange={(e) =>
-                                              setMandatoryRecordDateEdits((current) => ({
-                                                ...current,
-                                                [record.id]: e.target.value,
-                                              }))
-                                            }
-                                          />
+                                          <FormField label="Сумма, ₽">
+                                            <Input
+                                              type="number"
+                                              min={1}
+                                              step={1}
+                                              className="w-[120px]"
+                                              value={
+                                                mandatoryRecordAmountEdits[record.id] ??
+                                                formatAmountInput(record.amount)
+                                              }
+                                              onChange={(e) =>
+                                                setMandatoryRecordAmountEdits((current) => ({
+                                                  ...current,
+                                                  [record.id]: e.target.value,
+                                                }))
+                                              }
+                                            />
+                                          </FormField>
+                                          <FormField label="Дата кассы">
+                                            <Input
+                                              type="date"
+                                              className="w-[150px]"
+                                              value={
+                                                mandatoryRecordDateEdits[record.id] ??
+                                                record.payment_date
+                                              }
+                                              onChange={(e) =>
+                                                setMandatoryRecordDateEdits((current) => ({
+                                                  ...current,
+                                                  [record.id]: e.target.value,
+                                                }))
+                                              }
+                                            />
+                                          </FormField>
                                           <Button
                                             type="button"
                                             variant="secondary"
                                             disabled={
                                               savingMandatoryRecordDateId === record.id ||
-                                              (mandatoryRecordDateEdits[record.id] ??
-                                                record.payment_date) === record.payment_date
+                                              ((mandatoryRecordDateEdits[record.id] ??
+                                                record.payment_date) === record.payment_date &&
+                                                (mandatoryRecordAmountEdits[record.id] ??
+                                                  formatAmountInput(record.amount)) ===
+                                                  formatAmountInput(record.amount))
                                             }
                                             onClick={() =>
-                                              handleUpdateMandatoryRecordDate(item.id, record.id)
+                                              handleUpdateMandatoryRecord(item.id, record.id)
                                             }
                                           >
                                             {savingMandatoryRecordDateId === record.id
                                               ? "..."
-                                              : "Дата"}
+                                              : "Сохранить"}
                                           </Button>
                                           <Button
                                             type="button"
@@ -2609,10 +2782,52 @@ export default function ClientDetailPage() {
                 {scheduleError}
               </p>
             )}
+            {canEditSchedule && schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
+              <div className="mb-4 rounded-md border border-border bg-surface-muted p-3">
+                <SectionTitle
+                  title="Построить график по тарифу"
+                  description={`Укажите сумму долга от ${MIN_DEBT_AMOUNT.toLocaleString("ru-RU")} ₽ — месяцы подставятся из тарифной сетки`}
+                />
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <FormField label="Сумма долга, ₽">
+                    <Input
+                      inputMode="decimal"
+                      placeholder="350000"
+                      value={autoTierForm.debt_amount}
+                      onChange={(e) =>
+                        setAutoTierForm({
+                          ...autoTierForm,
+                          debt_amount: filterDecimalInput(e.target.value),
+                        })
+                      }
+                    />
+                  </FormField>
+                  <FormField label="Дата первого платежа">
+                    <Input
+                      type="date"
+                      value={autoTierForm.contract_date}
+                      onChange={(e) =>
+                        setAutoTierForm({
+                          ...autoTierForm,
+                          contract_date: e.target.value,
+                        })
+                      }
+                    />
+                  </FormField>
+                  <Button
+                    type="button"
+                    disabled={autoTierSaving}
+                    onClick={handleGenerateFromTier}
+                  >
+                    {autoTierSaving ? "Построение..." : "Построить автоматически"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
               <EmptyState>
                 {canEditSchedule
-                  ? "График не сформирован. Нажмите «+ Добавить месяц»."
+                  ? "График не сформирован. Постройте автоматически по сумме долга или нажмите «+ Добавить месяц»."
                   : "График не сформирован"}
               </EmptyState>
             ) : (
@@ -3148,6 +3363,23 @@ export default function ClientDetailPage() {
                     </div>
                     {isOwner && (
                       <div className="flex flex-wrap items-center gap-2">
+                        <FormField label="Сумма, ₽">
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            className="w-[120px]"
+                            value={
+                              paymentAmountEdits[payment.id] ?? formatAmountInput(payment.amount)
+                            }
+                            onChange={(e) =>
+                              setPaymentAmountEdits((current) => ({
+                                ...current,
+                                [payment.id]: e.target.value,
+                              }))
+                            }
+                          />
+                        </FormField>
                         <FormField label="Дата кассы">
                           <Input
                             type="date"
@@ -3166,12 +3398,15 @@ export default function ClientDetailPage() {
                           variant="secondary"
                           disabled={
                             savingPaymentDateId === payment.id ||
-                            (paymentDateEdits[payment.id] ?? payment.payment_date) ===
-                              payment.payment_date
+                            ((paymentDateEdits[payment.id] ?? payment.payment_date) ===
+                              payment.payment_date &&
+                              (paymentAmountEdits[payment.id] ??
+                                formatAmountInput(payment.amount)) ===
+                                formatAmountInput(payment.amount))
                           }
-                          onClick={() => handleUpdatePaymentDate(payment.id)}
+                          onClick={() => handleUpdatePayment(payment.id)}
                         >
-                          {savingPaymentDateId === payment.id ? "..." : "Дата"}
+                          {savingPaymentDateId === payment.id ? "..." : "Сохранить"}
                         </Button>
                         <Button
                           type="button"

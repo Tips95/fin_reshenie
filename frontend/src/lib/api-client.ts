@@ -439,7 +439,12 @@ export const clientsApi = {
 export const documentCollectionApi = {
   update: (
     clientId: string,
-    data: { collection_fee: string; notary_fee: string; manager_commission: string },
+    data: {
+      collection_fee: string;
+      notary_fee: string;
+      manager_commission: string;
+      paid_date?: string | null;
+    },
   ) =>
     apiFetch<import("./types").DocumentCollection>(
       `/clients/${clientId}/document-collection`,
@@ -449,6 +454,11 @@ export const documentCollectionApi = {
     apiFetch<import("./types").DocumentCollection>(
       `/clients/${clientId}/document-collection/record`,
       { method: "POST", body: JSON.stringify({ payment_date: paymentDate }) },
+    ),
+  unrecordPayment: (clientId: string) =>
+    apiFetch<import("./types").DocumentCollection>(
+      `/clients/${clientId}/document-collection/unrecord`,
+      { method: "POST" },
     ),
   convertToBankruptcy: (
     clientId: string,
@@ -627,17 +637,17 @@ export const mandatoryPaymentsApi = {
       `/clients/${clientId}/mandatory-payments/${paymentId}/records/${recordId}`,
       { method: "DELETE" },
     ),
-  updateRecordDate: (
+  updateRecord: (
     clientId: string,
     paymentId: string,
     recordId: string,
-    payment_date: string,
+    data: { payment_date?: string; amount?: string },
   ) =>
     apiFetch<MandatoryPayment>(
       `/clients/${clientId}/mandatory-payments/${paymentId}/records/${recordId}`,
       {
         method: "PATCH",
-        body: JSON.stringify({ payment_date }),
+        body: JSON.stringify(data),
       },
     ),
 };
@@ -648,6 +658,14 @@ export const installmentApi = {
   update: (clientId: string, planId: string, data: { total_amount: string }) =>
     apiFetch<InstallmentPlan>(`/clients/${clientId}/installment-plans/${planId}`, {
       method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  generateFromTier: (
+    clientId: string,
+    data: { debt_amount: string; contract_date?: string },
+  ) =>
+    apiFetch<InstallmentPlan>(`/clients/${clientId}/installment-plans/from-tier`, {
+      method: "POST",
       body: JSON.stringify(data),
     }),
   schedule: (clientId: string, planId: string) =>
@@ -664,7 +682,7 @@ export const paymentsApi = {
   create: (data: Record<string, unknown>) =>
     apiFetch<Payment>("/payments", { method: "POST", body: JSON.stringify(data) }),
   delete: (id: string) => apiFetch<void>(`/payments/${id}`, { method: "DELETE" }),
-  update: (id: string, data: { payment_date: string }) =>
+  update: (id: string, data: { payment_date?: string; amount?: string; comment?: string }) =>
     apiFetch<Payment>(`/payments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 };
 

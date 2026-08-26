@@ -19,8 +19,10 @@ from app.services.access import ensure_client_write_access
 from app.services.audit import log_audit
 from app.services.document_collection import (
     convert_client_to_bankruptcy,
+    get_document_collection,
     record_document_collection_payment,
     to_document_collection_response,
+    unrecord_document_collection_payment,
     update_document_collection_amounts,
 )
 
@@ -38,23 +40,36 @@ def patch_document_collection(
     db: Session = Depends(get_db),
 ) -> DocumentCollectionResponse:
     client = ensure_client_write_access(db, current_user, client_id)
+    existing = get_document_collection(db, client.id)
+    old_values = {
+        "collection_fee": existing.collection_fee if existing is not None else None,
+        "notary_fee": existing.notary_fee if existing is not None else None,
+        "manager_commission": existing.manager_commission if existing is not None else None,
+        "total_amount": existing.total_amount if existing is not None else None,
+        "paid_date": existing.paid_date if existing is not None else None,
+    }
     item = update_document_collection_amounts(
         db,
         client,
         collection_fee=payload.collection_fee,
         notary_fee=payload.notary_fee,
         manager_commission=payload.manager_commission,
+        actor_role=current_user.role,
+        paid_date=payload.paid_date,
     )
-    log_audit(
-        db,
-        user=current_user,
-        entity_type="document_collection",
-        entity_id=item.id,
-        action=AuditAction.UPDATE,
-        field_name="amounts",
-        old_value=None,
-        new_value=str(item.total_amount),
-    )
+    for field_name, old_value in old_values.items():
+        new_value = getattr(item, field_name)
+        if old_value != new_value:
+            log_audit(
+                db,
+                user=current_user,
+                entity_type="document_collection",
+                entity_id=item.id,
+                action=AuditAction.UPDATE,
+                field_name=field_name,
+                old_value=old_value,
+                new_value=new_value,
+            )
     db.commit()
     db.refresh(item)
     return to_document_collection_response(item)
@@ -81,6 +96,32 @@ def record_document_collection(
         field_name="status",
         old_value="pending",
         new_value="paid",
+    )
+    db.commit()
+    db.refresh(item)
+    return to_document_collection_response(item)
+
+
+@router.post(
+    "/{client_id}/document-collection/unrecord",
+    response_model=DocumentCollectionResponse,
+)
+def unrecord_document_collection(
+    client_id: UUID,
+    current_user: User = Depends(require_owner_or_manager),
+    db: Session = Depends(get_db),
+) -> DocumentCollectionResponse:
+    client = ensure_client_write_access(db, current_user, client_id)
+    item = unrecord_document_collection_payment(db, client)
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="document_collection",
+        entity_id=item.id,
+        action=AuditAction.UPDATE,
+        field_name="status",
+        old_value="paid",
+        new_value="pending",
     )
     db.commit()
     db.refresh(item)

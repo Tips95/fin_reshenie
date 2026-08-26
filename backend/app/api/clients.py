@@ -200,15 +200,45 @@ def _create_installment_for_client(
             ),
         )
 
-    plan = InstallmentPlan(
-        client_id=client.id,
-        pricing_tier_id=tier.id,
-        total_amount=tier.total_cost,
-        start_date=client.contract_date,
-        total_months=tier.total_months,
+    existing = db.scalar(
+        select(InstallmentPlan)
+        .where(InstallmentPlan.client_id == client.id)
+        .order_by(InstallmentPlan.created_at.desc())
     )
-    db.add(plan)
-    db.flush()
+    if existing is not None:
+        paid_exists = db.scalar(
+            select(Payment.id)
+            .where(Payment.client_id == client.id, Payment.is_deleted.is_(False))
+            .limit(1)
+        )
+        if paid_exists is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Нельзя построить график по тарифу: по клиенту уже есть внесённые платежи",
+            )
+        existing_rows = list(
+            db.scalars(
+                select(PaymentSchedule).where(PaymentSchedule.installment_plan_id == existing.id)
+            )
+        )
+        for row in existing_rows:
+            db.delete(row)
+        db.flush()
+        existing.pricing_tier_id = tier.id
+        existing.total_amount = tier.total_cost
+        existing.start_date = client.contract_date
+        existing.total_months = tier.total_months
+        plan = existing
+    else:
+        plan = InstallmentPlan(
+            client_id=client.id,
+            pricing_tier_id=tier.id,
+            total_amount=tier.total_cost,
+            start_date=client.contract_date,
+            total_months=tier.total_months,
+        )
+        db.add(plan)
+        db.flush()
 
     schedules = create_payment_schedule_models(
         pricing_tier=tier,
@@ -216,6 +246,7 @@ def _create_installment_for_client(
         installment_plan_id=plan.id,
     )
     db.add_all(schedules)
+    db.flush()
     return plan
 
 
