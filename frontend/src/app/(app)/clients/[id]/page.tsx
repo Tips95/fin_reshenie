@@ -1229,6 +1229,8 @@ export default function ClientDetailPage() {
       setAutoTierSaving(false);
     }
   }
+
+  async function handleSaveContractAndSchedule() {
     if (!client || !isDetail(client) || !client.installment_plan) return;
 
     const draftPlanned = computeScheduleDraftPlannedTotal(client.payment_schedule, scheduleDraft);
