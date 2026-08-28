@@ -32,6 +32,10 @@ import type {
   User,
   Questionnaire,
   QuestionnaireBrief,
+  CivilCase,
+  CivilCaseBrief,
+  CivilCaseDocumentKind,
+  CivilCaseExecutorOption,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -499,6 +503,37 @@ export const questionnairesApi = {
     }),
   downloadPdf: (id: string, fallbackFilename = "anketa.pdf") =>
     downloadFile(`/questionnaires/${id}/pdf`, fallbackFilename),
+};
+
+export const civilCasesApi = {
+  list: (params?: { search?: string; stage?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.search) search.set("search", params.search);
+    if (params?.stage) search.set("stage", params.stage);
+    const query = search.toString();
+    return apiFetch<CivilCaseBrief[]>(`/civil-cases${query ? `?${query}` : ""}`);
+  },
+  executors: () => apiFetch<CivilCaseExecutorOption[]>("/civil-cases/executors"),
+  get: (id: string) => apiFetch<CivilCase>(`/civil-cases/${id}`),
+  create: (data: Record<string, unknown>) =>
+    apiFetch<CivilCase>("/civil-cases", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: Record<string, unknown>) =>
+    apiFetch<CivilCase>(`/civil-cases/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  remove: (id: string) => apiFetch<void>(`/civil-cases/${id}`, { method: "DELETE" }),
+  addMovement: (id: string, body: string) =>
+    apiFetch<CivilCase>(`/civil-cases/${id}/movements`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  uploadDocument: (id: string, file: File, kind: CivilCaseDocumentKind) =>
+    uploadFile<CivilCase>(`/civil-cases/${id}/documents?kind=${kind}`, file),
+  downloadDocument: (caseId: string, documentId: string, fallbackFilename: string) =>
+    downloadFile(`/civil-cases/${caseId}/documents/${documentId}`, fallbackFilename),
+  deleteDocument: (caseId: string, documentId: string) =>
+    apiFetch<CivilCase>(`/civil-cases/${caseId}/documents/${documentId}`, { method: "DELETE" }),
 };
 
 export const auditApi = {

@@ -11,6 +11,7 @@ class UserRole(str, enum.Enum):
     MANAGER = "manager"
     CALL_CENTER = "call_center"
     INVESTOR = "investor"
+    EXECUTOR = "executor"
 
 
 class ClientStatus(str, enum.Enum):
@@ -113,3 +114,15 @@ class RetailOverdueStatus(str, enum.Enum):
     PROMISED = "promised"
     NO_CONTACT = "no_contact"
     CLOSED = "closed"
+
+
+class CivilCaseStage(str, enum.Enum):
+    INTAKE = "intake"
+    DOCUMENTS = "documents"
+    SUBMITTED = "submitted"
+    COMPLETED = "completed"
+
+
+class CivilCaseDocumentKind(str, enum.Enum):
+    CLIENT = "client"
+    PREPARED = "prepared"

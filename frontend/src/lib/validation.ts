@@ -210,3 +210,16 @@ export function validatePdfFile(file: File): string | null {
   }
   return null;
 }
+
+const DOCUMENT_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx"];
+
+export function validateDocumentFile(file: File): string | null {
+  const name = file.name.toLowerCase();
+  if (!DOCUMENT_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+    return "Допустимы PDF, JPG, PNG, WEBP, DOC и DOCX";
+  }
+  if (file.size > MAX_PDF_SIZE_BYTES) {
+    return "Файл слишком большой (максимум 10 МБ)";
+  }
+  return null;
+}

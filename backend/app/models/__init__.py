@@ -1,5 +1,6 @@
 from app.models.audit_log import AuditLog
 from app.models.base import Base
+from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovement
 from app.models.client import Client
 from app.models.client_mandatory_payment import ClientMandatoryPayment
 from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRecord
@@ -26,6 +27,9 @@ __all__ = [
     "AuditLog",
     "Base",
     "Client",
+    "CivilCase",
+    "CivilCaseDocument",
+    "CivilCaseMovement",
     "ClientMandatoryPayment",
     "ClientMandatoryPaymentRecord",
     "ClientQuestionnaire",

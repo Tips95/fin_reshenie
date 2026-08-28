@@ -85,6 +85,7 @@ export function statusLabel(status: string): string {
     manager: "Менеджер",
     call_center: "Сбор документов",
     investor: "Инвестор",
+    executor: "Исполнитель",
     salary: "Зарплата",
     rent: "Аренда",
     utilities: "Коммунальные",
@@ -137,6 +138,27 @@ export function overdueBucketLabel(days: number | null): string {
   if (days >= 8) return "8–14 дней";
   if (days >= 4) return "4–7 дней";
   return "1–3 дня";
+}
+
+export function civilCaseStageLabel(stage: string): string {
+  const labels: Record<string, string> = {
+    intake: "Новое",
+    documents: "Подготовка документов",
+    submitted: "Подано в орган",
+    completed: "Исполнено",
+  };
+  return labels[stage] ?? stage;
+}
+
+export function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Moscow",
+  }).format(new Date(value));
 }
 
 export function isFullClient(client: unknown): client is import("./types").Client {

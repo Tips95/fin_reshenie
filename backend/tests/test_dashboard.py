@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from app.models.enums import ClientStatus, EngagementStage, UserRole
-from app.services.dashboard import get_dashboard_summary
+from app.services.dashboard import CivilIncomeStats, get_dashboard_summary
 
 
 ORG_ID = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -37,6 +37,13 @@ def make_client(
         assigned_manager_id=USER_ID,
         contract_date=contract_date or date.today(),
         engagement_stage=engagement_stage,
+    )
+
+
+def patch_civil_income(monkeypatch, stats: CivilIncomeStats | None = None) -> None:
+    monkeypatch.setattr(
+        "app.services.dashboard.get_civil_income_stats",
+        lambda *_args, **_kwargs: stats or CivilIncomeStats(),
     )
 
 
@@ -109,6 +116,7 @@ class TestDashboardSummary:
             "app.services.dashboard.monthly_expenses_total",
             lambda *_args, **_kwargs: (Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
+        patch_civil_income(monkeypatch)
 
         summary = get_dashboard_summary(db, make_user())
 
@@ -124,6 +132,8 @@ class TestDashboardSummary:
         assert summary.mandatory_paid_total.total == Decimal("0.00")
         assert summary.org_profit_total == Decimal("3000.00")
         assert summary.net_profit_this_month == Decimal("3000.00")
+        assert summary.civil_income_this_month == Decimal("0.00")
+        assert summary.civil_income_total == Decimal("0.00")
 
     def test_manager_gets_counts_without_financial_metrics(self, monkeypatch):
         client = make_client()
@@ -295,6 +305,15 @@ class TestDashboardSummary:
             "app.services.dashboard.monthly_expenses_total",
             lambda *_args, **_kwargs: (Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
+        patch_civil_income(
+            monkeypatch,
+            CivilIncomeStats(
+                cases_total=3,
+                cases_this_month=1,
+                income_total=Decimal("45000.00"),
+                income_this_month=Decimal("12000.00"),
+            ),
+        )
 
         summary = get_dashboard_summary(db, make_user())
 
@@ -302,6 +321,11 @@ class TestDashboardSummary:
         assert summary.cash_received_this_month == Decimal("10000.00")
         assert summary.document_collection_this_month.collection_cash == Decimal("10000.00")
         assert summary.net_profit_this_month == Decimal("10000.00")
+        assert summary.org_profit_total == Decimal("10000.00")
+        assert summary.civil_income_this_month == Decimal("12000.00")
+        assert summary.civil_income_total == Decimal("45000.00")
+        assert summary.civil_cases_this_month == 1
+        assert summary.civil_cases_total == 3
 
     def test_call_center_gets_limited_summary(self, monkeypatch):
         client = make_client()

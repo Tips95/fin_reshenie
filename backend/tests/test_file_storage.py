@@ -48,3 +48,16 @@ def test_save_and_delete_roundtrip() -> None:
     assert path.exists()
     file_storage.delete_storage_key(key)
     assert not path.exists()
+
+
+@pytest.mark.asyncio
+async def test_read_and_validate_document_accepts_pdf() -> None:
+    upload = UploadFile(
+        filename="isk.pdf",
+        file=BytesIO(b"%PDF-1.4 civil case"),
+        headers={"content-type": "application/pdf"},
+    )
+    content, filename, content_type = await file_storage.read_and_validate_document(upload)
+    assert filename == "isk.pdf"
+    assert content_type == "application/pdf"
+    assert content.startswith(b"%PDF")

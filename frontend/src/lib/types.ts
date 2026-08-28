@@ -1,4 +1,4 @@
-export type UserRole = "owner" | "manager" | "call_center" | "investor";
+export type UserRole = "owner" | "manager" | "call_center" | "investor" | "executor";
 
 export type OrganizationType = "bankruptcy" | "retail";
 
@@ -303,6 +303,10 @@ export interface DashboardSummary {
   contracts_signed_this_month: number;
   org_profit_total: string;
   net_profit_this_month: string;
+  civil_cases_total: number;
+  civil_cases_this_month: number;
+  civil_income_total: string;
+  civil_income_this_month: string;
   open_tasks_count: number;
   overdue_clients_preview: DashboardOverdueClientItem[];
 }
@@ -627,4 +631,62 @@ export interface Questionnaire extends QuestionnaireBrief {
   assets?: QuestionnaireAsset[];
   documents?: QuestionnaireDocumentItem[];
 }
+
+export type CivilCaseStage = "intake" | "documents" | "submitted" | "completed";
+export type CivilCaseDocumentKind = "client" | "prepared";
+
+export interface CivilCaseExecutorOption {
+  id: string;
+  full_name: string;
+}
+
+export interface CivilCaseMovement {
+  id: string;
+  body: string;
+  created_by_id: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface CivilCaseDocument {
+  id: string;
+  kind: CivilCaseDocumentKind;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  uploaded_by_id: string | null;
+  uploaded_by_name: string | null;
+  created_at: string;
+}
+
+export interface CivilCaseBrief {
+  id: string;
+  full_name: string;
+  phone: string;
+  price: string;
+  appeal_date: string;
+  subject: string;
+  stage: CivilCaseStage;
+  assigned_executor_id: string | null;
+  assigned_executor_name: string | null;
+  created_by_id: string | null;
+  created_by_name: string | null;
+  documents_prepared_at: string | null;
+  submitted_at: string | null;
+  executed_at: string | null;
+  documents_count: number;
+  client_documents_count: number;
+  prepared_documents_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CivilCase extends CivilCaseBrief {
+  documents_note: string | null;
+  authority_name: string | null;
+  execution_note: string | null;
+  movements: CivilCaseMovement[];
+  documents: CivilCaseDocument[];
+}
+
 

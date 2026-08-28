@@ -1,10 +1,12 @@
 from calendar import monthrange
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
+from app.models.civil_case import CivilCase
 from app.models.client import Client
 from app.models.enums import ClientStatus, EngagementStage, TaskStatus, UserRole
 from app.models.installment_plan import InstallmentPlan
@@ -87,6 +89,53 @@ def _to_document_collection_breakdown(totals) -> DocumentCollectionBreakdown:
         notary_fee=totals.notary_fee,
         manager_commission=totals.manager_commission,
         paid_count=totals.paid_count,
+    )
+
+
+@dataclass(frozen=True)
+class CivilIncomeStats:
+    cases_total: int = 0
+    cases_this_month: int = 0
+    income_total: Decimal = Decimal("0.00")
+    income_this_month: Decimal = Decimal("0.00")
+
+
+def _as_money(value) -> Decimal:
+    if value is None:
+        return Decimal("0.00")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def get_civil_income_stats(
+    db: Session,
+    organization_id,
+    *,
+    month_start: date,
+    month_end: date,
+) -> CivilIncomeStats:
+    org_filter = CivilCase.organization_id == organization_id
+    cases_total = db.scalar(select(func.count()).select_from(CivilCase).where(org_filter)) or 0
+    income_total = _as_money(
+        db.scalar(select(func.coalesce(func.sum(CivilCase.price), 0)).where(org_filter))
+    )
+    month_filters = (
+        org_filter,
+        CivilCase.appeal_date >= month_start,
+        CivilCase.appeal_date <= month_end,
+    )
+    cases_this_month = (
+        db.scalar(select(func.count()).select_from(CivilCase).where(*month_filters)) or 0
+    )
+    income_this_month = _as_money(
+        db.scalar(select(func.coalesce(func.sum(CivilCase.price), 0)).where(*month_filters))
+    )
+    return CivilIncomeStats(
+        cases_total=int(cases_total),
+        cases_this_month=int(cases_this_month),
+        income_total=income_total,
+        income_this_month=income_this_month,
     )
 
 
@@ -207,6 +256,10 @@ def get_dashboard_summary(
             contracts_signed_this_month=0,
             org_profit_total=Decimal("0.00"),
             net_profit_this_month=Decimal("0.00"),
+            civil_cases_total=0,
+            civil_cases_this_month=0,
+            civil_income_total=Decimal("0.00"),
+            civil_income_this_month=Decimal("0.00"),
             open_tasks_count=open_tasks_count,
             overdue_clients_preview=overdue_clients_preview,
         )
@@ -307,6 +360,12 @@ def get_dashboard_summary(
         - mandatory_paid_this_month.total
         - monthly_expenses
     )
+    civil_income = get_civil_income_stats(
+        db,
+        user.organization_id,
+        month_start=month_start,
+        month_end=month_end,
+    )
 
     return DashboardSummary(
         period_month=period_month,
@@ -333,6 +392,10 @@ def get_dashboard_summary(
         contracts_signed_this_month=contracts_signed_this_month,
         org_profit_total=org_profit_total,
         net_profit_this_month=net_profit_this_month,
+        civil_cases_total=civil_income.cases_total,
+        civil_cases_this_month=civil_income.cases_this_month,
+        civil_income_total=civil_income.income_total,
+        civil_income_this_month=civil_income.income_this_month,
         open_tasks_count=open_tasks_count,
         overdue_clients_preview=overdue_clients_preview,
     )

@@ -55,5 +55,9 @@ class DashboardSummary(BaseModel):
     contracts_signed_this_month: int
     org_profit_total: Decimal
     net_profit_this_month: Decimal
+    civil_cases_total: int = 0
+    civil_cases_this_month: int = 0
+    civil_income_total: Decimal = Decimal("0.00")
+    civil_income_this_month: Decimal = Decimal("0.00")
     open_tasks_count: int = 0
     overdue_clients_preview: list[DashboardOverdueClientItem] = []

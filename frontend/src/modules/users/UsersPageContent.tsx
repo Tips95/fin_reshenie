@@ -64,6 +64,7 @@ function toEditForm(user: User): EditForm {
 function roleTone(role: UserRole): "default" | "success" | "warning" | "danger" {
   if (role === "owner") return "warning";
   if (role === "manager") return "success";
+  if (role === "executor") return "warning";
   return "default";
 }
 
@@ -305,6 +306,9 @@ export function UsersPageContent({
             >
               <option value="manager">Менеджер</option>
               <option value="call_center">Сбор документов</option>
+              {currentUser?.organization_type !== "retail" ? (
+                <option value="executor">Исполнитель</option>
+              ) : null}
               <option value="owner">Руководитель</option>
             </Select>
             <label className="flex items-center gap-2 text-sm text-foreground">
@@ -409,6 +413,9 @@ export function UsersPageContent({
                               >
                                 <option value="manager">Менеджер</option>
                                 <option value="call_center">Сбор документов</option>
+                                {currentUser?.organization_type !== "retail" ? (
+                                  <option value="executor">Исполнитель</option>
+                                ) : null}
                                 <option value="owner">Руководитель</option>
                               </Select>
                             </FormField>

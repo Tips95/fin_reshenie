@@ -19,6 +19,7 @@ const DASHBOARD_SECTIONS = [
   { id: "dash-clients", label: "Клиенты" },
   { id: "dash-activity", label: "Активность" },
   { id: "dash-income", label: "Рассрочка" },
+  { id: "dash-civil", label: "Гражданка" },
   { id: "dash-profit", label: "Прибыль" },
   { id: "dash-collection", label: "Сбор" },
   { id: "dash-mandatory", label: "Обязательные" },
@@ -93,6 +94,10 @@ function normalizeSummary(data: DashboardSummary): DashboardSummary {
     document_collection_total: data.document_collection_total ?? emptyCollection(),
     document_collection_this_month: data.document_collection_this_month ?? emptyCollection(),
     contracts_signed_this_month: data.contracts_signed_this_month ?? 0,
+    civil_cases_total: data.civil_cases_total ?? 0,
+    civil_cases_this_month: data.civil_cases_this_month ?? 0,
+    civil_income_total: data.civil_income_total ?? "0",
+    civil_income_this_month: data.civil_income_this_month ?? "0",
     open_tasks_count: data.open_tasks_count ?? 0,
     overdue_clients_preview: data.overdue_clients_preview ?? [],
   };
@@ -296,12 +301,17 @@ export default function DashboardPage() {
                 hint="Рассрочка + сбор документов"
               />
               <StatCard
+                label={`Доход от гражданки за ${monthLabel}`}
+                value={formatMoney(summary.civil_income_this_month)}
+                tone="brand"
+                hint="Отдельно от рассрочки, по дате обращения"
+              />
+              <StatCard
                 label="Сумма просрочки"
                 value={formatMoney(summary.overdue_amount)}
                 tone="danger"
                 hint={`${summary.clients_overdue} клиентов`}
               />
-              <StatCard label="Всего клиентов" value={summary.clients_total} tone="brand" />
             </>
           ) : (
             <>
@@ -444,10 +454,40 @@ export default function DashboardPage() {
           </DashboardSection>
 
           <DashboardSection
+            id="dash-civil"
+            tone="income"
+            title="Гражданские дела"
+            description="Доход по цене дел, отдельно от рассрочки. За месяц — по дате обращения"
+            action={
+              <Link
+                href="/civil-cases"
+                className="interactive text-xs font-semibold text-status-success-text hover:opacity-80"
+              >
+                Гражданские дела →
+              </Link>
+            }
+          >
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label={`Доход за ${monthLabel}`}
+                value={formatMoney(summary.civil_income_this_month)}
+                tone="success"
+              />
+              <StatCard label="Доход всего" value={formatMoney(summary.civil_income_total)} />
+              <StatCard
+                label={`Дел за ${monthLabel}`}
+                value={summary.civil_cases_this_month}
+                tone="brand"
+              />
+              <StatCard label="Всего дел" value={summary.civil_cases_total} />
+            </div>
+          </DashboardSection>
+
+          <DashboardSection
             id="dash-profit"
             tone="profit"
             title="Прибыль"
-            description="Итог: рассрочка + касса сбора − обязательные (по дате внесения) − расходы"
+            description="Итог по банкротству: рассрочка + касса сбора − обязательные (по дате внесения) − расходы. Гражданские дела сюда не входят"
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <StatCard

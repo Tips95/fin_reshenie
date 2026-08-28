@@ -4,6 +4,7 @@ from app.api import (
     analytics,
     audit_logs,
     auth,
+    civil_cases,
     clients,
     dashboard,
     document_collection,
@@ -64,5 +65,10 @@ api_router.include_router(
     questionnaires.router,
     prefix="/questionnaires",
     tags=["questionnaires"],
+)
+api_router.include_router(
+    civil_cases.router,
+    prefix="/civil-cases",
+    tags=["civil-cases"],
 )
 api_router.include_router(retail.router, prefix="/retail", tags=["retail"])

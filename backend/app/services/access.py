@@ -46,6 +46,7 @@ def manager_can_access_client(client: Client, user: User) -> bool:
 
 
 def ensure_client_read_access(db: Session, user: User, client_id: UUID) -> Client:
+    ensure_bankruptcy_client_module(user)
     client = get_organization_client(db, client_id=client_id, organization_id=user.organization_id)
     if user.role == UserRole.MANAGER and not manager_can_access_client(client, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к клиенту")
@@ -58,7 +59,16 @@ def ensure_client_write_access(db: Session, user: User, client_id: UUID) -> Clie
     return ensure_client_read_access(db, user, client_id)
 
 
+def ensure_bankruptcy_client_module(user: User) -> None:
+    if user.role == UserRole.EXECUTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Исполнитель работает только с разделом «Гражданские дела»",
+        )
+
+
 def apply_client_visibility_filter(stmt: Select, user: User) -> Select:
+    ensure_bankruptcy_client_module(user)
     stmt = stmt.where(Client.organization_id == user.organization_id, Client.is_deleted.is_(False))
     if user.role == UserRole.MANAGER:
         stmt = stmt.where(

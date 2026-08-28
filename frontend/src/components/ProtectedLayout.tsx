@@ -13,6 +13,10 @@ function isRetailPath(pathname: string): boolean {
   return pathname.startsWith("/retail");
 }
 
+function isCivilCasesPath(pathname: string): boolean {
+  return pathname.startsWith("/civil-cases");
+}
+
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -31,7 +35,11 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!retailUser && isRetailPath(pathname)) {
-      router.replace("/");
+      router.replace(legalHomePath(user));
+      return;
+    }
+    if (!retailUser && user.role === "executor" && !isCivilCasesPath(pathname)) {
+      router.replace("/civil-cases");
       return;
     }
     if (!retailUser && isCollectionStaff(user) && pathname === "/") {

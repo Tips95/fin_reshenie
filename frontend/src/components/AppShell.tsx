@@ -8,7 +8,7 @@ import { LogoMark } from "@/components/ui";
 import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff } from "@/lib/organization-features";
+import { canUseCivilCases, canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff, isCivilExecutor } from "@/lib/organization-features";
 import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -20,6 +20,13 @@ const navItems = [
     label: "Анкеты",
     icon: "▤",
     shortLabel: "Анкеты",
+  },
+  {
+    href: "/civil-cases",
+    label: "Гражданские дела",
+    icon: "⚖",
+    shortLabel: "Гражд.",
+    roles: ["owner", "manager", "executor"],
   },
   {
     href: "/clients/collection",
@@ -80,6 +87,7 @@ const navItems = [
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
   if (pathname.startsWith("/questionnaires")) return "Анкеты";
+  if (pathname.startsWith("/civil-cases")) return "Гражданские дела";
   if (pathname.startsWith("/clients/collection")) return "Сбор документов";
   if (pathname.startsWith("/clients/contracts")) return "Договоры";
   if (pathname.startsWith("/clients/")) return "Карточка клиента";
@@ -114,8 +122,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const companyName = user?.organization_name || WORKSPACE_LABELS.legal;
 
   const visibleNav = navItems.filter((item) => {
+    if (isCivilExecutor(user)) return item.href === "/civil-cases";
     if (item.hideFor?.includes(user?.role ?? "")) return false;
     if (item.href === "/questionnaires") return canUseQuestionnaires(user);
+    if (item.href === "/civil-cases") return canUseCivilCases(user);
     if (item.ownerOnly && user?.role !== "owner") return false;
     if (item.roles && !item.roles.includes(user?.role ?? "")) return false;
     if (item.feature && !features[item.feature]) return false;
@@ -123,9 +133,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   const mobilePrimary = (
-    isCollectionStaff(user)
-      ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
-      : ["/", "/questionnaires", "/clients/contracts", "/tasks"]
+    isCivilExecutor(user)
+      ? ["/civil-cases"]
+      : isCollectionStaff(user)
+        ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
+        : ["/", "/questionnaires", "/civil-cases", "/clients/contracts"]
   ).filter((href) => visibleNav.some((item) => item.href === href));
 
   return (

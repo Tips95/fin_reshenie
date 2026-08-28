@@ -16,7 +16,8 @@ from app.services.audit import log_audit
 
 router = APIRouter()
 
-TEAM_ROLES = {UserRole.OWNER, UserRole.MANAGER, UserRole.CALL_CENTER}
+LEGAL_TEAM_ROLES = {UserRole.OWNER, UserRole.MANAGER, UserRole.CALL_CENTER, UserRole.EXECUTOR}
+RETAIL_TEAM_ROLES = {UserRole.OWNER, UserRole.MANAGER, UserRole.CALL_CENTER}
 INVESTOR_VIA_USERS_MESSAGE = "Инвесторов добавляйте в разделе «Инвесторы»"
 
 
@@ -28,7 +29,13 @@ def _assert_team_role(role: UserRole, *, organization_type: OrganizationType) ->
             if organization_type == OrganizationType.RETAIL
             else "Роль инвестора доступна только в товарной рассрочке",
         )
-    if role not in TEAM_ROLES:
+    allowed = RETAIL_TEAM_ROLES if organization_type == OrganizationType.RETAIL else LEGAL_TEAM_ROLES
+    if role == UserRole.EXECUTOR and organization_type != OrganizationType.BANKRUPTCY:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Роль исполнителя доступна только в юридической компании",
+        )
+    if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Недопустимая роль для команды",

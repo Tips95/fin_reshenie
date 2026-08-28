@@ -67,4 +67,5 @@ def require_roles(*allowed_roles: UserRole):
 require_owner = require_roles(UserRole.OWNER)
 require_owner_or_manager = require_roles(UserRole.OWNER, UserRole.MANAGER)
 require_legal_staff = require_roles(UserRole.OWNER, UserRole.MANAGER, UserRole.CALL_CENTER)
+require_civil_staff = require_roles(UserRole.OWNER, UserRole.MANAGER, UserRole.EXECUTOR)
 require_any_authenticated = get_current_active_user
