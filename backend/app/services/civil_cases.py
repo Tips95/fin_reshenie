@@ -7,7 +7,14 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovement
-from app.models.enums import AuditAction, CivilCaseDocumentKind, CivilCaseStage, OrganizationType, UserRole
+from app.models.enums import (
+    AuditAction,
+    CivilCaseDocumentKind,
+    CivilCaseStage,
+    OrganizationType,
+    UserRole,
+    parse_user_role,
+)
 from app.models.user import User
 from app.schemas.civil_case import (
     CivilCaseBrief,
@@ -28,7 +35,15 @@ from app.services.file_storage import (
 )
 
 
-INTAKE_FIELDS = {"full_name", "phone", "price", "appeal_date", "subject", "assigned_executor_id"}
+INTAKE_FIELDS = {
+    "full_name",
+    "phone",
+    "price",
+    "appeal_date",
+    "subject",
+    "assigned_executor_id",
+    "concluding_manager_id",
+}
 WORK_FIELDS = {
     "documents_prepared_at",
     "documents_note",
@@ -37,6 +52,9 @@ WORK_FIELDS = {
     "executed_at",
     "execution_note",
 }
+
+CONCLUDING_MANAGER_ROLES = {UserRole.OWNER, UserRole.MANAGER}
+EXECUTOR_ROLES = {UserRole.EXECUTOR, UserRole.OWNER, UserRole.MANAGER}
 
 
 def ensure_legal_org(user: User) -> None:
@@ -66,10 +84,16 @@ def can_work_civil_case(user: User, case: CivilCase) -> bool:
     return can_view_civil_case(user, case)
 
 
-def can_upload_document_kind(user: User, kind: CivilCaseDocumentKind) -> bool:
+def can_upload_document_kind(
+    user: User,
+    kind: CivilCaseDocumentKind,
+    case: CivilCase | None = None,
+) -> bool:
     if kind == CivilCaseDocumentKind.CLIENT:
         return can_manage_intake(user)
-    return user.role == UserRole.EXECUTOR
+    if user.role == UserRole.EXECUTOR:
+        return True
+    return case is not None and can_manage_intake(user) and case.assigned_executor_id == user.id
 
 
 def can_delete_document_kind(user: User, kind: CivilCaseDocumentKind) -> bool:
@@ -88,6 +112,7 @@ def _case_load_options():
     return (
         joinedload(CivilCase.executor),
         joinedload(CivilCase.created_by),
+        joinedload(CivilCase.concluding_manager),
         selectinload(CivilCase.movements).joinedload(CivilCaseMovement.created_by),
         selectinload(CivilCase.documents).joinedload(CivilCaseDocument.uploaded_by),
     )
@@ -118,39 +143,114 @@ def sync_civil_case_stage(case: CivilCase) -> None:
         case.stage = CivilCaseStage.INTAKE
 
 
-def _get_executor(db: Session, *, organization_id: UUID, executor_id: UUID | None) -> User | None:
-    if executor_id is None:
-        return None
-    executor = db.scalar(
+def _staff_option(item: User) -> CivilCaseExecutorOption:
+    return CivilCaseExecutorOption(
+        id=item.id,
+        full_name=item.full_name,
+        role=parse_user_role(item.role).value,
+    )
+
+
+def _list_staff(
+    db: Session,
+    *,
+    organization_id: UUID,
+    roles: set[UserRole],
+) -> list[User]:
+    return list(
+        db.scalars(
+            select(User)
+            .where(
+                User.organization_id == organization_id,
+                User.role.in_(roles),
+                User.is_active.is_(True),
+            )
+            .order_by(User.full_name)
+        )
+    )
+
+
+def _get_org_user(
+    db: Session,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+    roles: set[UserRole],
+    missing_detail: str,
+) -> User:
+    item = db.scalar(
         select(User).where(
-            User.id == executor_id,
+            User.id == user_id,
             User.organization_id == organization_id,
-            User.role == UserRole.EXECUTOR,
+            User.role.in_(roles),
             User.is_active.is_(True),
         )
     )
-    if executor is None:
+    if item is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Выберите активного исполнителя",
+            detail=missing_detail,
         )
-    return executor
+    return item
+
+
+def _get_executor(db: Session, *, organization_id: UUID, executor_id: UUID | None) -> User | None:
+    if executor_id is None:
+        return None
+    return _get_org_user(
+        db,
+        organization_id=organization_id,
+        user_id=executor_id,
+        roles=EXECUTOR_ROLES,
+        missing_detail="Выберите активного исполнителя или укажите себя, если сделали сами",
+    )
+
+
+def _get_concluding_manager(
+    db: Session,
+    *,
+    organization_id: UUID,
+    manager_id: UUID | None,
+) -> User:
+    if manager_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Укажите менеджера, кто заключил клиента",
+        )
+    return _get_org_user(
+        db,
+        organization_id=organization_id,
+        user_id=manager_id,
+        roles=CONCLUDING_MANAGER_ROLES,
+        missing_detail="Укажите менеджера, кто заключил клиента",
+    )
 
 
 def list_executors(db: Session, user: User) -> list[CivilCaseExecutorOption]:
     ensure_legal_org(user)
     if not can_manage_intake(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
-    rows = db.scalars(
-        select(User)
-        .where(
-            User.organization_id == user.organization_id,
-            User.role == UserRole.EXECUTOR,
-            User.is_active.is_(True),
-        )
-        .order_by(User.full_name)
+    dedicated = _list_staff(db, organization_id=user.organization_id, roles={UserRole.EXECUTOR})
+    self_executors = _list_staff(
+        db,
+        organization_id=user.organization_id,
+        roles=CONCLUDING_MANAGER_ROLES,
     )
-    return [CivilCaseExecutorOption(id=item.id, full_name=item.full_name) for item in rows]
+    return [_staff_option(item) for item in [*dedicated, *self_executors]]
+
+
+def list_managers(db: Session, user: User) -> list[CivilCaseExecutorOption]:
+    ensure_legal_org(user)
+    if not can_manage_intake(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+    return [
+        _staff_option(item)
+        for item in _list_staff(
+            db,
+            organization_id=user.organization_id,
+            roles=CONCLUDING_MANAGER_ROLES,
+        )
+    ]
 
 
 def list_civil_cases(
@@ -166,6 +266,7 @@ def list_civil_cases(
         .options(
             joinedload(CivilCase.executor),
             joinedload(CivilCase.created_by),
+            joinedload(CivilCase.concluding_manager),
             selectinload(CivilCase.documents),
         )
         .where(CivilCase.organization_id == user.organization_id)
@@ -193,10 +294,16 @@ def create_civil_case(db: Session, user: User, payload: CivilCaseCreate) -> Civi
         organization_id=user.organization_id,
         executor_id=payload.assigned_executor_id,
     )
+    concluding_manager = _get_concluding_manager(
+        db,
+        organization_id=user.organization_id,
+        manager_id=payload.concluding_manager_id or user.id,
+    )
     case = CivilCase(
         organization_id=user.organization_id,
         created_by_id=user.id,
         assigned_executor_id=executor.id if executor else None,
+        concluding_manager_id=concluding_manager.id,
         full_name=payload.full_name,
         phone=payload.phone,
         price=payload.price,
@@ -229,7 +336,7 @@ def update_civil_case(db: Session, user: User, case_id: UUID, payload: CivilCase
     if not can_manage_intake(user) and INTAKE_FIELDS.intersection(updates):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="ФИО, телефон, цену, дату, предмет и исполнителя меняет менеджер",
+            detail="ФИО, телефон, цену, дату, предмет, менеджера и исполнителя меняет менеджер",
         )
     if not can_work_civil_case(user, case) and WORK_FIELDS.intersection(updates):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
@@ -241,6 +348,13 @@ def update_civil_case(db: Session, user: User, case_id: UUID, payload: CivilCase
             executor_id=updates["assigned_executor_id"],
         )
         updates["assigned_executor_id"] = executor.id if executor else None
+    if "concluding_manager_id" in updates:
+        concluding_manager = _get_concluding_manager(
+            db,
+            organization_id=user.organization_id,
+            manager_id=updates["concluding_manager_id"],
+        )
+        updates["concluding_manager_id"] = concluding_manager.id
 
     for field, value in updates.items():
         old_value = getattr(case, field)
@@ -307,7 +421,7 @@ def add_document(
     case = get_organization_civil_case(db, case_id=case_id, user=user)
     if not can_work_civil_case(user, case):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к делу")
-    if not can_upload_document_kind(user, kind):
+    if not can_upload_document_kind(user, kind, case):
         if kind == CivilCaseDocumentKind.CLIENT:
             detail = "Документы клиента загружает менеджер"
         else:
@@ -441,6 +555,8 @@ def to_civil_case_brief(case: CivilCase) -> CivilCaseBrief:
         stage=case.stage,
         assigned_executor_id=case.assigned_executor_id,
         assigned_executor_name=case.executor.full_name if case.executor else None,
+        concluding_manager_id=case.concluding_manager_id,
+        concluding_manager_name=case.concluding_manager.full_name if case.concluding_manager else None,
         created_by_id=case.created_by_id,
         created_by_name=case.created_by.full_name if case.created_by else None,
         documents_prepared_at=case.documents_prepared_at,

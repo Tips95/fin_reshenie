@@ -26,6 +26,11 @@ class CivilCase(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=True,
         index=True,
     )
+    concluding_manager_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0.00"))
@@ -51,6 +56,7 @@ class CivilCase(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     organization: Mapped["Organization"] = relationship()
     created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_id])
     executor: Mapped["User | None"] = relationship(foreign_keys=[assigned_executor_id])
+    concluding_manager: Mapped["User | None"] = relationship(foreign_keys=[concluding_manager_id])
     movements: Mapped[list["CivilCaseMovement"]] = relationship(
         back_populates="civil_case",
         cascade="all, delete-orphan",

@@ -638,6 +638,7 @@ export type CivilCaseDocumentKind = "client" | "prepared";
 export interface CivilCaseExecutorOption {
   id: string;
   full_name: string;
+  role: UserRole | string;
 }
 
 export interface CivilCaseMovement {
@@ -669,6 +670,8 @@ export interface CivilCaseBrief {
   stage: CivilCaseStage;
   assigned_executor_id: string | null;
   assigned_executor_name: string | null;
+  concluding_manager_id: string | null;
+  concluding_manager_name: string | null;
   created_by_id: string | null;
   created_by_name: string | null;
   documents_prepared_at: string | null;

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { ApiRequestError, civilCasesApi } from "@/lib/api-client";
 import { todayIsoDate } from "@/lib/format";
-import { canCreateCivilCase } from "@/lib/organization-features";
+import { canCreateCivilCase, civilExecutorGroups } from "@/lib/organization-features";
 import { PHONE_PREFIX } from "@/lib/phone";
 import {
   collectErrors,
@@ -36,6 +36,7 @@ export default function NewCivilCasePage() {
   const router = useRouter();
   const canCreate = canCreateCivilCase(user);
   const [executors, setExecutors] = useState<CivilCaseExecutorOption[]>([]);
+  const [managers, setManagers] = useState<CivilCaseExecutorOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +48,9 @@ export default function NewCivilCasePage() {
     appeal_date: todayIsoDate(),
     subject: "",
     assigned_executor_id: "",
+    concluding_manager_id: "",
   });
+  const executorGroups = civilExecutorGroups(executors);
 
   useEffect(() => {
     if (user && !canCreate) {
@@ -59,14 +62,28 @@ export default function NewCivilCasePage() {
     if (!canCreate) return;
     void (async () => {
       try {
-        setExecutors(await civilCasesApi.executors());
+        const [executorRows, managerRows] = await Promise.all([
+          civilCasesApi.executors(),
+          civilCasesApi.managers(),
+        ]);
+        setExecutors(executorRows);
+        setManagers(managerRows);
       } catch {
         setExecutors([]);
+        setManagers([]);
       } finally {
         setLoading(false);
       }
     })();
   }, [canCreate]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setForm((prev) => ({
+      ...prev,
+      concluding_manager_id: prev.concluding_manager_id || user.id,
+    }));
+  }, [user?.id]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -76,6 +93,7 @@ export default function NewCivilCasePage() {
       price: validatePositiveAmount(form.price, { label: "Цена" }),
       appeal_date: validateRequiredDate(form.appeal_date),
       subject: form.subject.trim().length < 3 ? "Укажите предмет обращения" : null,
+      concluding_manager_id: form.concluding_manager_id ? null : "Укажите, кто заключил клиента",
     });
     if (hasErrors(errors)) {
       setFormErrors(errors);
@@ -92,6 +110,7 @@ export default function NewCivilCasePage() {
         appeal_date: form.appeal_date,
         subject: form.subject.trim(),
         assigned_executor_id: form.assigned_executor_id || null,
+        concluding_manager_id: form.concluding_manager_id || null,
       });
       router.replace(`/civil-cases/${created.id}`);
     } catch (err) {
@@ -109,7 +128,7 @@ export default function NewCivilCasePage() {
     <div className="page-stack">
       <PageHeader
         title="Новое гражданское дело"
-        subtitle="Клиент попадает исполнителю и ведётся по этапам"
+        subtitle="Кто заключил клиента и кто ведёт дело: исполнитель или менеджер сам"
         back={<BackLink href="/civil-cases">К списку дел</BackLink>}
       />
 
@@ -117,7 +136,7 @@ export default function NewCivilCasePage() {
 
       <Card>
         {loading ? (
-          <LoadingState text="Загрузка исполнителей..." />
+          <LoadingState text="Загрузка..." />
         ) : (
           <form onSubmit={(event) => void handleSubmit(event)} className="grid gap-3 md:grid-cols-2">
             <FormField label="ФИО клиента" error={formErrors.full_name}>
@@ -162,26 +181,50 @@ export default function NewCivilCasePage() {
                 />
               </FormField>
             </div>
-            <div className="md:col-span-2">
-              <FormField label="Исполнитель">
+            <FormField label="Кто заключил" error={formErrors.concluding_manager_id}>
               <Select
-                value={form.assigned_executor_id}
-                onChange={(event) => setForm({ ...form, assigned_executor_id: event.target.value })}
+                value={form.concluding_manager_id}
+                onChange={(event) =>
+                  setForm({ ...form, concluding_manager_id: event.target.value })
+                }
               >
-                <option value="">Назначить позже</option>
-                {executors.map((item) => (
+                {managers.length === 0 ? <option value="">Выберите менеджера</option> : null}
+                {managers.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.full_name}
                   </option>
                 ))}
               </Select>
-              {executors.length === 0 ? (
-                <p className="mt-1 text-[11px] text-muted">
-                  Сначала добавьте сотрудника с ролью «Исполнитель» в разделе «Команда».
-                </p>
-              ) : null}
-              </FormField>
-            </div>
+            </FormField>
+            <FormField label="Исполнитель">
+              <Select
+                value={form.assigned_executor_id}
+                onChange={(event) => setForm({ ...form, assigned_executor_id: event.target.value })}
+              >
+                <option value="">Назначить позже</option>
+                {executorGroups.dedicated.length > 0 ? (
+                  <optgroup label="Исполнители">
+                    {executorGroups.dedicated.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.full_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {executorGroups.self.length > 0 ? (
+                  <optgroup label="Сделал сам">
+                    {executorGroups.self.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.full_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </Select>
+              <p className="mt-1 text-[11px] text-muted">
+                Если вели дело сами — выберите себя в группе «Сделал сам».
+              </p>
+            </FormField>
             <div className="md:col-span-2">
               <Button type="submit" disabled={saving}>
                 {saving ? "Сохранение..." : "Завести дело"}

@@ -17,6 +17,7 @@ from app.services.civil_cases import (
     delete_document,
     get_organization_civil_case,
     list_civil_cases,
+    list_executors,
     to_civil_case_response,
     update_civil_case,
 )
@@ -95,6 +96,8 @@ class TestCivilCases:
         response = to_civil_case_response(case)
         assert response.assigned_executor_name == "Исполнитель Делов"
         assert response.created_by_name == "Менеджер Тестов"
+        assert case.concluding_manager_id == manager.id
+        assert response.concluding_manager_name == "Менеджер Тестов"
 
     def test_executor_cannot_create_case(self, db):
         executor = _user(db, role=UserRole.EXECUTOR, email="ex@test.local")
@@ -388,3 +391,93 @@ class TestCivilCases:
         remaining = to_civil_case_response(delete_document(db, executor, case.id, prepared_doc_id))
         assert remaining.prepared_documents_count == 0
         assert remaining.client_documents_count == 1
+
+    def test_concluding_manager_can_be_another_manager(self, db):
+        manager = _user(db)
+        closer = _user(
+            db,
+            organization=manager.organization,
+            role=UserRole.MANAGER,
+            email="closer@test.local",
+            full_name="Менеджер Заключил",
+        )
+        case = create_civil_case(
+            db,
+            manager,
+            CivilCaseCreate(
+                full_name="Петров Пётр Петрович",
+                phone="+7 928 000-00-00",
+                price=Decimal("15000.00"),
+                appeal_date=date(2026, 8, 28),
+                subject="Взыскание долга по расписке",
+                concluding_manager_id=closer.id,
+            ),
+        )
+        response = to_civil_case_response(case)
+        assert case.created_by_id == manager.id
+        assert case.concluding_manager_id == closer.id
+        assert response.concluding_manager_name == "Менеджер Заключил"
+
+    def test_manager_can_assign_self_as_executor(self, db, monkeypatch):
+        monkeypatch.setattr("app.services.civil_cases.save_bytes", lambda *_args, **_kwargs: None)
+        manager = _user(db)
+        case = create_civil_case(
+            db,
+            manager,
+            CivilCaseCreate(
+                full_name="Сидоров Сидор",
+                phone="+7 928 111-22-33",
+                price=Decimal("25000.00"),
+                appeal_date=date(2026, 8, 1),
+                subject="Иск о разделе имущества",
+                assigned_executor_id=manager.id,
+            ),
+        )
+        assert case.assigned_executor_id == manager.id
+        prepared = add_document(
+            db,
+            manager,
+            case.id,
+            kind=CivilCaseDocumentKind.PREPARED,
+            content=b"prepared",
+            filename="claim.pdf",
+            content_type="application/pdf",
+        )
+        assert to_civil_case_response(prepared).prepared_documents_count == 1
+        options = list_executors(db, manager)
+        assert any(item.id == manager.id and item.role == "manager" for item in options)
+
+    def test_call_center_cannot_be_executor_or_concluding_manager(self, db):
+        manager = _user(db)
+        staff = _user(
+            db,
+            organization=manager.organization,
+            role=UserRole.CALL_CENTER,
+            email="cc@test.local",
+            full_name="Коллцентр Тестов",
+        )
+        payload = CivilCaseCreate(
+            full_name="Сидоров Сидор",
+            phone="+7 928 111-22-33",
+            price=Decimal("25000.00"),
+            appeal_date=date(2026, 8, 1),
+            subject="Иск о разделе имущества",
+            assigned_executor_id=staff.id,
+        )
+        with pytest.raises(HTTPException) as executor_exc:
+            create_civil_case(db, manager, payload)
+        assert executor_exc.value.status_code == 422
+        with pytest.raises(HTTPException) as manager_exc:
+            create_civil_case(
+                db,
+                manager,
+                CivilCaseCreate(
+                    full_name="Сидоров Сидор",
+                    phone="+7 928 111-22-33",
+                    price=Decimal("25000.00"),
+                    appeal_date=date(2026, 8, 1),
+                    subject="Иск о разделе имущества",
+                    concluding_manager_id=staff.id,
+                ),
+            )
+        assert manager_exc.value.status_code == 422

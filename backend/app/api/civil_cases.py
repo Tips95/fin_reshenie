@@ -27,6 +27,7 @@ from app.services.civil_cases import (
     get_organization_civil_case,
     list_civil_cases,
     list_executors,
+    list_managers,
     to_civil_case_brief,
     to_civil_case_response,
     update_civil_case,
@@ -49,6 +50,14 @@ def get_executors(
     db: Session = Depends(get_db),
 ) -> list[CivilCaseExecutorOption]:
     return list_executors(db, current_user)
+
+
+@router.get("/managers", response_model=list[CivilCaseExecutorOption])
+def get_managers(
+    current_user: User = Depends(_require_civil_staff),
+    db: Session = Depends(get_db),
+) -> list[CivilCaseExecutorOption]:
+    return list_managers(db, current_user)
 
 
 @router.get("", response_model=list[CivilCaseBrief])

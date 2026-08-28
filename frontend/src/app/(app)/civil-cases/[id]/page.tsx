@@ -19,7 +19,7 @@ import {
 } from "@/components/ui";
 import { ApiRequestError, civilCasesApi } from "@/lib/api-client";
 import { civilCaseStageLabel, formatDate, formatDateTime, formatMoney, todayIsoDate } from "@/lib/format";
-import { canCreateCivilCase, canUploadCivilClientDocuments, canUploadCivilPreparedDocuments, canUseCivilCases } from "@/lib/organization-features";
+import { canCreateCivilCase, canUploadCivilClientDocuments, canUploadCivilPreparedDocuments, canUseCivilCases, civilExecutorGroups } from "@/lib/organization-features";
 import { PHONE_PREFIX } from "@/lib/phone";
 import {
   collectErrors,
@@ -137,9 +137,9 @@ export default function CivilCaseDetailPage() {
   const canView = canUseCivilCases(user);
   const canManageIntake = canCreateCivilCase(user);
   const canUploadClientDocs = canUploadCivilClientDocuments(user);
-  const canUploadPreparedDocs = canUploadCivilPreparedDocuments(user);
   const [item, setItem] = useState<CivilCase | null>(null);
   const [executors, setExecutors] = useState<CivilCaseExecutorOption[]>([]);
+  const [managers, setManagers] = useState<CivilCaseExecutorOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -154,6 +154,7 @@ export default function CivilCaseDetailPage() {
     appeal_date: "",
     subject: "",
     assigned_executor_id: "",
+    concluding_manager_id: "",
   });
   const [work, setWork] = useState({
     documents_prepared: false,
@@ -183,6 +184,7 @@ export default function CivilCaseDetailPage() {
       appeal_date: data.appeal_date,
       subject: data.subject,
       assigned_executor_id: data.assigned_executor_id ?? "",
+      concluding_manager_id: data.concluding_manager_id ?? "",
     });
     setWork({
       documents_prepared: Boolean(data.documents_prepared_at),
@@ -205,9 +207,15 @@ export default function CivilCaseDetailPage() {
         await loadCase();
         if (canManageIntake) {
           try {
-            setExecutors(await civilCasesApi.executors());
+            const [executorRows, managerRows] = await Promise.all([
+              civilCasesApi.executors(),
+              civilCasesApi.managers(),
+            ]);
+            setExecutors(executorRows);
+            setManagers(managerRows);
           } catch {
             setExecutors([]);
+            setManagers([]);
           }
         }
       } catch (err) {
@@ -229,6 +237,7 @@ export default function CivilCaseDetailPage() {
       price: validatePositiveAmount(intake.price, { label: "Цена" }),
       appeal_date: validateRequiredDate(intake.appeal_date),
       subject: intake.subject.trim().length < 3 ? "Укажите предмет обращения" : null,
+      concluding_manager_id: intake.concluding_manager_id ? null : "Укажите, кто заключил клиента",
     });
     if (hasErrors(errors)) {
       setFormErrors(errors);
@@ -244,6 +253,7 @@ export default function CivilCaseDetailPage() {
         appeal_date: intake.appeal_date,
         subject: intake.subject.trim(),
         assigned_executor_id: intake.assigned_executor_id || null,
+        concluding_manager_id: intake.concluding_manager_id || null,
       });
       setItem(updated);
       setToast({ message: "Данные клиента сохранены", tone: "success" });
@@ -365,6 +375,9 @@ export default function CivilCaseDetailPage() {
     );
   }
 
+  const executorGroups = civilExecutorGroups(executors);
+  const canUploadPreparedDocs = canUploadCivilPreparedDocuments(user, item.assigned_executor_id);
+
   return (
     <div className="page-stack">
       {toast ? (
@@ -379,7 +392,7 @@ export default function CivilCaseDetailPage() {
 
       {canManageIntake ? (
         <Card>
-          <SectionTitle title="Клиент" description="ФИО, телефон, цена, дата и предмет обращения" />
+          <SectionTitle title="Клиент" description="ФИО, телефон, цена, кто заключил и кто ведёт дело" />
           <div className="grid gap-3 md:grid-cols-2">
             <FormField label="ФИО клиента" error={formErrors.full_name}>
               <Input
@@ -420,23 +433,52 @@ export default function CivilCaseDetailPage() {
                 />
               </FormField>
             </div>
-            <div className="md:col-span-2">
-              <FormField label="Исполнитель">
-                <Select
-                  value={intake.assigned_executor_id}
-                  onChange={(event) =>
-                    setIntake({ ...intake, assigned_executor_id: event.target.value })
-                  }
-                >
-                  <option value="">Не назначен</option>
-                  {executors.map((executor) => (
-                    <option key={executor.id} value={executor.id}>
-                      {executor.full_name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            </div>
+            <FormField label="Кто заключил" error={formErrors.concluding_manager_id}>
+              <Select
+                value={intake.concluding_manager_id}
+                onChange={(event) =>
+                  setIntake({ ...intake, concluding_manager_id: event.target.value })
+                }
+              >
+                {managers.length === 0 ? <option value="">Выберите менеджера</option> : null}
+                {managers.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.full_name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="Исполнитель">
+              <Select
+                value={intake.assigned_executor_id}
+                onChange={(event) =>
+                  setIntake({ ...intake, assigned_executor_id: event.target.value })
+                }
+              >
+                <option value="">Не назначен</option>
+                {executorGroups.dedicated.length > 0 ? (
+                  <optgroup label="Исполнители">
+                    {executorGroups.dedicated.map((executor) => (
+                      <option key={executor.id} value={executor.id}>
+                        {executor.full_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {executorGroups.self.length > 0 ? (
+                  <optgroup label="Сделал сам">
+                    {executorGroups.self.map((executor) => (
+                      <option key={executor.id} value={executor.id}>
+                        {executor.full_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </Select>
+              <p className="mt-1 text-[11px] text-muted">
+                Если вели дело сами — выберите себя в группе «Сделал сам».
+              </p>
+            </FormField>
             <div className="flex flex-wrap gap-2 md:col-span-2">
               <Button type="button" disabled={saving} onClick={() => void saveIntake()}>
                 {saving ? "Сохранение..." : "Сохранить"}
@@ -466,6 +508,14 @@ export default function CivilCaseDetailPage() {
             <div>
               <dt className="text-muted">Цена</dt>
               <dd>{formatMoney(item.price)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Кто заключил</dt>
+              <dd>{item.concluding_manager_name || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Исполнитель</dt>
+              <dd>{item.assigned_executor_name || "не назначен"}</dd>
             </div>
             <div className="md:col-span-2">
               <dt className="text-muted">Предмет обращения</dt>

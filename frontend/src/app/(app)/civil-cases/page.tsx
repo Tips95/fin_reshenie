@@ -75,7 +75,7 @@ export default function CivilCasesPage() {
         title="Гражданские дела"
         subtitle={
           canCreate
-            ? "Менеджер заводит клиента, исполнитель ведёт дело по этапам"
+            ? "Менеджер заводит клиента и указывает, кто заключил и кто ведёт дело"
             : "Ваши дела: документы, подача в орган, отметка об исполнении"
         }
         action={
@@ -139,6 +139,7 @@ export default function CivilCasesPage() {
                 <th>Дата обращения</th>
                 <th>Предмет</th>
                 <th>Этап</th>
+                <th>Менеджер</th>
                 <th>Исполнитель</th>
                 <th>Клиент</th>
                 <th>Пакет</th>
@@ -161,6 +162,7 @@ export default function CivilCasesPage() {
                   <td data-label="Этап">
                     <Badge tone={stageTone(item.stage)}>{civilCaseStageLabel(item.stage)}</Badge>
                   </td>
+                  <td data-label="Менеджер">{item.concluding_manager_name || "—"}</td>
                   <td data-label="Исполнитель">{item.assigned_executor_name || "не назначен"}</td>
                   <td data-label="Клиент">{item.client_documents_count ?? 0}</td>
                   <td data-label="Пакет">{item.prepared_documents_count ?? 0}</td>

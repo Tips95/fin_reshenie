@@ -15,6 +15,7 @@ class CivilCaseCreate(BaseModel):
     appeal_date: date
     subject: str = Field(min_length=3, max_length=4000)
     assigned_executor_id: UUID | None = None
+    concluding_manager_id: UUID | None = None
 
     @field_validator("full_name")
     @classmethod
@@ -42,6 +43,7 @@ class CivilCaseUpdate(BaseModel):
     appeal_date: date | None = None
     subject: str | None = Field(default=None, min_length=3, max_length=4000)
     assigned_executor_id: UUID | None = None
+    concluding_manager_id: UUID | None = None
     documents_prepared_at: date | None = None
     documents_note: str | None = Field(default=None, max_length=4000)
     submitted_at: date | None = None
@@ -120,6 +122,7 @@ class CivilCaseDocumentResponse(BaseModel):
 class CivilCaseExecutorOption(BaseModel):
     id: UUID
     full_name: str
+    role: str
 
 
 class CivilCaseBrief(BaseModel):
@@ -134,6 +137,8 @@ class CivilCaseBrief(BaseModel):
     stage: CivilCaseStage
     assigned_executor_id: UUID | None
     assigned_executor_name: str | None = None
+    concluding_manager_id: UUID | None = None
+    concluding_manager_name: str | None = None
     created_by_id: UUID | None
     created_by_name: str | None = None
     documents_prepared_at: date | None

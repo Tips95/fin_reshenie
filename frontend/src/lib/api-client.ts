@@ -514,6 +514,7 @@ export const civilCasesApi = {
     return apiFetch<CivilCaseBrief[]>(`/civil-cases${query ? `?${query}` : ""}`);
   },
   executors: () => apiFetch<CivilCaseExecutorOption[]>("/civil-cases/executors"),
+  managers: () => apiFetch<CivilCaseExecutorOption[]>("/civil-cases/managers"),
   get: (id: string) => apiFetch<CivilCase>(`/civil-cases/${id}`),
   create: (data: Record<string, unknown>) =>
     apiFetch<CivilCase>("/civil-cases", { method: "POST", body: JSON.stringify(data) }),
