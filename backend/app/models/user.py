@@ -1,11 +1,28 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, ForeignKey, Numeric, String, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
-from app.models.enums import UserRole
+from app.models.enums import UserRole, parse_user_role
+
+
+class UserRoleType(TypeDecorator):
+    """Пишем role.value, читаем и `owner`, и старое `OWNER`."""
+
+    impl = String(32)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return parse_user_role(value).value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return parse_user_role(value)
 
 
 class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
@@ -20,15 +37,7 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(
-            UserRole,
-            name="user_role",
-            native_enum=False,
-            values_callable=lambda enum: [item.value for item in enum],
-        ),
-        nullable=False,
-    )
+    role: Mapped[UserRole] = mapped_column(UserRoleType(), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     investment_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
 

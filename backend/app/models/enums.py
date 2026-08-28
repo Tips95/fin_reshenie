@@ -14,6 +14,19 @@ class UserRole(str, enum.Enum):
     EXECUTOR = "executor"
 
 
+def parse_user_role(value: str | UserRole) -> UserRole:
+    """Принимает и `owner`, и устаревшее `OWNER` из старых записей."""
+    if isinstance(value, UserRole):
+        return value
+    try:
+        return UserRole(value)
+    except ValueError:
+        try:
+            return UserRole[value]
+        except KeyError:
+            return UserRole[value.upper()]
+
+
 class ClientStatus(str, enum.Enum):
     ACTIVE = "active"
     COMPLETED = "completed"

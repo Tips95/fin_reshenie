@@ -35,7 +35,7 @@ def get_user_by_login(db: Session, login: str, workspace: str = "legal") -> User
             User.organization.has(organization_type=org_type),
         )
     )
-    return db.scalar(stmt)
+    return db.scalars(stmt).unique().first()
 
 
 def authenticate_user(db: Session, login: str, password: str, workspace: str = "legal") -> User | None:
