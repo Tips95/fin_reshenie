@@ -56,6 +56,7 @@ from app.services.retail_dashboard import (
 from app.services.retail_deals import create_retail_client, create_retail_deal, resolve_investor_id
 from app.services.retail_deletion import hard_delete_retail_client, hard_delete_retail_contract
 from app.services.file_storage import (
+    attachment_content_disposition,
     delete_storage_key,
     read_and_validate_pdf,
     resolve_storage_path,
@@ -299,7 +300,11 @@ def download_client_passport_pdf(
     return FileResponse(
         path,
         media_type="application/pdf",
-        filename=client.passport_pdf_filename or "passport.pdf",
+        headers={
+            "Content-Disposition": attachment_content_disposition(
+                client.passport_pdf_filename or "passport.pdf"
+            )
+        },
     )
 
 
@@ -378,7 +383,11 @@ def download_guarantor_passport_pdf(
     return FileResponse(
         path,
         media_type="application/pdf",
-        filename=client.guarantor_passport_pdf_filename or "guarantor-passport.pdf",
+        headers={
+            "Content-Disposition": attachment_content_disposition(
+                client.guarantor_passport_pdf_filename or "guarantor-passport.pdf"
+            )
+        },
     )
 
 
@@ -618,7 +627,11 @@ def download_signed_contract_pdf(
     return FileResponse(
         path,
         media_type="application/pdf",
-        filename=contract.signed_contract_pdf_filename or "contract.pdf",
+        headers={
+            "Content-Disposition": attachment_content_disposition(
+                contract.signed_contract_pdf_filename or "contract.pdf"
+            )
+        },
     )
 
 

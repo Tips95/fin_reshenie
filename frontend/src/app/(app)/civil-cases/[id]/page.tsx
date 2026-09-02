@@ -49,22 +49,24 @@ function CivilDocumentSlot({
   description,
   emptyText,
   documents,
-  caseId,
   canUpload,
   canDelete,
   uploading,
+  downloadingId,
   onUpload,
+  onDownload,
   onDelete,
 }: {
   title: string;
   description: string;
   emptyText: string;
   documents: CivilCaseDocument[];
-  caseId: string;
   canUpload: boolean;
   canDelete: boolean;
   uploading: boolean;
+  downloadingId: string | null;
   onUpload: (file: File) => void;
+  onDownload: (doc: CivilCaseDocument) => void;
   onDelete: (documentId: string) => void;
 }) {
   return (
@@ -107,9 +109,10 @@ function CivilDocumentSlot({
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => void civilCasesApi.downloadDocument(caseId, doc.id, doc.filename)}
+                  disabled={downloadingId === doc.id}
+                  onClick={() => onDownload(doc)}
                 >
-                  Скачать
+                  {downloadingId === doc.id ? "Скачивание..." : "Скачать"}
                 </Button>
                 {canDelete ? (
                   <Button
@@ -143,6 +146,7 @@ export default function CivilCaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [movement, setMovement] = useState("");
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
@@ -330,6 +334,20 @@ export default function CivilCaseDetailPage() {
       });
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDownloadDocument(doc: CivilCaseDocument) {
+    setDownloadingId(doc.id);
+    try {
+      await civilCasesApi.downloadDocument(params.id, doc.id, doc.filename);
+    } catch (err) {
+      setToast({
+        message: err instanceof ApiRequestError ? err.message : "Не удалось скачать документ",
+        tone: "error",
+      });
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -531,11 +549,12 @@ export default function CivilCaseDetailPage() {
           description="Менеджер загружает исходники: паспорт, доверенность, материалы обращения"
           emptyText="Документы клиента ещё не загружены"
           documents={item.documents.filter((doc) => doc.kind !== "prepared")}
-          caseId={item.id}
           canUpload={canUploadClientDocs}
           canDelete={canManageIntake}
           uploading={uploading}
+          downloadingId={downloadingId}
           onUpload={(file) => void handleUpload(file, "client")}
+          onDownload={(doc) => void handleDownloadDocument(doc)}
           onDelete={(documentId) => void handleDeleteDocument(documentId)}
         />
         <CivilDocumentSlot
@@ -543,11 +562,12 @@ export default function CivilCaseDetailPage() {
           description="Исполнитель загружает то, что подготовил: иск, жалобу, приложения"
           emptyText="Подготовленный пакет ещё не загружен"
           documents={item.documents.filter((doc) => doc.kind === "prepared")}
-          caseId={item.id}
           canUpload={canUploadPreparedDocs}
           canDelete={canManageIntake || canUploadPreparedDocs}
           uploading={uploading}
+          downloadingId={downloadingId}
           onUpload={(file) => void handleUpload(file, "prepared")}
+          onDownload={(doc) => void handleDownloadDocument(doc)}
           onDelete={(documentId) => void handleDeleteDocument(documentId)}
         />
       </div>

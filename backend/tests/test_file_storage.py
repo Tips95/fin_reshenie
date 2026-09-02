@@ -39,6 +39,22 @@ async def test_read_and_validate_pdf_rejects_non_pdf() -> None:
     assert exc.value.status_code == 422
 
 
+def test_attachment_content_disposition_includes_ascii_and_utf8_filename() -> None:
+    from urllib.parse import unquote
+
+    header = file_storage.attachment_content_disposition("Иск (копия).pdf")
+    assert 'filename="document.pdf"' in header
+    assert header.isascii()
+    encoded = header.split("filename*=UTF-8''", 1)[1]
+    assert unquote(encoded) == "Иск (копия).pdf"
+
+
+def test_attachment_content_disposition_keeps_ascii_name() -> None:
+    header = file_storage.attachment_content_disposition("claim.pdf")
+    assert 'filename="claim.pdf"' in header
+    assert "filename*=UTF-8''claim.pdf" in header
+
+
 def test_save_and_delete_roundtrip() -> None:
     org_id = uuid4()
     client_id = uuid4()

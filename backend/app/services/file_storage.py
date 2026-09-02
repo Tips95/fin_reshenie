@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile, status
@@ -68,6 +69,23 @@ def sanitize_document_filename(filename: str) -> str:
 
 def content_type_for_filename(filename: str) -> str:
     return CONTENT_TYPE_BY_EXTENSION.get(file_extension(filename), "application/octet-stream")
+
+
+def ascii_download_filename(filename: str, default: str = "document") -> str:
+    stem = Path(filename).stem
+    suffix = file_extension(filename) or ".bin"
+    ascii_stem = "".join(
+        ch if ch.isascii() and (ch.isalnum() or ch in ("-", "_")) else "_"
+        for ch in stem
+    ).strip("_") or default
+    return f"{ascii_stem}{suffix}"[:200]
+
+
+def attachment_content_disposition(filename: str) -> str:
+    """ASCII filename= plus RFC 5987 filename*, so browsers actually download Cyrillic names."""
+    utf_name = filename.replace('"', "").replace("\r", "").replace("\n", "").strip() or "document"
+    ascii_name = ascii_download_filename(utf_name)
+    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(utf_name)}'
 
 
 def _document_magic_matches(content: bytes, extension: str) -> bool:

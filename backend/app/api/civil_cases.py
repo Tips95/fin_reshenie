@@ -32,7 +32,11 @@ from app.services.civil_cases import (
     to_civil_case_response,
     update_civil_case,
 )
-from app.services.file_storage import read_and_validate_document, resolve_storage_path
+from app.services.file_storage import (
+    attachment_content_disposition,
+    read_and_validate_document,
+    resolve_storage_path,
+)
 
 router = APIRouter()
 
@@ -157,7 +161,7 @@ def download_document(
     return FileResponse(
         path,
         media_type=document.content_type or "application/octet-stream",
-        filename=document.filename,
+        headers={"Content-Disposition": attachment_content_disposition(document.filename)},
     )
 
 

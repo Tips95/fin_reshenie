@@ -176,10 +176,31 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return (await response.json()) as T;
 }
 
+function stripWrappingQuotes(value: string): string {
+  return value.trim().replace(/^["']|["']$/g, "");
+}
+
 function filenameFromDisposition(header: string | null, fallback: string): string {
   if (!header) return fallback;
-  const match = header.match(/filename="?([^";]+)"?/i);
-  return match?.[1] ?? fallback;
+
+  const encoded = header.match(/filename\*\s*=\s*(?:UTF-8''|utf-8'')?([^;]+)/i);
+  if (encoded?.[1]) {
+    try {
+      const decoded = decodeURIComponent(stripWrappingQuotes(encoded[1]));
+      if (decoded) return decoded;
+    } catch {
+      // malformed percent-encoding — fall through to filename= / fallback
+    }
+  }
+
+  const quoted = header.match(/(?:^|;)\s*filename\s*=\s*"([^"]+)"/i);
+  if (quoted?.[1]) return quoted[1];
+
+  const plain = header.match(/(?:^|;)\s*filename\s*=\s*([^;]+)/i);
+  const value = plain?.[1] ? stripWrappingQuotes(plain[1]) : "";
+  if (value && !value.startsWith("*")) return value;
+
+  return fallback;
 }
 
 export async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
@@ -212,10 +233,13 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
     response.headers.get("Content-Disposition"),
     fallbackFilename,
   );
+  link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 1500);
 }
 
 export async function uploadFile<T = unknown>(path: string, file: File, fieldName = "file"): Promise<T> {
