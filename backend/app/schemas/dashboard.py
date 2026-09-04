@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import ClientStatus
 
@@ -30,6 +30,22 @@ class DashboardOverdueClientItem(BaseModel):
     contract_total: Decimal | None = None
 
 
+class CashBalanceUpdate(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-\d{2}$")
+    opening_amount: Decimal = Field(decimal_places=2)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class CashBalanceCarryForward(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-\d{2}$")
+
+
+class CashBalanceResponse(BaseModel):
+    month: str
+    opening_amount: Decimal
+    comment: str | None = None
+
+
 class DashboardSummary(BaseModel):
     period_month: str
     is_current_month: bool
@@ -55,6 +71,10 @@ class DashboardSummary(BaseModel):
     contracts_signed_this_month: int
     org_profit_total: Decimal
     net_profit_this_month: Decimal
+    cash_opening_balance: Decimal = Decimal("0.00")
+    cash_closing_balance: Decimal = Decimal("0.00")
+    cash_opening_is_set: bool = False
+    cash_opening_comment: str | None = None
     civil_cases_total: int = 0
     civil_cases_this_month: int = 0
     civil_income_total: Decimal = Decimal("0.00")

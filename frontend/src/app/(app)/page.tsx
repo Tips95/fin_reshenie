@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 import { Badge, Button, Card, Input, LoadingState, PageHeader, SectionTitle, StatCard } from "@/components/ui";
-import { dashboardApi, exportsApi } from "@/lib/api-client";
-import { formatDate, formatMoney, formatMonthLabel, formatShortName, statusLabel } from "@/lib/format";
+import { ApiRequestError, dashboardApi, exportsApi } from "@/lib/api-client";
+import { formatAmountInput, formatDate, formatMoney, formatMonthLabel, formatShortName, statusLabel } from "@/lib/format";
 import type {
   DashboardOverdueClientItem,
   DashboardSummary,
@@ -21,6 +21,7 @@ const DASHBOARD_SECTIONS = [
   { id: "dash-income", label: "Рассрочка" },
   { id: "dash-civil", label: "Гражданка" },
   { id: "dash-profit", label: "Прибыль" },
+  { id: "dash-cash", label: "Касса" },
   { id: "dash-collection", label: "Сбор" },
   { id: "dash-mandatory", label: "Обязательные" },
   { id: "dash-expenses", label: "Расходы" },
@@ -98,6 +99,9 @@ function normalizeSummary(data: DashboardSummary): DashboardSummary {
     civil_cases_this_month: data.civil_cases_this_month ?? 0,
     civil_income_total: data.civil_income_total ?? "0",
     civil_income_this_month: data.civil_income_this_month ?? "0",
+    cash_opening_balance: data.cash_opening_balance ?? "0",
+    cash_closing_balance: data.cash_closing_balance ?? "0",
+    cash_opening_is_set: data.cash_opening_is_set ?? false,
     open_tasks_count: data.open_tasks_count ?? 0,
     overdue_clients_preview: data.overdue_clients_preview ?? [],
   };
@@ -192,6 +196,13 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function nextMonth(month: string): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const nextYear = monthNumber === 12 ? year + 1 : year;
+  const next = monthNumber === 12 ? 1 : monthNumber + 1;
+  return `${nextYear}-${String(next).padStart(2, "0")}`;
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [month, setMonth] = useState(currentMonth);
@@ -199,6 +210,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [exportingOverdue, setExportingOverdue] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [cashDraft, setCashDraft] = useState("");
+  const [cashSaving, setCashSaving] = useState(false);
+  const [cashError, setCashError] = useState<string | null>(null);
   const isOwner = user?.role === "owner";
   const canManageClients = isOwner || user?.role === "manager";
   const showQuestionnaires = canUseQuestionnaires(user);
@@ -209,11 +223,46 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setSummary(normalizeSummary(await dashboardApi.summary(month)));
+      const data = normalizeSummary(await dashboardApi.summary(month));
+      setSummary(data);
+      setCashDraft(data.cash_opening_is_set ? formatAmountInput(data.cash_opening_balance) : "");
     } finally {
       setLoading(false);
     }
   }, [month]);
+
+  async function handleSaveCashBalance() {
+    setCashSaving(true);
+    setCashError(null);
+    try {
+      await dashboardApi.setCashBalance({
+        month,
+        opening_amount: cashDraft.trim() === "" ? "0" : cashDraft.trim(),
+      });
+      await load();
+    } catch (error) {
+      setCashError(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить остаток",
+      );
+    } finally {
+      setCashSaving(false);
+    }
+  }
+
+  async function handleCarryForwardCash() {
+    setCashSaving(true);
+    setCashError(null);
+    try {
+      await dashboardApi.carryForwardCashBalance(month);
+      setMonth(nextMonth(month));
+    } catch (error) {
+      setCashError(
+        error instanceof ApiRequestError ? error.message : "Не удалось перенести остаток",
+      );
+    } finally {
+      setCashSaving(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -530,6 +579,56 @@ export default function DashboardPage() {
                 </span>
               </p>
             </div>
+          </DashboardSection>
+
+          <DashboardSection
+            id="dash-cash"
+            tone="income"
+            title="Касса"
+            description="Остаток на начало месяца задаётся вручную. К нему прибавляется прибыль месяца — получается остаток на конец"
+          >
+            <div className="stat-grid">
+              <StatCard
+                label="Остаток на начало"
+                value={formatMoney(summary.cash_opening_balance)}
+                hint={summary.cash_opening_is_set ? "Указан вручную" : "Не указан"}
+              />
+              <StatCard
+                label={`Прибыль за ${monthLabel}`}
+                value={formatMoney(summary.net_profit_this_month)}
+                tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
+              />
+              <StatCard
+                label="Остаток на конец"
+                value={formatMoney(summary.cash_closing_balance)}
+                tone={Number(summary.cash_closing_balance) >= 0 ? "success" : "danger"}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-status-success-border bg-surface px-3 py-2">
+              <div className="w-[180px]">
+                <label className="mb-0.5 block text-xs text-muted">
+                  Остаток на начало {monthLabel}, ₽
+                </label>
+                <Input
+                  type="number"
+                  value={cashDraft}
+                  placeholder="0"
+                  onChange={(e) => setCashDraft(e.target.value)}
+                />
+              </div>
+              <Button type="button" disabled={cashSaving} onClick={handleSaveCashBalance}>
+                {cashSaving ? "Сохранение..." : "Сохранить"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={cashSaving}
+                onClick={handleCarryForwardCash}
+              >
+                Перенести в {formatMonthLabel(nextMonth(month))}
+              </Button>
+            </div>
+            {cashError ? <p className="mt-2 text-xs text-status-danger-text">{cashError}</p> : null}
           </DashboardSection>
         </div>
       )}

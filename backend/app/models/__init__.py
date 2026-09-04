@@ -1,5 +1,6 @@
 from app.models.audit_log import AuditLog
 from app.models.base import Base
+from app.models.cash_balance import CashBalance
 from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovement
 from app.models.client import Client
 from app.models.client_mandatory_payment import ClientMandatoryPayment
@@ -26,6 +27,7 @@ from app.models.installment_plan import InstallmentPlan
 __all__ = [
     "AuditLog",
     "Base",
+    "CashBalance",
     "Client",
     "CivilCase",
     "CivilCaseDocument",

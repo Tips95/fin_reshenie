@@ -2,6 +2,7 @@ import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./auth-
 import { getApiUrl } from "./api";
 import type {
   ApiError,
+  CashBalance,
   Client,
   ClientBrief,
   ClientDetail,
@@ -379,6 +380,16 @@ export const retailApi = {
 export const dashboardApi = {
   summary: (month?: string) =>
     apiFetch<DashboardSummary>(`/dashboard/summary${month ? `?month=${month}` : ""}`),
+  setCashBalance: (data: { month: string; opening_amount: string; comment?: string | null }) =>
+    apiFetch<CashBalance>("/dashboard/cash-balance", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  carryForwardCashBalance: (month: string) =>
+    apiFetch<CashBalance>("/dashboard/cash-balance/carry-forward", {
+      method: "POST",
+      body: JSON.stringify({ month }),
+    }),
 };
 
 export const analyticsApi = {

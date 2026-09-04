@@ -47,6 +47,16 @@ def patch_civil_income(monkeypatch, stats: CivilIncomeStats | None = None) -> No
     )
 
 
+def patch_cash_balance(monkeypatch, opening: Decimal | None = None) -> None:
+    balance = (
+        None if opening is None else SimpleNamespace(opening_amount=opening, comment=None)
+    )
+    monkeypatch.setattr(
+        "app.services.dashboard.get_cash_balance",
+        lambda *_args, **_kwargs: balance,
+    )
+
+
 class TestDashboardSummary:
     def test_owner_gets_financial_metrics(self, monkeypatch):
         client = make_client()
@@ -117,6 +127,7 @@ class TestDashboardSummary:
             lambda *_args, **_kwargs: (Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
         patch_civil_income(monkeypatch)
+        patch_cash_balance(monkeypatch)
 
         summary = get_dashboard_summary(db, make_user())
 
@@ -314,6 +325,7 @@ class TestDashboardSummary:
                 income_this_month=Decimal("12000.00"),
             ),
         )
+        patch_cash_balance(monkeypatch)
 
         summary = get_dashboard_summary(db, make_user())
 
@@ -326,6 +338,73 @@ class TestDashboardSummary:
         assert summary.civil_income_total == Decimal("45000.00")
         assert summary.civil_cases_this_month == 1
         assert summary.civil_cases_total == 3
+
+    def test_cash_closing_adds_month_profit_to_manual_opening(self, monkeypatch):
+        client = make_client()
+        payment = SimpleNamespace(
+            amount=Decimal("3000.00"),
+            is_refund=False,
+            is_deleted=False,
+            payment_date=date.today(),
+        )
+        db = MagicMock()
+        db.scalars.side_effect = [[client], [], [payment]]
+        monkeypatch.setattr(
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.sum_active_contract_totals",
+            lambda *_args, **_kwargs: Decimal("0.00"),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_mandatory_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.mandatory_payment_stats",
+                fromlist=["MandatoryPaymentTotals"],
+            ).MandatoryPaymentTotals(
+                deposit=Decimal("0.00"),
+                financial_management=Decimal("0.00"),
+                court_fee=Decimal("0.00"),
+            ),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_document_collection_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.document_collection_stats",
+                fromlist=["DocumentCollectionTotals"],
+            ).DocumentCollectionTotals(
+                collection_cash=Decimal("0.00"),
+                notary_fee=Decimal("0.00"),
+                manager_commission=Decimal("0.00"),
+                paid_count=0,
+            ),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.count_contracts_signed_in_period",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.monthly_expenses_total",
+            lambda *_args, **_kwargs: (Decimal("1000.00"), Decimal("1000.00"), Decimal("0.00")),
+        )
+        patch_civil_income(monkeypatch)
+        patch_cash_balance(monkeypatch, Decimal("500000.00"))
+
+        summary = get_dashboard_summary(db, make_user())
+
+        assert summary.net_profit_this_month == Decimal("2000.00")
+        assert summary.cash_opening_balance == Decimal("500000.00")
+        assert summary.cash_closing_balance == Decimal("502000.00")
+        assert summary.cash_opening_is_set is True
 
     def test_call_center_gets_limited_summary(self, monkeypatch):
         client = make_client()

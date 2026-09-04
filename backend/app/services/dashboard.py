@@ -21,6 +21,7 @@ from app.schemas.dashboard import (
     MandatoryPaymentBreakdown,
 )
 from app.services.access import apply_client_visibility_filter, clients_overdue_map
+from app.services.cash_balance import get_cash_balance
 from app.services.document_collection_stats import (
     count_contracts_signed_in_period,
     get_document_collection_paid_totals,
@@ -367,6 +368,11 @@ def get_dashboard_summary(
         month_end=month_end,
     )
 
+    cash_balance = get_cash_balance(db, user.organization_id, period_month)
+    cash_opening_balance = (
+        cash_balance.opening_amount if cash_balance is not None else Decimal("0.00")
+    )
+
     return DashboardSummary(
         period_month=period_month,
         is_current_month=is_current_month,
@@ -392,6 +398,10 @@ def get_dashboard_summary(
         contracts_signed_this_month=contracts_signed_this_month,
         org_profit_total=org_profit_total,
         net_profit_this_month=net_profit_this_month,
+        cash_opening_balance=cash_opening_balance,
+        cash_closing_balance=cash_opening_balance + net_profit_this_month,
+        cash_opening_is_set=cash_balance is not None,
+        cash_opening_comment=cash_balance.comment if cash_balance is not None else None,
         civil_cases_total=civil_income.cases_total,
         civil_cases_this_month=civil_income.cases_this_month,
         civil_income_total=civil_income.income_total,
