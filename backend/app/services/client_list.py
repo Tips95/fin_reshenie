@@ -80,6 +80,7 @@ def query_clients(
     contract_month: str | None = None,
     due_month: str | None = None,
     collection_view: CollectionViewFilter | None = None,
+    collection_paid_month: str | None = None,
     sort_by: ClientSortField = ClientSortField.CREATED_AT,
     sort_dir: SortDirection = SortDirection.DESC,
 ) -> list[Client]:
@@ -133,13 +134,17 @@ def query_clients(
         )
         stmt = stmt.where(Client.id.in_(list(client_ids)))
 
-    if collection_view is not None and not searching:
+    collection_joined = False
+    if (collection_view is not None or collection_paid_month) and not searching:
         # OUTER JOIN: клиент на сборе без записи DocumentCollection иначе
         # не виден ни в сборе, ни в договорах, но дубль его блокирует.
         stmt = stmt.outerjoin(
             DocumentCollection,
             DocumentCollection.client_id == Client.id,
         )
+        collection_joined = True
+
+    if collection_joined and collection_view is not None:
         if collection_view == CollectionViewFilter.ACTIVE:
             stmt = stmt.where(Client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION)
         elif collection_view == CollectionViewFilter.PAID:
@@ -152,6 +157,16 @@ def query_clients(
                 Client.engagement_stage == EngagementStage.BANKRUPTCY,
                 DocumentCollection.status == DocumentCollectionStatus.PAID,
             )
+
+    if collection_joined and collection_paid_month:
+        # Ровно та же выборка, что стоит за счётчиком «Оплатили сбор» на дашборде:
+        # по дате поступления в кассу и независимо от текущего этапа клиента.
+        paid_from, paid_to = month_bounds(collection_paid_month)
+        stmt = stmt.where(
+            DocumentCollection.status == DocumentCollectionStatus.PAID,
+            DocumentCollection.paid_date >= paid_from,
+            DocumentCollection.paid_date <= paid_to,
+        )
 
     clients = list(db.scalars(stmt).unique())
 

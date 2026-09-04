@@ -23,6 +23,8 @@ export type ClientListFilters = {
   sort_dir: ClientListSortDir;
   page: number;
   collection_view: CollectionViewFilter;
+  /** Месяц поступления сбора в кассу — то же, что считает дашборд. */
+  collection_paid_month: string;
 };
 
 const SORT_FIELDS = new Set<ClientListSortField>([
@@ -54,6 +56,7 @@ export const DEFAULT_CLIENT_LIST_FILTERS: ClientListFilters = {
   sort_dir: "desc",
   page: 1,
   collection_view: "active",
+  collection_paid_month: "",
 };
 
 function parseSortField(value: string | null): ClientListSortField {
@@ -89,6 +92,7 @@ export function parseClientListFilters(searchParams: URLSearchParams): ClientLis
     sort_dir: parseSortDir(searchParams.get("sort_dir")),
     page: Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1,
     collection_view: parseCollectionView(searchParams.get("collection_view")),
+    collection_paid_month: searchParams.get("collection_paid_month") ?? "",
   };
 }
 
@@ -112,6 +116,9 @@ export function buildClientListQuery(filters: ClientListFilters): string {
   if (filters.page > 1) params.set("page", String(filters.page));
   if (filters.collection_view !== DEFAULT_CLIENT_LIST_FILTERS.collection_view) {
     params.set("collection_view", filters.collection_view);
+  }
+  if (filters.collection_paid_month) {
+    params.set("collection_paid_month", filters.collection_paid_month);
   }
 
   return params.toString();

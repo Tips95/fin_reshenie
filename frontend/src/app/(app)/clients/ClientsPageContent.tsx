@@ -202,6 +202,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           procedure_stage: isCollectionView ? undefined : filters.procedure_stage || undefined,
           engagement_stage: isCollectionView ? undefined : workspaceConfig.engagementStage,
           collection_view: isCollectionView ? filters.collection_view : undefined,
+          collection_paid_month: filters.collection_paid_month || undefined,
           manager_id: filters.manager_id || undefined,
           phone: filters.phone.trim() || undefined,
           name: filters.name.trim() || undefined,
@@ -239,6 +240,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     filters.overdue,
     filters.procedure_stage,
     filters.collection_view,
+    filters.collection_paid_month,
     filters.manager_id,
     filters.phone,
     filters.name,
@@ -488,6 +490,21 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
             </button>
           ))}
         </div>
+      )}
+
+      {filters.collection_paid_month && (
+        <p className="alert-warning">
+          Показаны клиенты, чей сбор поступил в кассу в{" "}
+          {formatMonthLabel(filters.collection_paid_month)} — ровно те, кого считает дашборд.
+          Текущий этап клиента здесь не важен: те, кого уже перевели на банкротство, тоже в списке.{" "}
+          <button
+            type="button"
+            className="link-brand font-medium"
+            onClick={() => updateFilters({ collection_paid_month: "" })}
+          >
+            Показать все
+          </button>
+        </p>
       )}
 
       <PageHeader

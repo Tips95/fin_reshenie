@@ -288,6 +288,7 @@ def list_clients(
     contract_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     due_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     collection_view: CollectionViewFilter | None = Query(default=None),
+    collection_paid_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     sort_by: ClientSortField = Query(default=ClientSortField.CREATED_AT),
     sort_dir: SortDirection = Query(default=SortDirection.DESC),
     page: int = Query(default=1, ge=1),
@@ -311,6 +312,7 @@ def list_clients(
         contract_month=contract_month,
         due_month=due_month,
         collection_view=collection_view,
+        collection_paid_month=collection_paid_month,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )

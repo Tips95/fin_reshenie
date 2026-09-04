@@ -28,6 +28,7 @@ import type {
   DocumentCollectionBreakdown,
   MandatoryPaymentBreakdown,
 } from "@/lib/types";
+import { clientListPath } from "@/lib/client-list-filters";
 import { canUseQuestionnaires } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -656,11 +657,19 @@ export default function DashboardPage() {
                     tone="brand"
                     hint={`Дата договора в ${monthLabel}`}
                   />
-                  <StatCard
-                    label="Оплатили сбор документов"
-                    value={summary.document_collection_this_month.paid_count}
-                    hint="13 000 ₽ за клиента (10k + 2k + 1k)"
-                  />
+              <Link
+                href={clientListPath("collection", {
+                  collection_view: "all",
+                  collection_paid_month: month,
+                })}
+                className="interactive block"
+              >
+                <StatCard
+                  label="Оплатили сбор документов"
+                  value={summary.document_collection_this_month.paid_count}
+                  hint="Нажмите, чтобы увидеть поимённо, кто именно вошёл в счёт"
+                />
+              </Link>
                   <StatCard
                     label="Заключили договор"
                     value={summary.contracts_signed_this_month}

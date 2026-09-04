@@ -432,6 +432,7 @@ export const clientsApi = {
     contract_month?: string;
     due_month?: string;
     collection_view?: "active" | "paid" | "converted" | "all";
+    collection_paid_month?: string;
     sort_by?: string;
     sort_dir?: "asc" | "desc";
     page?: number;
@@ -448,6 +449,9 @@ export const clientsApi = {
     if (params?.contract_month) search.set("contract_month", params.contract_month);
     if (params?.due_month) search.set("due_month", params.due_month);
     if (params?.collection_view) search.set("collection_view", params.collection_view);
+    if (params?.collection_paid_month) {
+      search.set("collection_paid_month", params.collection_paid_month);
+    }
     if (params?.sort_by) search.set("sort_by", params.sort_by);
     if (params?.sort_dir) search.set("sort_dir", params.sort_dir);
     if (params?.page) search.set("page", String(params.page));
