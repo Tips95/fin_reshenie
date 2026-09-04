@@ -1,3 +1,5 @@
+from collections import defaultdict
+from datetime import date
 from enum import Enum
 from uuid import UUID
 
@@ -162,6 +164,58 @@ def query_clients(
         ]
 
     return sort_clients(db, clients, sort_by=sort_by, sort_dir=sort_dir)
+
+
+def clients_latest_notes_map(
+    db: Session,
+    client_ids: list[UUID],
+    *,
+    due_month: str | None = None,
+) -> dict[UUID, tuple[str | None, int]]:
+    """Latest non-empty schedule note per client: (text, notes_count).
+
+    If due_month is set, prefer a note on a month that falls into that window.
+    """
+    if not client_ids:
+        return {}
+
+    rows = db.execute(
+        select(
+            InstallmentPlan.client_id,
+            PaymentSchedule.manager_note,
+            PaymentSchedule.due_date,
+            PaymentSchedule.deferred_until,
+            PaymentSchedule.month_number,
+        )
+        .join(PaymentSchedule, PaymentSchedule.installment_plan_id == InstallmentPlan.id)
+        .where(InstallmentPlan.client_id.in_(client_ids))
+    ).all()
+
+    grouped: dict[UUID, list[tuple[str, date, int]]] = defaultdict(list)
+    for client_id, note, due_date, deferred_until, month_number in rows:
+        text = (note or "").strip()
+        if not text:
+            continue
+        grouped[client_id].append((text, deferred_until or due_date, month_number))
+
+    month_start = month_end = None
+    if due_month:
+        month_start, month_end = month_bounds(due_month)
+
+    result: dict[UUID, tuple[str | None, int]] = {}
+    for client_id in client_ids:
+        notes = grouped.get(client_id, [])
+        if not notes:
+            result[client_id] = (None, 0)
+            continue
+        notes.sort(key=lambda item: (item[1], item[2]), reverse=True)
+        chosen = notes[0]
+        if month_start is not None and month_end is not None:
+            in_month = [item for item in notes if month_start <= item[1] <= month_end]
+            if in_month:
+                chosen = in_month[0]
+        result[client_id] = (chosen[0], len(notes))
+    return result
 
 
 def paginate_clients(

@@ -13,7 +13,7 @@ import {
   type ClientListSortField,
   type CollectionViewFilter,
 } from "@/lib/client-list-filters";
-import { formatDate, formatMoney, formatMonthLabel, formatShortName, engagementStageLabel, isFullClient, procedureStageLabel, statusLabel } from "@/lib/format";
+import { formatDate, formatMoney, formatMonthLabel, formatShortName, isFullClient, statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
@@ -322,9 +322,32 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const canEdit = canCreate;
   const isManager = user?.role === "manager";
   const canAssignManager = user?.role === "owner";
-  const canManageProcedure = user?.role === "owner";
   const canSeeClientAmounts = user?.role === "owner" || user?.role === "manager";
   const isCollectionStaff = user?.role === "call_center";
+
+  function clientLatestNote(client: Client | ClientBrief) {
+    if (!isFullClient(client)) {
+      return { text: "", extraCount: 0 };
+    }
+    const text = client.latest_manager_note?.trim() ?? "";
+    const count = client.manager_notes_count ?? 0;
+    return { text, extraCount: text && count > 1 ? count - 1 : 0 };
+  }
+
+  function renderClientNote(client: Client | ClientBrief) {
+    const { text, extraCount } = clientLatestNote(client);
+    if (!text) {
+      return <span className="text-sm text-muted">—</span>;
+    }
+    return (
+      <div className="max-w-[240px]">
+        <p className="line-clamp-2 whitespace-pre-wrap leading-snug text-foreground" title={text}>
+          {text}
+        </p>
+        {extraCount > 0 ? <p className="mt-0.5 text-[11px] text-muted">ещё {extraCount}</p> : null}
+      </div>
+    );
+  }
 
   function collectionStageBadge(client: Client | ClientBrief) {
     if (client.engagement_stage === "bankruptcy") {
@@ -821,10 +844,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       <div className="mt-2 flex flex-wrap gap-1">
                         {isCollectionView ? (
                           collectionStageBadge(client)
-                        ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
-                          <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
                         ) : (
-                          <Badge tone="default">{procedureStageLabel(client.procedure_stage)}</Badge>
+                          renderClientNote(client)
                         )}
                         {isManager && isCollectionView && isFullClient(client) && client.assigned_manager_id === user?.id ? (
                           <Badge tone="success">За вами</Badge>
@@ -878,7 +899,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   )}
                   {canAssignManager && <th>Менеджер</th>}
                   {isManager && isCollectionView && <th>Закрепление</th>}
-                  <th>Этап</th>
+                  <th>{isCollectionView ? "Этап" : "Примечание"}</th>
                   <SortableTh
                     label="Статус"
                     field="status"
@@ -902,7 +923,6 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   const isOverdue = isFullClient(client) && client.has_overdue;
                   const statusSaving = savingField === `${client.id}:status`;
                   const managerSaving = savingField === `${client.id}:manager`;
-                  const stageSaving = savingField === `${client.id}:procedure_stage`;
                   return (
                   <tr
                     key={client.id}
@@ -1018,32 +1038,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       </td>
                     )}
                     <td>
-                      {isCollectionView ? (
-                        collectionStageBadge(client)
-                      ) : isFullClient(client) && client.engagement_stage === "document_collection" ? (
-                        <Badge tone="warning">{engagementStageLabel(client.engagement_stage)}</Badge>
-                      ) : canManageProcedure && editMode ? (
-                        <Select
-                          className="min-w-[150px]"
-                          value={client.procedure_stage}
-                          disabled={stageSaving}
-                          onChange={(e) =>
-                            handleClientUpdate(
-                              client.id,
-                              { procedure_stage: e.target.value },
-                              "procedure_stage",
-                            )
-                          }
-                        >
-                          {PROCEDURE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </Select>
-                      ) : (
-                        <Badge tone="default">{procedureStageLabel(client.procedure_stage)}</Badge>
-                      )}
+                      {isCollectionView ? collectionStageBadge(client) : renderClientNote(client)}
                     </td>
                     <td>
                       {canEdit && editMode && isFullClient(client) ? (

@@ -34,7 +34,14 @@ from app.services.access import (
     pricing_tier_not_found_message,
 )
 from app.services.audit import log_audit
-from app.services.client_list import ClientSortField, CollectionViewFilter, SortDirection, paginate_clients, query_clients
+from app.services.client_list import (
+    ClientSortField,
+    CollectionViewFilter,
+    SortDirection,
+    clients_latest_notes_map,
+    paginate_clients,
+    query_clients,
+)
 from app.schemas.installment_plan import InstallmentPlanResponse
 from app.schemas.payment import PaymentAlignResult, PaymentResponse
 from app.schemas.payment_schedule import PaymentScheduleResponse
@@ -323,6 +330,15 @@ def list_clients(
         _apply_month_stats(_to_client_response(client, db), month_stats_by_client)
         for client in page_clients
     ]
+    notes_map = clients_latest_notes_map(
+        db,
+        [client.id for client in page_clients],
+        due_month=due_month,
+    )
+    for item in items:
+        note, notes_count = notes_map.get(item.id, (None, 0))
+        item.latest_manager_note = note
+        item.manager_notes_count = notes_count
 
     return ClientListResponse(
         items=items,

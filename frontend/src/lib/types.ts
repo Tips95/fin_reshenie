@@ -118,6 +118,8 @@ export interface Client {
   manager_first_commission_collected_at?: string | null;
   manager_first_commission_collected_by?: string | null;
   manager_first_commission_collected_by_name?: string | null;
+  latest_manager_note?: string | null;
+  manager_notes_count?: number;
 }
 
 export interface ClientDueMonthSummary {
@@ -278,6 +280,12 @@ export interface DashboardOverdueClientItem {
   contract_total: string | null;
 }
 
+export interface CashBalance {
+  month: string;
+  opening_amount: string;
+  comment: string | null;
+}
+
 export interface DashboardSummary {
   period_month: string;
   is_current_month: boolean;
@@ -303,6 +311,10 @@ export interface DashboardSummary {
   contracts_signed_this_month: number;
   org_profit_total: string;
   net_profit_this_month: string;
+  cash_opening_balance: string;
+  cash_closing_balance: string;
+  cash_opening_is_set: boolean;
+  cash_opening_comment: string | null;
   civil_cases_total: number;
   civil_cases_this_month: number;
   civil_income_total: string;
