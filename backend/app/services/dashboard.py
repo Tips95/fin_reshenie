@@ -28,7 +28,7 @@ from app.services.document_collection_stats import (
 )
 from app.services.mandatory_payment_stats import MandatoryPaymentTotals, breakdown_from_totals, get_mandatory_paid_totals
 from app.services.client_finances import contract_totals_by_client, sum_active_contract_totals
-from app.services.expense_totals import monthly_expenses_total
+from app.services.expense_totals import monthly_expenses_total, paid_fixed_expenses_total
 from app.services.phone import month_bounds
 from app.services.schedule_dates import effective_due_date, payment_window_end
 
@@ -373,6 +373,28 @@ def get_dashboard_summary(
         cash_balance.opening_amount if cash_balance is not None else Decimal("0.00")
     )
 
+    # Касса живёт по факту, а не по бюджету: плановые статьи вычитаются только
+    # после того, как их отметили оплаченными. Разовые траты фиксируются
+    # постфактум, поэтому они сразу считаются потраченными.
+    paid_fixed_expenses = paid_fixed_expenses_total(
+        db,
+        user.organization_id,
+        month_start=month_start,
+        month_end=month_end,
+    )
+    expenses_paid_this_month = paid_fixed_expenses + one_time_expenses_this_month
+    expenses_remaining_this_month = max(
+        Decimal("0.00"), fixed_monthly_expenses - paid_fixed_expenses
+    )
+    cash_in_this_month = cash_received_this_month + civil_income.income_this_month
+    cash_on_hand = (
+        cash_opening_balance
+        + cash_in_this_month
+        - mandatory_paid_this_month.total
+        - expenses_paid_this_month
+    )
+    cash_forecast_end = cash_on_hand + expected_this_month - expenses_remaining_this_month
+
     return DashboardSummary(
         period_month=period_month,
         is_current_month=is_current_month,
@@ -399,9 +421,13 @@ def get_dashboard_summary(
         org_profit_total=org_profit_total,
         net_profit_this_month=net_profit_this_month,
         cash_opening_balance=cash_opening_balance,
-        cash_closing_balance=cash_opening_balance + net_profit_this_month,
         cash_opening_is_set=cash_balance is not None,
         cash_opening_comment=cash_balance.comment if cash_balance is not None else None,
+        cash_in_this_month=cash_in_this_month,
+        expenses_paid_this_month=expenses_paid_this_month,
+        expenses_remaining_this_month=expenses_remaining_this_month,
+        cash_on_hand=cash_on_hand,
+        cash_forecast_end=cash_forecast_end,
         civil_cases_total=civil_income.cases_total,
         civil_cases_this_month=civil_income.cases_this_month,
         civil_income_total=civil_income.income_total,

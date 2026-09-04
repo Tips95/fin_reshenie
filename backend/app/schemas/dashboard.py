@@ -72,9 +72,13 @@ class DashboardSummary(BaseModel):
     org_profit_total: Decimal
     net_profit_this_month: Decimal
     cash_opening_balance: Decimal = Decimal("0.00")
-    cash_closing_balance: Decimal = Decimal("0.00")
     cash_opening_is_set: bool = False
     cash_opening_comment: str | None = None
+    cash_in_this_month: Decimal = Decimal("0.00")
+    expenses_paid_this_month: Decimal = Decimal("0.00")
+    expenses_remaining_this_month: Decimal = Decimal("0.00")
+    cash_on_hand: Decimal = Decimal("0.00")
+    cash_forecast_end: Decimal = Decimal("0.00")
     civil_cases_total: int = 0
     civil_cases_this_month: int = 0
     civil_income_total: Decimal = Decimal("0.00")

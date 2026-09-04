@@ -312,9 +312,13 @@ export interface DashboardSummary {
   org_profit_total: string;
   net_profit_this_month: string;
   cash_opening_balance: string;
-  cash_closing_balance: string;
   cash_opening_is_set: boolean;
   cash_opening_comment: string | null;
+  cash_in_this_month: string;
+  expenses_paid_this_month: string;
+  expenses_remaining_this_month: string;
+  cash_on_hand: string;
+  cash_forecast_end: string;
   civil_cases_total: number;
   civil_cases_this_month: number;
   civil_income_total: string;

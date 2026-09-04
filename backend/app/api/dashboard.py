@@ -96,6 +96,6 @@ def carry_forward_cash_balance(
         db,
         current_user,
         month=target_month,
-        opening_amount=summary.cash_closing_balance,
+        opening_amount=summary.cash_on_hand,
         comment=f"Перенос остатка за {payload.month}",
     )

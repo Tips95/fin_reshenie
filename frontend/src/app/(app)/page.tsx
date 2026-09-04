@@ -3,9 +3,25 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { Badge, Button, Card, Input, LoadingState, PageHeader, SectionTitle, StatCard } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  LoadingState,
+  PageHeader,
+  SectionTitle,
+  StatCard,
+} from "@/components/ui";
 import { ApiRequestError, dashboardApi, exportsApi } from "@/lib/api-client";
-import { formatAmountInput, formatDate, formatMoney, formatMonthLabel, formatShortName, statusLabel } from "@/lib/format";
+import {
+  formatAmountInput,
+  formatDate,
+  formatMoney,
+  formatMonthLabel,
+  formatShortName,
+  statusLabel,
+} from "@/lib/format";
 import type {
   DashboardOverdueClientItem,
   DashboardSummary,
@@ -16,33 +32,29 @@ import { canUseQuestionnaires } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const DASHBOARD_SECTIONS = [
-  { id: "dash-clients", label: "Клиенты" },
-  { id: "dash-activity", label: "Активность" },
-  { id: "dash-income", label: "Рассрочка" },
-  { id: "dash-civil", label: "Гражданка" },
-  { id: "dash-profit", label: "Прибыль" },
   { id: "dash-cash", label: "Касса" },
+  { id: "dash-portfolio", label: "Портфель" },
+  { id: "dash-month", label: "Месяц" },
+  { id: "dash-activity", label: "Активность" },
+  { id: "dash-civil", label: "Гражданка" },
   { id: "dash-collection", label: "Сбор" },
   { id: "dash-mandatory", label: "Обязательные" },
   { id: "dash-expenses", label: "Расходы" },
 ] as const;
 
 // Разделы, скрытые за кнопкой «Подробнее»: нужны реже, чем остальные.
-const DETAIL_SECTION_IDS: string[] = ["dash-collection", "dash-mandatory", "dash-expenses"];
+const DETAIL_SECTION_IDS: string[] = [
+  "dash-activity",
+  "dash-civil",
+  "dash-collection",
+  "dash-mandatory",
+  "dash-expenses",
+];
 
 type SectionTone =
-  | "clients"
-  | "activity"
-  | "income"
-  | "collection"
-  | "mandatory"
-  | "expenses"
-  | "profit";
+  "clients" | "activity" | "income" | "collection" | "mandatory" | "expenses" | "profit";
 
-const SECTION_STYLES: Record<
-  SectionTone,
-  { shell: string; header: string; badge: string }
-> = {
+const SECTION_STYLES: Record<SectionTone, { shell: string; header: string; badge: string }> = {
   clients: {
     shell: "border-border bg-surface",
     header: "border-b border-border bg-surface-muted",
@@ -100,8 +112,12 @@ function normalizeSummary(data: DashboardSummary): DashboardSummary {
     civil_income_total: data.civil_income_total ?? "0",
     civil_income_this_month: data.civil_income_this_month ?? "0",
     cash_opening_balance: data.cash_opening_balance ?? "0",
-    cash_closing_balance: data.cash_closing_balance ?? "0",
     cash_opening_is_set: data.cash_opening_is_set ?? false,
+    cash_in_this_month: data.cash_in_this_month ?? "0",
+    expenses_paid_this_month: data.expenses_paid_this_month ?? "0",
+    expenses_remaining_this_month: data.expenses_remaining_this_month ?? "0",
+    cash_on_hand: data.cash_on_hand ?? "0",
+    cash_forecast_end: data.cash_forecast_end ?? "0",
     open_tasks_count: data.open_tasks_count ?? 0,
     overdue_clients_preview: data.overdue_clients_preview ?? [],
   };
@@ -131,7 +147,9 @@ function DashboardSection({
     >
       <div className={`dashboard-section-header ${styles.header}`}>
         <div className="flex items-start gap-2">
-          <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${styles.badge}`}>
+          <span
+            className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${styles.badge}`}
+          >
             {title}
           </span>
           {description && (
@@ -168,7 +186,9 @@ function MandatoryPaymentsTable({
         </thead>
         <tbody>
           <tr>
-            <td data-label="Период" className="font-medium text-foreground">{monthLabel}</td>
+            <td data-label="Период" className="font-medium text-foreground">
+              {monthLabel}
+            </td>
             <td data-label="Депозит">{formatMoney(month.deposit)}</td>
             <td data-label="Фин. управление">{formatMoney(month.financial_management)}</td>
             <td data-label="Госпошлина">{formatMoney(month.court_fee)}</td>
@@ -177,7 +197,9 @@ function MandatoryPaymentsTable({
             </td>
           </tr>
           <tr>
-            <td data-label="Период" className="font-medium text-foreground">Всего</td>
+            <td data-label="Период" className="font-medium text-foreground">
+              Всего
+            </td>
             <td data-label="Депозит">{formatMoney(total.deposit)}</td>
             <td data-label="Фин. управление">{formatMoney(total.financial_management)}</td>
             <td data-label="Госпошлина">{formatMoney(total.court_fee)}</td>
@@ -270,6 +292,9 @@ export default function DashboardPage() {
 
   const overdueClients = summary?.overdue_clients_preview ?? [];
   const openTasksCount = summary?.open_tasks_count ?? 0;
+  const cashOutThisMonth =
+    Number(summary?.mandatory_paid_this_month?.total ?? 0) +
+    Number(summary?.expenses_paid_this_month ?? 0);
 
   function goToSection(id: string) {
     if (DETAIL_SECTION_IDS.includes(id)) {
@@ -339,27 +364,32 @@ export default function DashboardPage() {
           {showOrgFinance ? (
             <>
               <StatCard
-                label={`Чистая прибыль за ${monthLabel}`}
-                value={formatMoney(summary.net_profit_this_month)}
-                tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
+                label="Сейчас в кассе"
+                value={formatMoney(summary.cash_on_hand)}
+                tone={Number(summary.cash_on_hand) >= 0 ? "success" : "danger"}
+                hint={
+                  summary.cash_opening_is_set
+                    ? `Остаток на начало ${formatMoney(summary.cash_opening_balance)} + движение месяца`
+                    : "Остаток на начало не указан — укажите в разделе «Касса»"
+                }
               />
               <StatCard
-                label={`Поступило в кассу за ${monthLabel}`}
-                value={formatMoney(summary.cash_received_this_month)}
-                tone="success"
-                hint="Рассрочка + сбор документов"
-              />
-              <StatCard
-                label={`Доход от гражданки за ${monthLabel}`}
-                value={formatMoney(summary.civil_income_this_month)}
+                label="Ещё ожидается"
+                value={formatMoney(summary.expected_this_month)}
                 tone="brand"
-                hint="Отдельно от рассрочки, по дате обращения"
+                hint={`Платежи клиентов до конца ${monthLabel}`}
               />
               <StatCard
-                label="Сумма просрочки"
-                value={formatMoney(summary.overdue_amount)}
-                tone="danger"
-                hint={`${summary.clients_overdue} клиентов`}
+                label="Осталось расходов"
+                value={formatMoney(summary.expenses_remaining_this_month)}
+                tone="warning"
+                hint={`План ${formatMoney(summary.monthly_expenses)} · оплачено ${formatMoney(summary.expenses_paid_this_month)}`}
+              />
+              <StatCard
+                label="Прогноз на конец месяца"
+                value={formatMoney(summary.cash_forecast_end)}
+                tone={Number(summary.cash_forecast_end) >= 0 ? "success" : "danger"}
+                hint="Если все платежи придут, а плановые расходы закроются"
               />
             </>
           ) : (
@@ -397,7 +427,10 @@ export default function DashboardPage() {
                 <Link href="/questionnaires/new">
                   <Button type="button">Новая анкета</Button>
                 </Link>
-                <Link href="/questionnaires" className="text-sm font-semibold text-brand-600 hover:text-brand-700">
+                <Link
+                  href="/questionnaires"
+                  className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                >
                   Все анкеты →
                 </Link>
               </div>
@@ -413,179 +446,10 @@ export default function DashboardPage() {
       {showOrgFinance && (
         <div className="page-group">
           <DashboardSection
-            id="dash-clients"
-            tone="clients"
-            title="Клиенты"
-            description="Текущая база и состояние договоров"
-          >
-            <div className="stat-grid">
-              <StatCard label="Активных" value={summary.clients_active} tone="success" />
-              <StatCard label="С просрочкой" value={summary.clients_overdue} tone="danger" />
-              <StatCard
-                label="Сумма активных договоров"
-                value={formatMoney(summary.active_contract_total)}
-                hint="По графику рассрочки, без долга перед кредиторами"
-              />
-            </div>
-          </DashboardSection>
-        </div>
-      )}
-
-      {showOrgFinance && (
-        <div className="page-group">
-          <DashboardSection
-            id="dash-activity"
-            tone="activity"
-            title={`Активность за ${monthLabel}`}
-            description="Сколько человек пришло, оплатило сбор документов и заключило договор банкротства"
-            action={
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href="/clients/collection"
-                  className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
-                >
-                  Сбор документов →
-                </Link>
-                <Link
-                  href="/clients/contracts"
-                  className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
-                >
-                  Договоры →
-                </Link>
-              </div>
-            }
-          >
-            <div className="stat-grid">
-              <StatCard
-                label="Новых клиентов"
-                value={summary.clients_new_this_month}
-                tone="brand"
-                hint={`Дата договора в ${monthLabel}`}
-              />
-              <StatCard
-                label="Оплатили сбор документов"
-                value={summary.document_collection_this_month.paid_count}
-                hint="13 000 ₽ за клиента (10k + 2k + 1k)"
-              />
-              <StatCard
-                label="Заключили договор"
-                value={summary.contracts_signed_this_month}
-                tone="success"
-                hint="Переведены на банкротство"
-              />
-              <StatCard
-                label="Сейчас на сборе"
-                value={summary.collection_in_progress}
-                tone="warning"
-                hint="Текущее состояние, не зависит от месяца"
-              />
-            </div>
-          </DashboardSection>
-
-          <DashboardSection
-            id="dash-income"
-            tone="income"
-            title="Поступления по рассрочке"
-            description="Платежи по графикам договоров банкротства"
-          >
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <StatCard
-                label={`Ожидается в ${monthLabel}`}
-                value={formatMoney(summary.expected_this_month)}
-              />
-              <StatCard label="Всего получено" value={formatMoney(summary.total_collected)} />
-              <StatCard
-                label="Остаток по графикам"
-                value={formatMoney(summary.total_remainder)}
-                tone="warning"
-              />
-            </div>
-          </DashboardSection>
-
-          <DashboardSection
-            id="dash-civil"
-            tone="income"
-            title="Гражданские дела"
-            description="Доход по цене дел, отдельно от рассрочки. За месяц — по дате обращения"
-            action={
-              <Link
-                href="/civil-cases"
-                className="interactive text-xs font-semibold text-status-success-text hover:opacity-80"
-              >
-                Гражданские дела →
-              </Link>
-            }
-          >
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label={`Доход за ${monthLabel}`}
-                value={formatMoney(summary.civil_income_this_month)}
-                tone="success"
-              />
-              <StatCard label="Доход всего" value={formatMoney(summary.civil_income_total)} />
-              <StatCard
-                label={`Дел за ${monthLabel}`}
-                value={summary.civil_cases_this_month}
-                tone="brand"
-              />
-              <StatCard label="Всего дел" value={summary.civil_cases_total} />
-            </div>
-          </DashboardSection>
-
-          <DashboardSection
-            id="dash-profit"
-            tone="profit"
-            title="Прибыль"
-            description="Итог по банкротству: рассрочка + касса сбора − обязательные (по дате внесения) − расходы. Гражданские дела сюда не входят"
-          >
-            <div className="grid gap-2 sm:grid-cols-2">
-              <StatCard
-                label="Прибыль по клиентам (всего)"
-                value={formatMoney(summary.org_profit_total)}
-                tone={Number(summary.org_profit_total) >= 0 ? "success" : "danger"}
-              />
-            </div>
-            <div className="mt-2 rounded-md border border-status-success-border bg-surface px-3 py-2">
-              <p className="text-xs font-semibold text-foreground">Формула за {monthLabel}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">
-                Рассрочка{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(summary.collected_this_month)}
-                </span>
-                {" + "}
-                Касса сбора{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(summary.document_collection_this_month.collection_cash)}
-                </span>
-                {" − "}
-                Обязательные{" "}
-                <span className="font-semibold text-status-warning-text">
-                  {formatMoney(summary.mandatory_paid_this_month.total)}
-                </span>
-                {" − "}
-                Расходы{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(summary.monthly_expenses)}
-                </span>
-                {" = "}
-                <span
-                  className={`font-bold ${
-                    Number(summary.net_profit_this_month) >= 0
-                      ? "text-status-success-text"
-                      : "text-status-danger-text"
-                  }`}
-                >
-                  {formatMoney(summary.net_profit_this_month)}
-                </span>
-              </p>
-            </div>
-          </DashboardSection>
-
-          <DashboardSection
             id="dash-cash"
             tone="income"
             title="Касса"
-            description="Остаток на начало месяца задаётся вручную. К нему прибавляется прибыль месяца — получается остаток на конец"
+            description="Остаток на начало задаётся вручную. Дальше касса живёт по факту: прибавляются поступления, вычитаются реально сделанные выплаты"
           >
             <div className="stat-grid">
               <StatCard
@@ -594,14 +458,21 @@ export default function DashboardPage() {
                 hint={summary.cash_opening_is_set ? "Указан вручную" : "Не указан"}
               />
               <StatCard
-                label={`Прибыль за ${monthLabel}`}
-                value={formatMoney(summary.net_profit_this_month)}
-                tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
+                label={`Поступило за ${monthLabel}`}
+                value={formatMoney(summary.cash_in_this_month)}
+                tone="success"
+                hint="Рассрочка + сбор документов + гражданка"
               />
               <StatCard
-                label="Остаток на конец"
-                value={formatMoney(summary.cash_closing_balance)}
-                tone={Number(summary.cash_closing_balance) >= 0 ? "success" : "danger"}
+                label={`Выплачено за ${monthLabel}`}
+                value={formatMoney(cashOutThisMonth)}
+                tone="warning"
+                hint="Обязательные платежи + оплаченные расходы"
+              />
+              <StatCard
+                label="Сейчас в кассе"
+                value={formatMoney(summary.cash_on_hand)}
+                tone={Number(summary.cash_on_hand) >= 0 ? "success" : "danger"}
               />
             </div>
             <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-status-success-border bg-surface px-3 py-2">
@@ -625,10 +496,117 @@ export default function DashboardPage() {
                 disabled={cashSaving}
                 onClick={handleCarryForwardCash}
               >
-                Перенести в {formatMonthLabel(nextMonth(month))}
+                Перенести {formatMoney(summary.cash_on_hand)} в {formatMonthLabel(nextMonth(month))}
               </Button>
             </div>
             {cashError ? <p className="mt-2 text-xs text-status-danger-text">{cashError}</p> : null}
+          </DashboardSection>
+
+          <DashboardSection
+            id="dash-portfolio"
+            tone="clients"
+            title="Портфель"
+            description="Деньги, которые клиенты ещё должны по графикам. Не зависит от выбранного месяца"
+          >
+            <div className="stat-grid">
+              <StatCard
+                label="Остаток по графикам"
+                value={formatMoney(summary.total_remainder)}
+                tone="brand"
+                hint="Сколько ещё предстоит получить"
+              />
+              <StatCard
+                label="Из них просрочено"
+                value={formatMoney(summary.overdue_amount)}
+                tone="danger"
+                hint={`${summary.clients_overdue} клиентов`}
+              />
+              <StatCard
+                label="Сумма активных договоров"
+                value={formatMoney(summary.active_contract_total)}
+                hint={`${summary.clients_active} активных клиентов`}
+              />
+              <StatCard
+                label="Получено за всё время"
+                value={formatMoney(summary.total_collected)}
+                tone="success"
+              />
+            </div>
+          </DashboardSection>
+
+          <DashboardSection
+            id="dash-month"
+            tone="profit"
+            title={`Итоги за ${monthLabel}`}
+            description="Прибыль по банкротству: рассрочка + касса сбора − обязательные − расходы. Гражданка идёт в кассу, но в эту прибыль не входит"
+          >
+            <div className="stat-grid">
+              <StatCard
+                label="Чистая прибыль"
+                value={formatMoney(summary.net_profit_this_month)}
+                tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
+              />
+              <StatCard
+                label="Поступило по рассрочке"
+                value={formatMoney(summary.collected_this_month)}
+                tone="success"
+                hint={`Касса сбора ${formatMoney(summary.document_collection_this_month.collection_cash)}`}
+              />
+              <StatCard
+                label="Обязательные платежи"
+                value={formatMoney(summary.mandatory_paid_this_month.total)}
+                tone="warning"
+                hint="Депозит, фин. управление, госпошлина"
+              />
+              <StatCard
+                label="Расходы: оплачено"
+                value={formatMoney(summary.expenses_paid_this_month)}
+                tone="warning"
+                hint={`План ${formatMoney(summary.monthly_expenses)} · осталось ${formatMoney(summary.expenses_remaining_this_month)}`}
+              />
+            </div>
+            <div className="mt-2 rounded-md border border-status-success-border bg-surface px-3 py-2">
+              <p className="text-xs font-semibold text-foreground">Формула прибыли</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted">
+                Рассрочка{" "}
+                <span className="font-semibold text-foreground">
+                  {formatMoney(summary.collected_this_month)}
+                </span>
+                {" + "}
+                Касса сбора{" "}
+                <span className="font-semibold text-foreground">
+                  {formatMoney(summary.document_collection_this_month.collection_cash)}
+                </span>
+                {" − "}
+                Обязательные{" "}
+                <span className="font-semibold text-status-warning-text">
+                  {formatMoney(summary.mandatory_paid_this_month.total)}
+                </span>
+                {" − "}
+                Расходы (план){" "}
+                <span className="font-semibold text-foreground">
+                  {formatMoney(summary.monthly_expenses)}
+                </span>
+                {" = "}
+                <span
+                  className={`font-bold ${
+                    Number(summary.net_profit_this_month) >= 0
+                      ? "text-status-success-text"
+                      : "text-status-danger-text"
+                  }`}
+                >
+                  {formatMoney(summary.net_profit_this_month)}
+                </span>
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted">
+                Прибыль считает расходы по бюджету, касса — по факту оплаты. Поэтому «сейчас в
+                кассе» выше прибыли ровно на неоплаченные{" "}
+                <span className="font-semibold text-foreground">
+                  {formatMoney(summary.expenses_remaining_this_month)}
+                </span>
+                .
+              </p>
+            </div>
           </DashboardSection>
         </div>
       )}
@@ -649,6 +627,85 @@ export default function DashboardPage() {
 
           {showDetails ? (
             <>
+              <DashboardSection
+                id="dash-activity"
+                tone="activity"
+                title={`Активность за ${monthLabel}`}
+                description="Сколько человек пришло, оплатило сбор документов и заключило договор банкротства"
+                action={
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href="/clients/collection"
+                      className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
+                    >
+                      Сбор документов →
+                    </Link>
+                    <Link
+                      href="/clients/contracts"
+                      className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
+                    >
+                      Договоры →
+                    </Link>
+                  </div>
+                }
+              >
+                <div className="stat-grid">
+                  <StatCard
+                    label="Новых клиентов"
+                    value={summary.clients_new_this_month}
+                    tone="brand"
+                    hint={`Дата договора в ${monthLabel}`}
+                  />
+                  <StatCard
+                    label="Оплатили сбор документов"
+                    value={summary.document_collection_this_month.paid_count}
+                    hint="13 000 ₽ за клиента (10k + 2k + 1k)"
+                  />
+                  <StatCard
+                    label="Заключили договор"
+                    value={summary.contracts_signed_this_month}
+                    tone="success"
+                    hint="Переведены на банкротство"
+                  />
+                  <StatCard
+                    label="Сейчас на сборе"
+                    value={summary.collection_in_progress}
+                    tone="warning"
+                    hint="Текущее состояние, не зависит от месяца"
+                  />
+                </div>
+              </DashboardSection>
+
+              <DashboardSection
+                id="dash-civil"
+                tone="income"
+                title="Гражданские дела"
+                description="Доход по цене дел, отдельно от рассрочки. За месяц — по дате обращения"
+                action={
+                  <Link
+                    href="/civil-cases"
+                    className="interactive text-xs font-semibold text-status-success-text hover:opacity-80"
+                  >
+                    Гражданские дела →
+                  </Link>
+                }
+              >
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatCard
+                    label={`Доход за ${monthLabel}`}
+                    value={formatMoney(summary.civil_income_this_month)}
+                    tone="success"
+                  />
+                  <StatCard label="Доход всего" value={formatMoney(summary.civil_income_total)} />
+                  <StatCard
+                    label={`Дел за ${monthLabel}`}
+                    value={summary.civil_cases_this_month}
+                    tone="brand"
+                  />
+                  <StatCard label="Всего дел" value={summary.civil_cases_total} />
+                </div>
+              </DashboardSection>
+
               <DashboardSection
                 id="dash-collection"
                 tone="collection"
@@ -759,9 +816,7 @@ export default function DashboardPage() {
             }
           />
           {overdueClients.length === 0 ? (
-            <p className="alert-success">
-              Просроченных платежей нет — отличная работа!
-            </p>
+            <p className="alert-success">Просроченных платежей нет — отличная работа!</p>
           ) : (
             <>
               <div className="desktop-only overflow-x-auto">
@@ -779,10 +834,7 @@ export default function DashboardPage() {
                     {overdueClients.map((client: DashboardOverdueClientItem) => (
                       <tr key={client.id}>
                         <td>
-                          <Link
-                            href={`/clients/${client.id}`}
-                            className="link-brand"
-                          >
+                          <Link href={`/clients/${client.id}`} className="link-brand">
                             {formatShortName(client.full_name)}
                           </Link>
                         </td>

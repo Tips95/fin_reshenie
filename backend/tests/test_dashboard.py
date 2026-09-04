@@ -47,6 +47,13 @@ def patch_civil_income(monkeypatch, stats: CivilIncomeStats | None = None) -> No
     )
 
 
+def patch_paid_expenses(monkeypatch, paid: Decimal = Decimal("0.00")) -> None:
+    monkeypatch.setattr(
+        "app.services.dashboard.paid_fixed_expenses_total",
+        lambda *_args, **_kwargs: paid,
+    )
+
+
 def patch_cash_balance(monkeypatch, opening: Decimal | None = None) -> None:
     balance = (
         None if opening is None else SimpleNamespace(opening_amount=opening, comment=None)
@@ -127,6 +134,7 @@ class TestDashboardSummary:
             lambda *_args, **_kwargs: (Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
         patch_civil_income(monkeypatch)
+        patch_paid_expenses(monkeypatch)
         patch_cash_balance(monkeypatch)
 
         summary = get_dashboard_summary(db, make_user())
@@ -325,6 +333,7 @@ class TestDashboardSummary:
                 income_this_month=Decimal("12000.00"),
             ),
         )
+        patch_paid_expenses(monkeypatch)
         patch_cash_balance(monkeypatch)
 
         summary = get_dashboard_summary(db, make_user())
@@ -339,7 +348,7 @@ class TestDashboardSummary:
         assert summary.civil_cases_this_month == 1
         assert summary.civil_cases_total == 3
 
-    def test_cash_closing_adds_month_profit_to_manual_opening(self, monkeypatch):
+    def test_cash_on_hand_counts_paid_expenses_not_budget(self, monkeypatch):
         client = make_client()
         payment = SimpleNamespace(
             amount=Decimal("3000.00"),
@@ -396,15 +405,32 @@ class TestDashboardSummary:
             "app.services.dashboard.monthly_expenses_total",
             lambda *_args, **_kwargs: (Decimal("1000.00"), Decimal("1000.00"), Decimal("0.00")),
         )
-        patch_civil_income(monkeypatch)
+        patch_civil_income(
+            monkeypatch,
+            CivilIncomeStats(
+                cases_total=1,
+                cases_this_month=1,
+                income_total=Decimal("5000.00"),
+                income_this_month=Decimal("5000.00"),
+            ),
+        )
+        patch_paid_expenses(monkeypatch, Decimal("400.00"))
         patch_cash_balance(monkeypatch, Decimal("500000.00"))
 
         summary = get_dashboard_summary(db, make_user())
 
         assert summary.net_profit_this_month == Decimal("2000.00")
         assert summary.cash_opening_balance == Decimal("500000.00")
-        assert summary.cash_closing_balance == Decimal("502000.00")
         assert summary.cash_opening_is_set is True
+        # Гражданка попадает в кассу, но не в прибыль по банкротству.
+        assert summary.cash_in_this_month == Decimal("8000.00")
+        # Из бюджета в 1000 закрыто только 400 — остальное ещё предстоит потратить.
+        assert summary.expenses_paid_this_month == Decimal("400.00")
+        assert summary.expenses_remaining_this_month == Decimal("600.00")
+        assert summary.cash_on_hand == Decimal("507600.00")
+        assert summary.cash_forecast_end == (
+            summary.cash_on_hand + summary.expected_this_month - Decimal("600.00")
+        )
 
     def test_call_center_gets_limited_summary(self, monkeypatch):
         client = make_client()
