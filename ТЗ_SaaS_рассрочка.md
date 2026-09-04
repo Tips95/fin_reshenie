@@ -1,189 +1,368 @@
 # Техническое задание: SaaS-платформа учёта клиентов и рассрочки
 
+**Актуализация:** 24.07.2026 — по текущему коду `backend` + `frontend` (ветка `main`, prod Timeweb App Platform).
+
 ## Контекст проекта
 
-Мы разрабатываем внутреннюю систему для юридической компании «Решение» (банкротство физлиц, Грозный), которая заменит текущий учёт в Excel. Система должна быть спроектирована так, чтобы в будущем стать мультитенантным SaaS-продуктом и продаваться другим юридическим/банкротным фирмам в регионе. Поэтому **архитектура с первого дня должна поддерживать несколько организаций**, даже если сейчас реально работает только одна.
+Внутренняя система для юридической компании «Решение» (банкротство физлиц, Грозный), заменяющая учёт в Excel. Архитектура с первого дня поддерживает **несколько организаций** (`organization_id` во всех бизнес-таблицах).
+
+Дополнительно реализован **отдельный модуль «Товарная рассрочка»** (`organization_type = retail`) для инвесторов и розничных договоров.
+
+**Prod:** Timeweb App Platform + Managed PostgreSQL.  
+**Repo:** `Tips95/fin_reshenie`.
 
 ---
 
-## Стек
+## Стек (фактический)
 
-- **Backend:** FastAPI (Python 3.12+)
-- **БД:** PostgreSQL (не SQLite — важно для будущей мультитенантности и конкурентного доступа)
-- **ORM:** SQLAlchemy 2.0 + Alembic для миграций
-- **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- **Хостинг:** Timeweb Cloud (VPS)
-- **Аутентификация:** JWT (access + refresh токены), пароли — bcrypt/argon2
-- **Деплой:** Docker + docker-compose (backend, frontend, postgres, nginx)
-
----
-
-## 1. Архитектура данных (мультитенантность с первого дня)
-
-Каждая таблица с бизнес-данными обязана иметь поле `organization_id`, даже если сейчас в системе одна организация. Это критично — переделывать это на живых данных потом будет очень болезненно.
-
-### Основные таблицы
-
-**organizations**
-- id (uuid, PK)
-- name (string) — например «Решение»
-- created_at
-
-**users**
-- id (uuid, PK)
-- organization_id (FK → organizations)
-- full_name
-- phone / email
-- password_hash
-- role (enum: `owner`, `manager`, `call_center`) — по образцу текущей структуры (аккаунт-менеджеры / колл-центр)
-- is_active (bool)
-- created_at
-
-**clients**
-- id (uuid, PK)
-- organization_id (FK)
-- assigned_manager_id (FK → users, nullable)
-- full_name
-- phone
-- contract_date (date)
-- debt_amount (numeric) — сумма долга/договора
-- status (enum: `active`, `completed`, `defaulted`, `cancelled`)
-- created_at, updated_at
-
-**pricing_tiers** (важно: прайс — это данные в БД, а не хардкод в коде!)
-- id (uuid, PK)
-- organization_id (FK) — у каждой организации может быть свой прайс
-- min_amount (numeric)
-- max_amount (numeric)
-- total_cost (numeric) — стоимость рассрочки (то, что клиент платит компании)
-- first_month_payment (numeric)
-- second_month_payment (numeric)
-- remaining_months_count (int) — сколько месяцев после первых двух (3-10 и т.д.)
-- remaining_month_payment (numeric) — платёж за каждый из оставшихся месяцев
-- total_months (int)
-- is_active (bool)
-- effective_from (date) — дата начала действия тарифа (чтобы при смене прайса старые договоры считались по старой сетке!)
-
-**installment_plans** (график рассрочки конкретного клиента)
-- id (uuid, PK)
-- client_id (FK → clients)
-- pricing_tier_id (FK → pricing_tiers, nullable — можно и вручную задать)
-- total_amount (numeric)
-- start_date (date)
-- total_months (int)
-- created_at
-
-**payment_schedule** (плановые платежи по месяцам — замена столбцов авг.25...июл.26 из Excel)
-- id (uuid, PK)
-- installment_plan_id (FK)
-- month_number (int) — порядковый номер месяца в графике
-- due_date (date)
-- planned_amount (numeric)
-- paid_amount (numeric, default 0)
-- paid_date (date, nullable)
-- status (enum: `pending`, `paid`, `partial`, `overdue`)
-
-**payments** (журнал фактических поступлений — на случай частичных/досрочных оплат)
-- id (uuid, PK)
-- client_id (FK)
-- payment_schedule_id (FK, nullable)
-- amount (numeric)
-- payment_date (date)
-- comment (text, nullable)
-- created_by (FK → users)
-
-**court_deposit_tracking** (опционально, отдельно от общего графика — судебные и депозитные суммы, как в текущей таблице «СУД» / «ДЕПОЗИТ»)
-- id (uuid, PK)
-- client_id (FK)
-- court_amount (numeric)
-- deposit_amount (numeric)
-- paid (bool)
+| Слой | Технологии |
+|------|------------|
+| Backend | FastAPI, Python 3.11+, SQLAlchemy 2.0, Alembic, Pydantic v2 |
+| БД | PostgreSQL (Timeweb Managed), SSL |
+| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| Auth | JWT (access + refresh), bcrypt |
+| Экспорт | openpyxl → `.xlsx` |
+| Деплой | Docker, docker-compose (local), Timeweb App Platform (prod) |
+| API prefix | `/api` |
 
 ---
 
-## 2. Роли и права доступа
+## 1. Архитектура данных
 
-Взять за основу текущую логику ролей в amoCRM (Диана, Беслан и т.д.):
+### 1.1. Базовые сущности (банкротство)
+
+**organizations** — id, name, `organization_type` (`bankruptcy` \| `retail`), created_at
+
+**users** — id, organization_id, full_name, email, password_hash, role (`owner`, `manager`, `call_center`, `investor`), is_active, `investment_amount` (для investor), created_at
+
+**clients** — id, organization_id, assigned_manager_id, full_name, phone, contract_date, debt_amount, status (`active`, `completed`, `defaulted`, `cancelled`), **`engagement_stage`** (`document_collection` \| `bankruptcy`), **`procedure_stage`** (воронка: договор → депозит → ФУ → суд → завершение), is_deleted, created_at, updated_at
+
+**pricing_tiers** — тарифная сетка по диапазонам долга (min/max, total_cost, first/second month, remaining_months, effective_from, is_active)
+
+**installment_plans** — client_id, pricing_tier_id, total_amount, start_date, total_months
+
+**payment_schedule** — installment_plan_id, month_number, due_date, planned_amount, paid_amount, paid_date, status, **deferred_until**, **deferral_comment**, **overdue_waived**
+
+**payments** — client_id, payment_schedule_id, amount, payment_date, comment, created_by, **is_refund**, is_deleted
+
+**client_mandatory_payments** — депозит (25 000 ₽), фин. управление, судебная пошлина; planned/paid amounts, is_applicable, status
+
+**client_mandatory_payment_records** — журнал внесений по обязательным платежам
+
+**document_collections** — предуслуга «Сбор документов»: total_amount, **collection_fee** (касса 10k), **notary_fee** (2k), **manager_commission** (1k), status, paid_date
+
+**operating_expenses** — ежемесячные расходы организации (зарплаты, аренда, ЖКХ и т.д.)
+
+**expense_payments** — факт оплаты расходов по месяцам
+
+**manager_tasks** — задачи менеджерам (авто по просрочке, ручные)
+
+**audit_logs** — журнал изменений (entity, field, old/new, user, timestamp)
+
+**court_deposit_tracking** — legacy-таблица из начальной схемы; в UI не используется, записи не создаются
+
+### 1.2. Модуль «Товарная рассрочка» (retail)
+
+**retail_clients**, **retail_contracts**, **retail_payments**, **retail_term_rates**, **retail_overdue_logs** — отдельный контур для owner/investor.
+
+### 1.3. Миграции Alembic (11 версий)
+
+От `initial_schema` до: deferral, operating_expenses, mandatory_payments, procedure_stage/tasks, document_collection, retail, investor amounts, overdue_waived, mandatory_payment_records.
+
+---
+
+## 2. Роли и права доступа (реализовано)
 
 | Роль | Доступ |
-|---|---|
-| **owner** (руководитель) | видит всех клиентов организации, управляет прайсом, управляет пользователями |
-| **manager** (аккаунт-менеджер) | видит только своих клиентов, может фиксировать платежи, не может менять прайс |
-| **call_center** | видит ограниченный набор полей (для первичного контакта), не видит финансовые детали |
+|------|--------|
+| **owner** | Полный доступ: финансы, аналитика, расходы, команда, тарифы, журнал, удаление клиентов/платежей, обязательные платежи, снятие просрочки, внесение платежей по рассрочке |
+| **manager** | Свои клиенты + незакреплённые на этапе «Сбор документов»; редактирование графика; сбор документов; **без** внесения платежей по рассрочке, **без** обязательных платежей (депозит/ФУ/пошлина) |
+| **call_center** | Краткая карточка клиента, без финансов и дашборда |
+| **investor** | Только модуль `/retail` (свои договоры и капитал) |
 
-Права проверяются на уровне API (middleware/dependency в FastAPI), не только на фронтенде.
-
----
-
-## 3. Логика расчёта графика рассрочки (ключевая бизнес-логика)
-
-При создании installment_plan для клиента:
-
-1. По сумме долга (`debt_amount`) найти подходящий `pricing_tier` для данной организации (где `min_amount <= debt_amount < max_amount` и `is_active = true`)
-2. Сгенерировать `payment_schedule`:
-   - Месяц 1 = `first_month_payment`
-   - Месяц 2 = `second_month_payment`
-   - Месяцы 3...N = равными частями по `remaining_month_payment`, количество = `remaining_months_count`
-3. Даты `due_date` считать от `start_date` (даты заключения договора) с шагом в 1 месяц
-4. Итоговая сумма всех платежей должна равняться `total_cost` из тарифа — сделать валидацию/тест на это, чтобы не было расхождений как в текущем Excel
-
-**Важно:** если организация меняет прайс (как это только что произошло у «Решение» — переход с наценки 0/15/30% на фиксированные суммы по диапазонам), старые графики рассрочки **не должны пересчитываться** — они остаются по тарифу, который действовал на момент заключения договора. Новые расчёты идут по новому тарифу. Отсюда поле `effective_from`.
+Права проверяются в FastAPI (`deps.py`, `access.py`), не только на фронте.
 
 ---
 
-## 4. Основной функционал MVP (по приоритету)
+## 3. Ключевая бизнес-логика
 
-### Этап 1 — ядро
-- [ ] Авторизация (логин/пароль, роли)
-- [ ] CRUD клиентов (карточка клиента вместо строки Excel)
-- [ ] Админка тарифной сетки (owner может добавлять/редактировать диапазоны прайса)
-- [ ] Автогенерация графика платежей при создании клиента
-- [ ] Ручная фиксация платежа (менеджер отмечает: клиент заплатил Х числа сумму Y)
-- [ ] Список клиентов с фильтрами: статус, менеджер, просрочка
+### 3.1. График рассрочки (банкротство)
 
-### Этап 2 — дашборд и аналитика
-- [ ] Общий дашборд: сколько денег ожидается в этом месяце, сколько просрочено, общая прибыль/остаток (замена столбцов «прибыль»/«остаток» из Excel)
-- [ ] Карточка клиента с полной историей платежей и визуальным графиком (кто оплатил / кто должен)
-- [ ] Экспорт в Excel/PDF (для отчётности, к которой все привыкли)
+1. Подбор `pricing_tier` по `debt_amount` и `contract_date` (диапазоны **включительные**).
+2. Генерация `payment_schedule` по тарифу (1-й, 2-й месяц + remaining).
+3. Старые графики **не пересчитываются** при смене прайса (`effective_from`).
+4. Owner может **вручную** задать сумму договора и редактировать график (суммы, даты, добавление/удаление месяцев).
+5. Окно оплаты: с **25-го** по конец месяца; просрочка — после grace period (`schedule_dates.py`).
 
-### Этап 3 — автоматизация
-- [ ] Автонапоминания клиентам о платеже (интеграция с Green API / WhatsApp — уже есть опыт с этим стеком)
-- [ ] Уведомления менеджерам о просрочках
-- [ ] Интеграция с amoCRM (синхронизация клиентов, чтобы не вести двойной учёт)
+### 3.2. Сбор документов (до банкротства)
 
-### Этап 4 — подготовка к мультитенантности (для будущей продажи другим фирмам)
-- [ ] Онбординг новой организации (регистрация, настройка своего прайса)
-- [ ] Разделение биллинга/подписки для клиентов SaaS (если будет продаваться)
-- [ ] White-label настройки (логотип, название компании в интерфейсе)
+- Стандарт: **13 000 ₽** = 10 000 (касса) + 2 000 (нотариус) + 1 000 (менеджер).
+- Legacy-клиенты: часто **10 000 ₽** целиком в кассу.
+- Суммы можно менять **до оплаты** (owner/manager).
+- После оплаты — перевод на банкротство с указанием долга и созданием графика.
 
----
+### 3.3. Прибыль компании
 
-## 5. Важные технические требования
+```
+Прибыль = платежи по рассрочке + collection_fee (касса сбора) − обязательные платежи
+Чистая прибыль (месяц) = поступления месяца + касса сбора месяца − обязательные месяца − operating_expenses
+```
 
-- **Все денежные суммы** хранить как `numeric(12,2)`, никогда не `float` (ошибки округления критичны в финансовых расчётах)
-- **Все даты** — timezone-aware, хранить в UTC, отображать в московском времени (UTC+3, Грозный)
-- **Soft delete** для клиентов и платежей (никогда не удалять физически — только помечать `is_deleted`, для истории и юридической отчётности)
-- **Логирование изменений** (audit log) — кто и когда изменил сумму платежа или статус клиента. Это то, чего катастрофически не хватает в Excel
-- **Валидация на бэкенде** обязательна для всех финансовых операций, даже если есть валидация на фронте
+**Не входят в прибыль:** нотариус, комиссия менеджера по сбору, обязательные платежи клиента (депозит/ФУ/пошлина) — транзит.
+
+**«Сумма активных договоров»** на дашборде = сумма `planned_amount` по графикам активных клиентов на банкротстве (не `debt_amount`).
+
+### 3.4. Legacy-импорт
+
+Скрипт `backend/scripts/import_legacy_excel.py` — перенос из Excel «Новый УЧЕТ.xlsm» (dry-run / `--execute`).
 
 ---
 
-## 6. Что взять из текущего Excel-файла как референс
+## 4. Реализованный функционал
 
-При проектировании UI карточки клиента и списка — ориентироваться на структуру существующей таблицы:
-ФИО, телефон, дата заключения, сумма договора, ежемесячный платёж, сумма исполнителя, фин. управление, суд, депозит, прибыль, остаток, помесячная разбивка платежей.
+### 4.1. Ядро — ✅
 
-Эти же поля должны быть доступны для фильтрации и сортировки в новой системе.
+- [x] Авторизация JWT (login, refresh, `/auth/me`)
+- [x] CRUD клиентов, soft delete, назначение менеджера
+- [x] Админка тарифной сетки (`/pricing`)
+- [x] Автогенерация графика + ручное редактирование графика
+- [x] Фиксация платежей по рассрочке (**только owner**)
+- [x] Возвраты (`is_refund`), удаление платежей (owner)
+- [x] Список клиентов: фильтры (статус, менеджер, просрочка, этап, сбор), сортировка, поиск
+- [x] Два списка: «Сбор документов» и «Договоры» (банкротство)
+
+### 4.2. Сбор документов — ✅
+
+- [x] Этап `document_collection` до банкротства
+- [x] Разбивка 10+2+1, ручная правка сумм
+- [x] Фиксация оплаты, перевод на банкротство
+- [x] «Принять в работу» — закрепление незакреплённого клиента (manager)
+- [x] Учёт в дашборде/аналитике (касса / нотариус / менеджерам отдельно)
+
+### 4.3. Обязательные платежи — ✅
+
+- [x] Депозит 25k, финуправление, госпошлина (вкл/выкл)
+- [x] Внесение и редактирование — **только owner**
+
+### 4.4. Дашборд и аналитика — ✅
+
+- [x] Дашборд owner: рассрочка, сбор, обязательные, расходы, прибыль
+- [x] Касса («кубышка»): ручной остаток на начало месяца + перенос на следующий
+- [x] Оптимизация: **один запрос** `/dashboard/summary` (просрочка batch + preview + счётчик задач)
+- [x] Аналитика owner: прибыль по клиентам, тренды, комиссии менеджеров за сбор
+- [x] Экспорт Excel: список клиентов, карточка, просрочки
+
+### 4.5. Операционка — ✅
+
+- [x] Ежемесячные расходы организации (`/expenses`)
+- [x] Журнал аудита (`/audit`) + блок на карточке клиента
+- [x] Воронка процедуры (`procedure_stage`) + задачи по просрочкам (`/tasks`, `/funnel`)
+- [x] Отсрочка платежа, снятие просрочки (owner)
+- [x] Перестройка дат платежей от даты договора (legacy, owner)
+- [x] Управление пользователями (`/users`)
+
+### 4.6. Товарная рассрочка — ✅
+
+- [x] Отдельный UI (`/retail/*`): дашборд, клиенты, договоры, инвесторы, капитал
+- [x] Роли owner + investor
+
+### 4.7. Не реализовано (бэклог)
+
+- [ ] Автонапоминания WhatsApp / Green API
+- [ ] Push-уведомления менеджерам
+- [ ] Интеграция amoCRM
+- [ ] Онбординг новых организаций (self-service)
+- [ ] Биллинг SaaS / white-label
+- [ ] PDF-экспорт
+- [ ] UI для `organizations/current` (API есть)
 
 ---
 
-## Инструкция для Cursor (что делать по шагам)
+## 5. API — эндпоинты (префикс `/api`)
 
-1. Инициализировать монорепозиторий: `/backend` (FastAPI) и `/frontend` (Next.js)
-2. Настроить docker-compose с сервисами: postgres, backend, frontend, nginx
-3. Создать модели SQLAlchemy по схеме из раздела 1, настроить Alembic
-4. Реализовать аутентификацию (JWT) и middleware проверки ролей
-5. Реализовать CRUD для organizations → users → pricing_tiers → clients → installment_plans → payment_schedule → payments в этом порядке (каждая следующая сущность зависит от предыдущей)
-6. Написать unit-тест на логику генерации графика рассрочки (раздел 3) — это самая критичная бизнес-логика, её нужно покрыть тестами до подключения фронта
-7. Собрать frontend: страница логина → список клиентов → карточка клиента → админка тарифов → дашборд
-8. Задеплоить MVP на Timeweb Cloud, протестировать на реальных данных «Решение» (можно взять текущий Excel как тестовый датасет для миграции)
+### Auth
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/auth/login` | Вход |
+| POST | `/auth/refresh` | Обновление токена |
+| GET | `/auth/me` | Текущий пользователь |
+
+### Dashboard
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/dashboard/summary` | Сводка (+ `open_tasks_count`, `overdue_clients_preview`) |
+| PUT | `/dashboard/cash-balance` | Остаток кассы на начало месяца (owner) |
+| POST | `/dashboard/cash-balance/carry-forward` | Перенести остаток в следующий месяц (owner) |
+
+### Clients
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/clients` | Список (фильтры, sort_by, overdue, collection_view) |
+| POST | `/clients` | Создание |
+| GET | `/clients/{id}` | Карточка (краткая для call_center) |
+| GET | `/clients/{id}/detail` | Полная карточка |
+| PATCH | `/clients/{id}` | Обновление |
+| DELETE | `/clients/{id}` | Soft delete (owner) |
+| POST | `/clients/{id}/payments/align-schedule-dates` | Legacy: выровнять даты (owner) |
+
+### Document collection
+| Метод | Путь | Описание |
+|-------|------|----------|
+| PATCH | `/clients/{id}/document-collection` | Суммы сбора (до оплаты) |
+| POST | `/clients/{id}/document-collection/record` | Зафиксировать оплату |
+| POST | `/clients/{id}/convert-to-bankruptcy` | Перевод на банкротство |
+
+### Mandatory payments
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/clients/{id}/mandatory-payments` | Список |
+| PATCH | `/clients/{id}/mandatory-payments/{pid}` | План/применимость (owner) |
+| POST | `/clients/{id}/mandatory-payments/{pid}/record` | Внесение (owner) |
+
+### Installment plans
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/clients/{id}/installment-plans` | Список планов |
+| POST | `/clients/{id}/installment-plans` | Создание |
+| GET | `/clients/{id}/installment-plans/{plan_id}` | План |
+| PATCH | `/clients/{id}/installment-plans/{plan_id}` | Сумма договора (owner) |
+
+### Payment schedule
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/payment-schedule/{client_id}/installment-plans/{plan_id}/payment-schedule` | График |
+| POST | `/payment-schedule/{client_id}/installment-plans/{plan_id}/payment-schedule` | Добавить месяц |
+| GET | `/payment-schedule/{schedule_id}` | Строка графика |
+| PATCH | `/payment-schedule/{schedule_id}` | Сумма/дата |
+| DELETE | `/payment-schedule/{schedule_id}` | Удалить месяц |
+| POST | `/payment-schedule/{schedule_id}/defer` | Отсрочка |
+| POST | `/payment-schedule/{schedule_id}/waive-overdue` | Снять просрочку (owner) |
+
+### Payments
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/payments` | Список (client_id) |
+| POST | `/payments` | Создать (**owner**) |
+| GET | `/payments/{id}` | Одна запись |
+| PATCH | `/payments/{id}` | Дата (owner) |
+| DELETE | `/payments/{id}` | Soft delete (owner) |
+
+### Analytics
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/analytics/overview` | Обзор + тренды (owner) |
+| GET | `/analytics/manager-commissions` | Комиссии за сбор (owner) |
+
+### Funnel & Tasks
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/funnel/overview` | Воронка процедуры |
+| GET | `/tasks` | Задачи (status=open) |
+| POST | `/tasks` | Создать задачу |
+| PATCH | `/tasks/{id}` | Обновить статус |
+| GET | `/tasks/overview` | Дубликат funnel (legacy API) |
+
+### Operating expenses
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET/POST | `/operating-expenses` | CRUD расходов |
+| PATCH/DELETE | `/operating-expenses/{id}` | |
+| GET/POST | `/operating-expenses/payments` | Оплаты расходов |
+
+### Pricing, Users, Organizations
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET/POST | `/pricing-tiers` | Тарифы |
+| GET/PATCH | `/pricing-tiers/{id}` | |
+| GET/POST/PATCH/DELETE | `/users`, `/users/{id}` | Команда |
+| GET/PATCH | `/organizations/current` | Организация (без UI) |
+
+### Audit & Exports
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/audit-logs` | Журнал (фильтры) |
+| GET | `/audit-logs/recent` | Последние события |
+| GET | `/exports/clients.xlsx` | Экспорт списка |
+| GET | `/exports/clients/{id}.xlsx` | Экспорт карточки |
+| GET | `/exports/overdue-clients.xlsx` | Просрочки |
+
+### Retail (`/retail/*`)
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/retail/dashboard/summary` | Дашборд retail |
+| GET/POST/DELETE | `/retail/clients`, `/retail/clients/{id}` | Клиенты |
+| GET/PATCH | `/retail/clients/{id}` | |
+| GET/POST/DELETE | `/retail/contracts`, `/retail/contracts/{id}` | Договоры |
+| POST | `/retail/contracts/{id}/payments` | Платёж |
+| DELETE | `/retail/payments/{id}` | |
+| POST | `/retail/contracts/{id}/overdue-logs` | Лог просрочки |
+| GET/POST/PATCH/DELETE | `/retail/investors`, `/retail/investors/me` | Инвесторы |
+| GET | `/retail/term-rates` | Ставки |
+
+### Health
+| GET | `/health` | Проверка живости |
+
+---
+
+## 6. Frontend — страницы
+
+### Банкротство (AppShell)
+
+| Путь | Страница | Доступ |
+|------|----------|--------|
+| `/login` | Вход | все |
+| `/` | Дашборд | owner (финансы), manager (счётчики) |
+| `/clients/collection` | Сбор документов | owner, manager |
+| `/clients/contracts` | Договоры (банкротство) | owner, manager |
+| `/clients/[id]` | Карточка клиента | owner, manager, call_center (огранич.) |
+| `/analytics` | Аналитика | owner |
+| `/tasks` | Задачи и воронка | owner, manager |
+| `/expenses` | Расходы организации | owner |
+| `/audit` | Журнал аудита | owner |
+| `/users` | Команда | owner |
+| `/pricing` | Тарифная сетка | owner |
+
+`/clients` → редирект на `/clients/contracts`.
+
+### Товарная рассрочка (RetailShell)
+
+| Путь | Страница |
+|------|----------|
+| `/retail` | Дашборд |
+| `/retail/clients` | Клиенты |
+| `/retail/contracts` | Договоры |
+| `/retail/contracts/[id]` | Карточка договора |
+| `/retail/investors` | Инвесторы (owner) |
+| `/retail/capital` | Капитал (investor) |
+
+Переход: ссылка «Товарная рассрочка» в сайдбаре банкротства.
+
+---
+
+## 7. Технические требования (соблюдаются)
+
+- Денежные суммы: `numeric(12,2)`, не float
+- Soft delete: clients (`is_deleted`), payments (`is_deleted`)
+- Audit log на критичные изменения
+- Валидация финансовых операций на backend
+- Batch-проверка просрочки (`clients_overdue_map`) — без N+1 на дашборде и в фильтрах списка
+- CORS, JWT, role-based dependencies
+
+---
+
+## 8. Референс Excel
+
+При проектировании UI ориентир — листы «Банкротство» и «СБОР ДОКУМЕНТОВ» файла «Новый УЧЕТ.xlsm»:
+
+ФИО, телефон, дата договора, сумма договора, помесячные платежи, депозит, финуправление, суд, прибыль, остаток.
+
+В системе: `contract_total` / график вместо «долга кредиторам» на дашборде; обязательные платежи — отдельный блок; сбор документов — отдельная услуга.
+
+---
+
+## 9. История изменений ТЗ
+
+| Дата | Изменения |
+|------|-----------|
+| Исходная версия | MVP-структура, unchecked этапы |
+| 24.07.2026 | Актуализация по prod-коду: сбор документов, обязательные, расходы, аналитика, retail, права менеджеров, оптимизация дашборда, полный каталог API/страниц |
