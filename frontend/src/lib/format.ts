@@ -30,6 +30,20 @@ export function formatAmountInput(value: string | number): string {
   return String(Math.round(amount));
 }
 
+/**
+ * Разряды прямо в поле ввода: «35000» показывается как «35 000».
+ * Разделитель — неразрывный пробел, тот же, что в formatMoney.
+ */
+export function groupAmountDigits(value: string): string {
+  const digits = digitsOnly(value);
+  return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0") : "";
+}
+
+/** Обратная операция: из «35 000» получаем «35000» для отправки на сервер. */
+export function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 export function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }

@@ -343,6 +343,12 @@ body {
     @apply bg-surface-muted;
   }
 
+  /* В плотных таблицах ячейка уже узкая, и просторные боковые отступы поля
+     съедают место у самого значения — здесь они прижимаются. */
+  .data-table :is(input, select) {
+    padding-inline: 0.5rem;
+  }
+
   .data-table tbody tr.is-overdue {
     @apply bg-status-danger-bg hover:bg-status-danger-bg;
   }

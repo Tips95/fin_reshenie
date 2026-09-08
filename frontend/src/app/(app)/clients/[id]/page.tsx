@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ActionMenu,
   ActionMenuItem,
+  AmountInput,
   BackLink,
   Badge,
   Button,
@@ -2450,16 +2451,13 @@ export default function ClientDetailPage() {
                               <span className="text-muted">Не требуется</span>
                             ) : canEditPlanned && (editingPlanned || Number(item.planned_amount) <= 0) ? (
                               <div className="flex flex-wrap items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={Number(item.paid_amount)}
-                                  step={1}
-                                  className="max-w-[120px]"
+                                <AmountInput
+                                  className="max-w-[130px]"
                                   value={plannedValue}
-                                  onChange={(e) =>
+                                  onValueChange={(amount) =>
                                     setPlannedEdits({
                                       ...plannedEdits,
-                                      [item.id]: e.target.value,
+                                      [item.id]: amount,
                                     })
                                   }
                                 />
@@ -2623,19 +2621,16 @@ export default function ClientDetailPage() {
                                       {canManageMandatory ? (
                                         <div className="flex flex-wrap items-center gap-2">
                                           <FormField label="Сумма, ₽">
-                                            <Input
-                                              type="number"
-                                              min={1}
-                                              step={1}
-                                              className="w-[120px]"
+                                            <AmountInput
+                                              className="w-[130px]"
                                               value={
                                                 mandatoryRecordAmountEdits[record.id] ??
                                                 formatAmountInput(record.amount)
                                               }
-                                              onChange={(e) =>
+                                              onValueChange={(amount) =>
                                                 setMandatoryRecordAmountEdits((current) => ({
                                                   ...current,
-                                                  [record.id]: e.target.value,
+                                                  [record.id]: amount,
                                                 }))
                                               }
                                             />
@@ -2738,12 +2733,9 @@ export default function ClientDetailPage() {
               <div className="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-border bg-surface-muted p-3">
                 <div className="min-w-[180px]">
                   <FormField label="Сумма договора, ₽">
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1000}
+                    <AmountInput
                       value={scheduleContractDraft}
-                      onChange={(e) => setScheduleContractDraft(e.target.value)}
+                      onValueChange={setScheduleContractDraft}
                     />
                   </FormField>
                 </div>
@@ -2840,8 +2832,8 @@ export default function ClientDetailPage() {
                     <tr>
                       <th className="w-8">#</th>
                       <th>Дата</th>
-                      <th className="w-[76px] text-right">План</th>
-                      <th className="w-[76px] text-right">Опл./ост.</th>
+                      <th className="w-[108px] text-right">План</th>
+                      <th className="w-[108px] text-right">Опл./ост.</th>
                       <th className="w-24">Статус</th>
                       <th className="min-w-[140px]">Примечание</th>
                       {scheduleHasActions && <th className="w-32">Действия</th>}
@@ -2880,7 +2872,7 @@ export default function ClientDetailPage() {
                             {canEditSchedule && !markedForDelete ? (
                               <Input
                                 type="date"
-                                className="max-w-[118px] py-0.5"
+                                className="max-w-[142px] py-0.5"
                                 value={editValues.due_date}
                                 onChange={(e) =>
                                   setScheduleDraft((current) => ({
@@ -2913,20 +2905,17 @@ export default function ClientDetailPage() {
                           </td>
                           <td data-label="План" className="text-right">
                             {canEditSchedule && !markedForDelete ? (
-                              <Input
-                                type="number"
-                                min={Math.max(1, Math.round(Number(item.paid_amount) || 0))}
-                                step={1}
-                                className="w-[72px] py-0.5 text-right tabular-nums"
+                              <AmountInput
+                                className="w-[100px] py-0.5 text-right tabular-nums"
                                 value={formatAmountInput(editValues.planned_amount)}
-                                onChange={(e) =>
+                                onValueChange={(amount) =>
                                   setScheduleDraft((current) => ({
                                     ...current,
                                     edits: {
                                       ...current.edits,
                                       [item.id]: {
                                         ...editValues,
-                                        planned_amount: e.target.value,
+                                        planned_amount: amount,
                                       },
                                     },
                                   }))
@@ -3160,7 +3149,7 @@ export default function ClientDetailPage() {
                         <td data-label="Дата">
                           <Input
                             type="date"
-                            className="max-w-[118px] py-0.5"
+                            className="max-w-[142px] py-0.5"
                             value={item.due_date}
                             onChange={(e) =>
                               updatePendingAdd(item.tempId, "due_date", e.target.value)
@@ -3168,14 +3157,11 @@ export default function ClientDetailPage() {
                           />
                         </td>
                         <td data-label="План">
-                          <Input
-                            type="number"
-                            min={1}
-                            step={1}
-                            className="w-[72px] py-0.5 text-right tabular-nums"
+                          <AmountInput
+                            className="w-[100px] py-0.5 text-right tabular-nums"
                             value={formatAmountInput(item.planned_amount)}
-                            onChange={(e) =>
-                              updatePendingAdd(item.tempId, "planned_amount", e.target.value)
+                            onValueChange={(amount) =>
+                              updatePendingAdd(item.tempId, "planned_amount", amount)
                             }
                           />
                         </td>
@@ -3366,18 +3352,15 @@ export default function ClientDetailPage() {
                     {isOwner && (
                       <div className="flex flex-wrap items-center gap-2">
                         <FormField label="Сумма, ₽">
-                          <Input
-                            type="number"
-                            min={1}
-                            step={1}
-                            className="w-[120px]"
+                          <AmountInput
+                            className="w-[130px]"
                             value={
                               paymentAmountEdits[payment.id] ?? formatAmountInput(payment.amount)
                             }
-                            onChange={(e) =>
+                            onValueChange={(amount) =>
                               setPaymentAmountEdits((current) => ({
                                 ...current,
-                                [payment.id]: e.target.value,
+                                [payment.id]: amount,
                               }))
                             }
                           />

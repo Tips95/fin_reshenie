@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
+import { digitsOnly, groupAmountDigits } from "@/lib/format";
 import { APP_LOGO_FULL, APP_LOGO_MARK, APP_NAME } from "@/lib/brand";
 import { PHONE_PREFIX, applyPhoneInput } from "@/lib/phone";
 import { applyPassportInput, PASSPORT_PLACEHOLDER } from "@/lib/passport";
@@ -238,6 +239,9 @@ export function Modal({
   );
 }
 
+const INPUT_CLASS =
+  "interactive min-h-[38px] w-full rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 lg:min-h-[34px]";
+
 export function Input({
   className,
   type,
@@ -273,7 +277,7 @@ export function Input({
       value={value}
       onChange={onChange}
       className={cn(
-        "interactive min-h-[38px] w-full rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 lg:min-h-[34px]",
+        INPUT_CLASS,
         type === "number" &&
           "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
         className,
@@ -283,6 +287,62 @@ export function Input({
           event.currentTarget.blur();
         }
         onWheel?.(event);
+      }}
+      {...props}
+    />
+  );
+}
+
+/**
+ * Поле суммы: на экране «35 000», наружу отдаёт «35000».
+ * Текстовое, а не числовое, потому что number-поле не принимает разделитель
+ * разрядов и молча стирает такое значение.
+ */
+export function AmountInput({
+  className,
+  value,
+  onValueChange,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
+  value: string;
+  onValueChange: (value: string) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const caret = useRef<number | null>(null);
+
+  // Пробелы сдвигают текст, поэтому курсор возвращаем по числу цифр слева от
+  // него, иначе при правке середины суммы он улетал бы в конец.
+  useLayoutEffect(() => {
+    if (caret.current !== null && ref.current) {
+      ref.current.setSelectionRange(caret.current, caret.current);
+      caret.current = null;
+    }
+  });
+
+  return (
+    <input
+      ref={ref}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      className={cn(INPUT_CLASS, className)}
+      value={groupAmountDigits(value)}
+      onChange={(event) => {
+        const element = event.target;
+        const digitsBeforeCaret = digitsOnly(
+          element.value.slice(0, element.selectionStart ?? element.value.length),
+        ).length;
+        const raw = digitsOnly(element.value);
+        const shown = groupAmountDigits(raw);
+
+        let position = 0;
+        let counted = 0;
+        while (position < shown.length && counted < digitsBeforeCaret) {
+          if (/\d/.test(shown[position])) counted += 1;
+          position += 1;
+        }
+        caret.current = position;
+        onValueChange(raw);
       }}
       {...props}
     />
