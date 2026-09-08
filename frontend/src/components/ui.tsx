@@ -74,15 +74,15 @@ export function Button({
 
   // На телефоне минимальная высота поднимается до комфортной для пальца.
   const sizes = {
-    sm: "px-2 py-1 text-[11px]",
-    md: "px-2.5 py-1 text-xs min-h-[32px] lg:min-h-0",
-    lg: "px-3.5 py-2 text-sm min-h-[40px]",
+    sm: "px-2.5 py-1 text-xs min-h-[30px] lg:min-h-0",
+    md: "px-3.5 py-1.5 text-[13px] min-h-[38px] lg:min-h-[34px]",
+    lg: "px-4 py-2.5 text-sm min-h-[44px]",
   };
 
   return (
     <button
       className={cn(
-        "interactive inline-flex items-center justify-center gap-1 rounded-md font-medium disabled:cursor-not-allowed disabled:opacity-50",
+        "interactive inline-flex items-center justify-center gap-1.5 rounded-md font-semibold disabled:cursor-not-allowed disabled:opacity-50",
         sizes[size],
         variants[variant],
         className,
@@ -273,7 +273,7 @@ export function Input({
       value={value}
       onChange={onChange}
       className={cn(
-        "interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20",
+        "interactive min-h-[38px] w-full rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 lg:min-h-[34px]",
         type === "number" &&
           "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
         className,
@@ -404,7 +404,7 @@ export function Select({
   return (
     <select
       className={cn(
-        "interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20",
+        "interactive min-h-[38px] w-full rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 lg:min-h-[34px]",
         className,
       )}
       {...props}
@@ -453,7 +453,12 @@ export function Badge({
   };
 
   return (
-    <span className={cn("inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-medium", tones[tone])}>
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        tones[tone],
+      )}
+    >
       {children}
     </span>
   );
@@ -603,10 +608,12 @@ export function StatCard({
   };
 
   return (
-    <Card className="p-2.5">
-      <p className="type-caption">{label}</p>
-      <p className={cn("mt-1 text-lg font-semibold leading-tight", valueColors[tone])}>{value}</p>
-      {hint && <p className="mt-0.5 type-hint">{hint}</p>}
+    <Card className="flex flex-col gap-1 p-3.5">
+      {/* Подпись занимает две строки всегда, иначе крупные суммы в соседних
+          карточках встают на разной высоте. */}
+      <p className="type-caption line-clamp-2 min-h-[2.7em]">{label}</p>
+      <p className={cn("metric-value", valueColors[tone])}>{value}</p>
+      {hint && <p className="type-hint mt-auto line-clamp-2">{hint}</p>}
     </Card>
   );
 }

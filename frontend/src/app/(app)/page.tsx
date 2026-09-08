@@ -361,19 +361,33 @@ export default function DashboardPage() {
           </p>
         )}
 
-        <div className="stat-grid">
+        {showOrgFinance && (
+          <div className="metric-hero">
+            <div className="relative z-10">
+              <p className="metric-hero-label">Сейчас в кассе</p>
+              <p className="metric-hero-value mt-1.5">{formatMoney(summary.cash_on_hand)}</p>
+              <p className="metric-hero-hint mt-2">
+                {summary.cash_opening_is_set
+                  ? `Остаток на начало ${formatMoney(summary.cash_opening_balance)} + движение месяца`
+                  : "Остаток на начало не указан — укажите в разделе «Касса»"}
+              </p>
+              <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-white/20 pt-3">
+                <span className="metric-hero-hint">Прогноз на конец месяца</span>
+                <span
+                  className={`tabular text-base font-bold ${
+                    Number(summary.cash_forecast_end) >= 0 ? "text-white" : "text-brand-100"
+                  }`}
+                >
+                  {formatMoney(summary.cash_forecast_end)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={showOrgFinance ? "grid grid-cols-2 gap-2" : "stat-grid"}>
           {showOrgFinance ? (
             <>
-              <StatCard
-                label="Сейчас в кассе"
-                value={formatMoney(summary.cash_on_hand)}
-                tone={Number(summary.cash_on_hand) >= 0 ? "success" : "danger"}
-                hint={
-                  summary.cash_opening_is_set
-                    ? `Остаток на начало ${formatMoney(summary.cash_opening_balance)} + движение месяца`
-                    : "Остаток на начало не указан — укажите в разделе «Касса»"
-                }
-              />
               <StatCard
                 label="Ещё ожидается"
                 value={formatMoney(summary.expected_this_month)}
@@ -385,12 +399,6 @@ export default function DashboardPage() {
                 value={formatMoney(summary.expenses_remaining_this_month)}
                 tone="warning"
                 hint={`План ${formatMoney(summary.monthly_expenses)} · оплачено ${formatMoney(summary.expenses_paid_this_month)}`}
-              />
-              <StatCard
-                label="Прогноз на конец месяца"
-                value={formatMoney(summary.cash_forecast_end)}
-                tone={Number(summary.cash_forecast_end) >= 0 ? "success" : "danger"}
-                hint="Если все платежи придут, а плановые расходы закроются"
               />
             </>
           ) : (
@@ -404,7 +412,7 @@ export default function DashboardPage() {
         </div>
 
         {showOrgFinance && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="client-section-nav">
             {DASHBOARD_SECTIONS.map((section) => (
               <button
                 key={section.id}

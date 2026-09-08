@@ -336,10 +336,12 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     return { text, extraCount: text && count > 1 ? count - 1 : 0 };
   }
 
-  function renderClientNote(client: Client | ClientBrief) {
+  // В таблице пустая ячейка требует прочерка, а в карточке на телефоне он
+  // превращается в висящий символ без смысла — там примечание просто скрыто.
+  function renderClientNote(client: Client | ClientBrief, showPlaceholder = true) {
     const { text, extraCount } = clientLatestNote(client);
     if (!text) {
-      return <span className="text-sm text-muted">—</span>;
+      return showPlaceholder ? <span className="text-sm text-muted">—</span> : null;
     }
     return (
       <div className="max-w-[240px]">
@@ -805,27 +807,34 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         <div className="min-w-0">
                           <p
                             className={cn(
-                              "truncate font-semibold text-foreground",
-                              isOverdue && "text-status-danger-text",
+                              "truncate text-[15px] font-semibold leading-tight",
+                              isOverdue ? "text-status-danger-text" : "text-foreground",
                             )}
                           >
                             {formatShortName(client.full_name)}
                           </p>
-                          <p className="text-xs text-muted">{client.phone}</p>
+                          <p className="mt-0.5 text-xs text-muted">{client.phone}</p>
                         </div>
-                        <Badge
-                          tone={
-                            client.status === "active"
-                              ? "success"
-                              : client.status === "defaulted"
-                                ? "danger"
-                                : "default"
-                          }
-                        >
-                          {statusLabel(client.status)}
-                        </Badge>
+                        {/* Статус и просрочка стоят рядом: оба отвечают на вопрос
+                            «всё ли в порядке с клиентом». */}
+                        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                          {canSeeClientAmounts && !isCollectionView && isOverdue ? (
+                            <Badge tone="danger">Просрочка</Badge>
+                          ) : null}
+                          <Badge
+                            tone={
+                              client.status === "active"
+                                ? "success"
+                                : client.status === "defaulted"
+                                  ? "danger"
+                                  : "default"
+                            }
+                          >
+                            {statusLabel(client.status)}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
                         <span>Договор: {formatDate(client.contract_date)}</span>
                         {canSeeClientAmounts && !isCollectionView && isFullClient(client) && filters.due_month ? (
                           <>
@@ -850,20 +859,13 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                           </>
                         ) : null}
                         {canSeeClientAmounts && !isCollectionView && isFullClient(client) && !filters.due_month && client.contract_total ? (
-                          <span className="font-medium text-foreground">
+                          <span className="tabular text-sm font-bold text-foreground">
                             {formatMoney(client.contract_total)}
                           </span>
                         ) : null}
-                        {canSeeClientAmounts && !isCollectionView && isOverdue ? (
-                          <Badge tone="danger">Просрочка</Badge>
-                        ) : null}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {isCollectionView ? (
-                          collectionStageBadge(client)
-                        ) : (
-                          renderClientNote(client)
-                        )}
+                        {isCollectionView ? collectionStageBadge(client) : renderClientNote(client, false)}
                         {isManager && isCollectionView && isFullClient(client) && client.assigned_manager_id === user?.id ? (
                           <Badge tone="success">За вами</Badge>
                         ) : null}

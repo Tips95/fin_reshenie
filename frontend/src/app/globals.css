@@ -37,6 +37,9 @@
 
   --brand-gradient: linear-gradient(135deg, #e8202e 0%, #c50d1a 100%);
   --brand-gradient-hover: linear-gradient(135deg, #f2333f 0%, #d4111e 100%);
+  /* Плашка баланса: фирменный красный сверху, вишнёвая глубина снизу —
+     тот же переход, что на логотипе, вместо плоского чёрного. */
+  --hero-gradient: linear-gradient(145deg, #e8202e 0%, #c00d1b 42%, #6d0710 78%, #3a040a 100%);
   --chrome-gradient: linear-gradient(180deg, #131318 0%, #0a0a0c 55%, #150709 100%);
 
   --status-success-bg: #ecfdf3;
@@ -62,22 +65,25 @@
   --status-neutral-text: #4c4f57;
   --status-neutral-solid: #6c6e76;
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
 
-  --shadow-soft: 0 1px 2px rgb(10 10 12 / 0.05);
-  --shadow-card: 0 1px 3px rgb(10 10 12 / 0.07), 0 1px 2px rgb(10 10 12 / 0.04);
-  --shadow-hover: 0 6px 18px rgb(10 10 12 / 0.1);
-  --shadow-brand: 0 1px 2px rgb(10 10 12 / 0.08), 0 2px 8px rgb(209 16 29 / 0.22);
+  /* Поверхности держатся на границе, а не на тени: тень осталась только там,
+     где элемент действительно висит над страницей. */
+  --shadow-soft: 0 1px 1px rgb(10 10 12 / 0.03);
+  --shadow-card: 0 1px 2px rgb(10 10 12 / 0.04);
+  --shadow-hover: 0 8px 24px rgb(10 10 12 / 0.1);
+  --shadow-brand: 0 2px 10px rgb(209 16 29 / 0.24);
+  --shadow-hero: 0 10px 30px rgb(10 10 12 / 0.28);
 
-  --space-page-x: 0.75rem;
-  --space-page-y: 0.625rem;
-  --space-card: 0.625rem;
-  --space-stack: 0.5rem;
-  --space-section: 0.625rem;
-  --space-group: 1.5rem;
+  --space-page-x: 1rem;
+  --space-page-y: 0.875rem;
+  --space-card: 1rem;
+  --space-stack: 0.75rem;
+  --space-section: 1rem;
+  --space-group: 1.75rem;
   --mobile-nav-height: 3.75rem;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -86,8 +92,8 @@
 
 @media (max-width: 1023px) {
   :root {
-    --space-page-x: 0.625rem;
-    --space-page-y: 0.5rem;
+    --space-page-x: 0.875rem;
+    --space-page-y: 0.75rem;
   }
 }
 
@@ -95,11 +101,20 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+/* Деньги и даты выравниваются по разрядам — цифры одной ширины. */
+.tabular,
+.metric-value,
+.metric-hero-value,
+.field-value,
+.row-card-value {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 1023px) {
@@ -158,8 +173,10 @@ body {
     @apply grid gap-2 md:grid-cols-2 xl:grid-cols-3;
   }
 
+  /* На телефоне показатели идут по два в ряд: четыре числа помещаются на один
+     экран вместо четырёх прокруток. */
   .stat-grid {
-    @apply grid gap-2 sm:grid-cols-2 xl:grid-cols-4;
+    @apply grid grid-cols-2 gap-2 xl:grid-cols-4;
   }
 
   .filter-grid {
@@ -167,32 +184,60 @@ body {
   }
 
   .metric-value {
-    @apply text-lg font-bold leading-tight text-foreground;
+    @apply text-2xl font-bold leading-none tracking-tight text-foreground;
+  }
+
+  /* Главная сумма экрана — фирменная красная плашка, как баланс счёта. */
+  .metric-hero {
+    @apply relative overflow-hidden rounded-xl px-4 py-4 text-white;
+    background-image: var(--hero-gradient);
+    box-shadow: var(--shadow-hero);
+  }
+
+  /* Мягкий блик из левого верхнего угла — снимает плоскость заливки. */
+  .metric-hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(520px 220px at 8% -10%, rgb(255 255 255 / 0.16), transparent 68%);
+    pointer-events: none;
+  }
+
+  .metric-hero-label {
+    @apply text-xs font-medium uppercase tracking-wide text-white/70;
+  }
+
+  .metric-hero-hint {
+    @apply text-[13px] leading-snug text-white/75;
+  }
+
+  .metric-hero-value {
+    @apply text-[34px] font-bold leading-none tracking-tight text-white;
   }
 
   .field-value {
-    @apply text-sm font-semibold text-foreground;
+    @apply font-semibold text-foreground;
   }
 
   /* Четыре ступени: заголовок, значение, текст, подпись. */
   .type-caption {
-    @apply text-[11px] font-medium uppercase tracking-wide text-muted;
+    @apply text-xs font-medium uppercase tracking-wide text-muted;
   }
 
   .type-hint {
-    @apply text-[11px] text-muted;
+    @apply text-xs leading-snug text-muted;
   }
 
   .alert-danger {
-    @apply rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2 text-xs text-status-danger-text;
+    @apply rounded-lg border border-status-danger-border bg-status-danger-bg px-3.5 py-2.5 text-[13px] leading-snug text-status-danger-text;
   }
 
   .alert-success {
-    @apply rounded-md border border-status-success-border bg-status-success-bg px-3 py-2 text-xs text-status-success-text;
+    @apply rounded-lg border border-status-success-border bg-status-success-bg px-3.5 py-2.5 text-[13px] leading-snug text-status-success-text;
   }
 
   .alert-warning {
-    @apply rounded-md border border-status-warning-border bg-status-warning-bg px-3 py-2 text-xs text-status-warning-text;
+    @apply rounded-lg border border-status-warning-border bg-status-warning-bg px-3.5 py-2.5 text-[13px] leading-snug text-status-warning-text;
   }
 
   .link-brand {
@@ -250,7 +295,7 @@ body {
   }
 
   .tab-pill {
-    @apply interactive rounded-full px-3 py-1 text-xs font-semibold;
+    @apply interactive rounded-full px-3.5 py-1.5 text-[13px] font-semibold;
   }
 
   .tab-pill-active {
@@ -262,7 +307,7 @@ body {
   }
 
   .nav-item {
-    @apply interactive flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium;
+    @apply interactive flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium;
   }
 
   .nav-item-active {
@@ -275,15 +320,15 @@ body {
   }
 
   .data-table {
-    @apply min-w-full text-[13px];
+    @apply min-w-full text-sm;
   }
 
   .data-table thead tr {
-    @apply border-b border-border bg-surface-muted text-left text-[11px] uppercase tracking-wide text-muted;
+    @apply border-b border-border bg-surface-muted text-left text-xs uppercase tracking-wide text-muted;
   }
 
   .data-table th {
-    @apply px-1.5 py-1 font-semibold;
+    @apply px-3 py-2 font-semibold;
   }
 
   .data-table tbody tr {
@@ -291,7 +336,7 @@ body {
   }
 
   .data-table td {
-    @apply px-1.5 py-1 align-middle;
+    @apply px-3 py-2.5 align-middle;
   }
 
   .data-table tbody tr.is-editing {
@@ -323,7 +368,7 @@ body {
     }
 
     .table-cards tbody tr {
-      @apply mb-2 rounded-md border border-border bg-surface p-2.5 shadow-soft;
+      @apply mb-2 rounded-lg border border-border bg-surface p-3.5 shadow-soft;
     }
 
     .table-cards tbody tr:hover {
@@ -340,7 +385,7 @@ body {
     }
 
     .table-cards td {
-      @apply min-h-[30px] border-0 px-0 py-1 text-right;
+      @apply min-h-[34px] border-0 px-0 py-1.5 text-right;
       display: grid;
       grid-template-columns: minmax(0, auto) minmax(0, 1fr);
       align-items: center;
@@ -355,7 +400,7 @@ body {
       content: attr(data-label);
       grid-column: 1;
       grid-row: 1;
-      @apply text-left text-[11px] font-medium text-muted;
+      @apply text-left text-xs font-medium text-muted;
     }
 
     .table-cards td > * {
@@ -365,7 +410,7 @@ body {
   }
 
   .section-title {
-    @apply text-sm font-semibold text-foreground;
+    @apply text-base font-semibold tracking-tight text-foreground;
   }
 
   .payment-tile {
@@ -381,12 +426,12 @@ body {
   }
 
   .empty-state {
-    @apply flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-surface-muted px-3 py-5 text-center text-xs text-muted;
+    @apply flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface-muted px-4 py-8 text-center text-sm text-muted;
   }
 
   /* Строка таблицы, свёрнутая в карточку на телефоне. */
   .row-card {
-    @apply rounded-md border border-border bg-surface p-2.5 shadow-soft;
+    @apply rounded-lg border border-border bg-surface p-3.5 shadow-soft;
   }
 
   .row-card-overdue {
@@ -403,15 +448,15 @@ body {
   }
 
   .row-card-label {
-    @apply text-[11px] text-muted;
+    @apply text-xs text-muted;
   }
 
   .row-card-value {
-    @apply text-xs font-semibold text-foreground;
+    @apply text-sm font-semibold text-foreground;
   }
 
   .action-menu-item {
-    @apply interactive flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-medium text-foreground hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50;
+    @apply interactive flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .action-menu-item-danger {
@@ -419,11 +464,11 @@ body {
   }
 
   .dashboard-section-header {
-    @apply flex flex-wrap items-start justify-between gap-2 px-3 py-2;
+    @apply flex flex-wrap items-start justify-between gap-2 px-4 py-3;
   }
 
   .dashboard-section-body {
-    @apply p-2.5;
+    @apply p-card;
   }
 
   .collapsible-summary {
@@ -451,7 +496,7 @@ body {
   }
 
   .client-section-nav-btn {
-    @apply interactive shrink-0 rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-foreground shadow-soft transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-700;
+    @apply interactive shrink-0 rounded-full border border-border bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-foreground transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-700;
   }
 
   .mobile-shell-main {
@@ -468,7 +513,7 @@ body {
   }
 
   .mobile-bottom-nav-item {
-    @apply interactive relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[11px] font-medium text-chrome-muted;
+    @apply interactive relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-xs font-medium text-chrome-muted;
   }
 
   .mobile-bottom-nav-item-active {
