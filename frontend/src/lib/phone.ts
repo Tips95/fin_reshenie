@@ -81,3 +81,18 @@ export function phoneToWhatsAppWebUrl(phone: string): string | null {
   }
   return `https://web.whatsapp.com/send?phone=${digits}`;
 }
+
+/** Display: «+7 928 111-22-33». Incomplete numbers stay as stored. */
+export function formatPhoneDisplay(phone: string): string {
+  const trimmed = phone.trim();
+  if (!trimmed) return "—";
+  const digits = phoneToWhatsAppDigits(trimmed);
+  if (!digits || digits.length !== 11) return trimmed;
+  const national = digits.slice(1);
+  return `+7 ${national.slice(0, 3)} ${national.slice(3, 6)}-${national.slice(6, 8)}-${national.slice(8)}`;
+}
+
+export function phoneToTelHref(phone: string): string | null {
+  const digits = phoneToWhatsAppDigits(phone);
+  return digits ? `tel:+${digits}` : null;
+}

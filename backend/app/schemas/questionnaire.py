@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.enums import LeadCallOutcome, LeadStatus
 from app.services.questionnaire_defaults import (
     empty_debts,
     merge_assets,
@@ -36,9 +37,12 @@ class QuestionnaireDocument(BaseModel):
 
 
 class QuestionnaireBase(BaseModel):
-    full_name: str = Field(min_length=2, max_length=255)
+    """Карточка лида заводится в момент звонка, поэтому обязателен только телефон —
+    всё остальное менеджер дописывает по ходу разговора."""
+
+    full_name: str = Field(default="", max_length=255)
     service_cost: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    phone: str = Field(default="", max_length=32)
+    phone: str = Field(max_length=32)
     registration_region: str | None = Field(default=None, max_length=255)
     fake_income_documents: bool | None = None
     bank_accounts: str | None = None
@@ -73,7 +77,10 @@ class QuestionnaireBase(BaseModel):
     @field_validator("phone")
     @classmethod
     def normalize_phone(cls, value: str) -> str:
-        return value.strip()
+        phone = value.strip()
+        if not phone:
+            raise ValueError("Укажите телефон — по нему лид найдут для повторного звонка")
+        return phone
 
     @field_validator("debts", mode="before")
     @classmethod
@@ -107,6 +114,68 @@ class QuestionnaireCreateClientRequest(BaseModel):
     contract_date: date | None = None
 
 
+class QuestionnaireCallCreate(BaseModel):
+    outcome: LeadCallOutcome
+    comment: str | None = None
+    next_call_at: date | None = None
+
+    @field_validator("comment")
+    @classmethod
+    def normalize_comment(cls, value: str | None) -> str | None:
+        text = (value or "").strip()
+        return text or None
+
+
+class QuestionnaireUnqualifyRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        reason = value.strip()
+        if not reason:
+            raise ValueError("Напишите, почему лид некачественный")
+        return reason
+
+
+class QuestionnaireAssignRequest(BaseModel):
+    manager_id: UUID | None = None
+
+
+class QuestionnaireCallResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    outcome: LeadCallOutcome
+    comment: str | None
+    created_by_id: UUID | None
+    created_by_name: str | None = None
+    created_at: datetime
+
+
+class LeadStatsRow(BaseModel):
+    manager_id: UUID | None
+    manager_name: str
+    leads_added: int = 0
+    calls_total: int = 0
+    calls_answered: int = 0
+    calls_no_answer: int = 0
+    unqualified: int = 0
+    converted: int = 0
+
+
+class LeadStatsResponse(BaseModel):
+    day: date
+    rows: list[LeadStatsRow]
+    totals: LeadStatsRow
+
+
+class QuestionnaireManagerOption(BaseModel):
+    id: UUID
+    full_name: str
+    role: str
+
+
 class QuestionnaireBrief(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -122,6 +191,13 @@ class QuestionnaireBrief(BaseModel):
     created_by_name: str | None = None
     created_at: datetime
     updated_at: datetime
+    lead_status: LeadStatus = LeadStatus.NEW
+    unqualified_reason: str | None = None
+    next_call_at: date | None = None
+    last_call_at: datetime | None = None
+    call_attempts: int = 0
+    assigned_manager_id: UUID | None = None
+    assigned_manager_name: str | None = None
 
 
 class QuestionnaireResponse(QuestionnaireBrief):
@@ -146,3 +222,4 @@ class QuestionnaireResponse(QuestionnaireBrief):
     debts: list[QuestionnaireDebt]
     assets: list[QuestionnaireAsset]
     documents: list[QuestionnaireDocument]
+    calls: list[QuestionnaireCallResponse] = Field(default_factory=list)

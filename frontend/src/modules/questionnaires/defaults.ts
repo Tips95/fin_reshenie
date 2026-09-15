@@ -11,6 +11,17 @@ import {
 export const ABSENT_LABEL = "Отсутствует";
 export const DEFAULT_REGION = "Чеченская Республика";
 
+/** Поля воронки (статус, звонки, закрепление) живут в LeadPanel, а не в анкете. */
+type LeadFieldKey =
+  | "lead_status"
+  | "unqualified_reason"
+  | "next_call_at"
+  | "last_call_at"
+  | "call_attempts"
+  | "assigned_manager_id"
+  | "assigned_manager_name"
+  | "calls";
+
 export type QuestionnaireFormValue = Omit<
   Questionnaire,
   | "id"
@@ -21,6 +32,7 @@ export type QuestionnaireFormValue = Omit<
   | "updated_at"
   | "assets"
   | "documents"
+  | LeadFieldKey
 > & {
   property_debtor: string;
   property_spouse: string;
@@ -234,105 +246,106 @@ export function removeDebtRow(debts: QuestionnaireDebt[], index: number): Questi
   return debts.filter((_, itemIndex) => itemIndex !== index);
 }
 
-function requiredText(value: string | null | undefined, message: string): string | null {
-  return value?.trim() ? null : message;
-}
-
-function requiredChoice(value: boolean | null | undefined, message = "Выберите ДА или НЕТ"): string | null {
-  return value === null || value === undefined ? message : null;
-}
-
+/**
+ * Лид заводят прямо во время звонка, поэтому сохранить анкету можно в любой момент.
+ * Блокирует сохранение только телефон — без него лид некому перезвонить. Остальное
+ * проверяется по формату и лишь тогда, когда поле реально заполнили.
+ */
 export function validateQuestionnaireForm(form: QuestionnaireFormValue): Record<string, string> {
   const errors: Record<string, string> = {};
+
+  const phoneError = validatePhone(form.phone);
+  if (phoneError) errors.phone = phoneError;
+
+  if (form.full_name.trim()) {
+    const nameError = validateFullName(form.full_name);
+    if (nameError) errors.full_name = nameError;
+  }
+
+  const cost = (form.service_cost ?? "").trim();
+  if (cost) {
+    const costError = validatePositiveAmount(cost, { label: "Стоимость" });
+    if (costError) errors.service_cost = costError;
+  }
+
+  return errors;
+}
+
+type CompletenessField = { key: string; done: boolean };
+
+/**
+ * Полнота анкеты для перевода в клиента: менеджер видит, что ещё не выяснено,
+ * но это подсказка, а не запрет на сохранение.
+ */
+export function questionnaireCompleteness(form: QuestionnaireFormValue): {
+  filled: number;
+  total: number;
+  missing: string[];
+} {
   const married = hasSpouse(form);
   const spouseProperty = hadRegisteredMarriage(form);
   const anyProperty = hasAnyProperty(form);
+  const filledText = (value: string | null | undefined) => Boolean(value?.trim());
+  const answered = (value: boolean | null | undefined) => value === true || value === false;
 
-  const nameError = validateFullName(form.full_name);
-  if (nameError) errors.full_name = nameError;
-  const costError = validatePositiveAmount(form.service_cost ?? "", { label: "Стоимость" });
-  if (costError) errors.service_cost = costError;
-  const phoneError = validatePhone(form.phone);
-  if (phoneError) errors.phone = phoneError;
-  const regionError = requiredText(form.registration_region, "Укажите регион регистрации");
-  if (regionError) errors.registration_region = regionError;
-
-  form.debts.forEach((row, index) => {
-    if (!row.creditor.trim()) errors[`debt_${index}_creditor`] = "Укажите кредитора";
-    if (!row.debt_amount.trim()) errors[`debt_${index}_debt_amount`] = "Укажите долг";
-  });
-
-  const fakeError = requiredChoice(form.fake_income_documents);
-  if (fakeError) errors.fake_income_documents = fakeError;
-  const banksError = requiredText(form.bank_accounts, "Укажите кредитные организации");
-  if (banksError) errors.bank_accounts = banksError;
-  const guaranteeError = requiredChoice(form.has_guarantee_or_collateral);
-  if (guaranteeError) errors.has_guarantee_or_collateral = guaranteeError;
-  const marriedError = requiredChoice(form.is_married);
-  if (marriedError) errors.is_married = marriedError;
+  const fields: CompletenessField[] = [
+    { key: "full_name", done: !validateFullName(form.full_name) },
+    { key: "phone", done: !validatePhone(form.phone) },
+    { key: "service_cost", done: filledText(form.service_cost) },
+    { key: "registration_region", done: filledText(form.registration_region) },
+    {
+      key: "debts",
+      done: form.debts.some((row) => row.creditor.trim() && row.debt_amount.trim()),
+    },
+    { key: "fake_income_documents", done: answered(form.fake_income_documents) },
+    { key: "bank_accounts", done: filledText(form.bank_accounts) },
+    { key: "has_guarantee_or_collateral", done: answered(form.has_guarantee_or_collateral) },
+    { key: "is_married", done: answered(form.is_married) },
+    { key: "dependents", done: filledText(form.dependents) },
+    { key: "income_debtor", done: filledText(form.income_debtor) },
+    { key: "has_property_debtor", done: answered(form.has_property_debtor) },
+    { key: "has_recent_property_deals", done: answered(form.has_recent_property_deals) },
+    { key: "has_weapon", done: answered(form.has_weapon) },
+    { key: "filled_date", done: !validateRequiredDate(form.filled_date ?? "") },
+  ];
 
   if (form.is_married === false) {
-    const divorcedError = requiredChoice(form.was_divorced);
-    if (divorcedError) errors.was_divorced = divorcedError;
+    fields.push({ key: "was_divorced", done: answered(form.was_divorced) });
     if (form.was_divorced === true) {
-      const detailsError = requiredText(form.divorce_info, "Укажите дату или комментарий");
-      if (detailsError) errors.divorce_info = detailsError;
+      fields.push({ key: "divorce_info", done: filledText(form.divorce_info) });
     }
   }
-
-  const dependentsError = requiredText(
-    form.dependents,
-    "Укажите детей и иждивенцев или «нет»",
-  );
-  if (dependentsError) errors.dependents = dependentsError;
-  const incomeDebtorError = requiredText(form.income_debtor, "Укажите доход должника");
-  if (incomeDebtorError) errors.income_debtor = incomeDebtorError;
   if (married) {
-    const incomeSpouseError = requiredText(form.income_spouse, "Укажите доход супруга(и) или «нет»");
-    if (incomeSpouseError) errors.income_spouse = incomeSpouseError;
+    fields.push({ key: "income_spouse", done: filledText(form.income_spouse) });
   }
-
-  const debtorPropertyChoice = requiredChoice(form.has_property_debtor);
-  if (debtorPropertyChoice) errors.has_property_debtor = debtorPropertyChoice;
   if (form.has_property_debtor === true) {
-    const detailsError = requiredText(form.property_debtor, "Опишите имущество должника");
-    if (detailsError) errors.property_debtor = detailsError;
+    fields.push({ key: "property_debtor", done: filledText(form.property_debtor) });
   }
   if (spouseProperty) {
-    const spousePropertyChoice = requiredChoice(form.has_property_spouse);
-    if (spousePropertyChoice) errors.has_property_spouse = spousePropertyChoice;
+    fields.push({ key: "has_property_spouse", done: answered(form.has_property_spouse) });
     if (form.has_property_spouse === true) {
-      const detailsError = requiredText(
-        form.property_spouse,
-        form.was_divorced === true
-          ? "Опишите имущество бывшего супруга(и)"
-          : "Опишите имущество супруга(и)",
-      );
-      if (detailsError) errors.property_spouse = detailsError;
+      fields.push({ key: "property_spouse", done: filledText(form.property_spouse) });
     }
   }
-
   if (anyProperty) {
-    const encumbranceError = requiredChoice(form.has_property_encumbrance);
-    if (encumbranceError) errors.has_property_encumbrance = encumbranceError;
+    fields.push({ key: "has_property_encumbrance", done: answered(form.has_property_encumbrance) });
     if (form.has_property_encumbrance === true) {
-      const detailsError = requiredText(form.property_encumbrance_details, "Опишите обременение");
-      if (detailsError) errors.property_encumbrance_details = detailsError;
+      fields.push({
+        key: "property_encumbrance_details",
+        done: filledText(form.property_encumbrance_details),
+      });
     }
   }
-
-  const dealsError = requiredChoice(form.has_recent_property_deals);
-  if (dealsError) errors.has_recent_property_deals = dealsError;
   if (form.has_recent_property_deals === true) {
-    const detailsError = requiredText(form.recent_property_deals_details, "Опишите сделки");
-    if (detailsError) errors.recent_property_deals_details = detailsError;
+    fields.push({
+      key: "recent_property_deals_details",
+      done: filledText(form.recent_property_deals_details),
+    });
   }
 
-  const weaponError = requiredChoice(form.has_weapon);
-  if (weaponError) errors.has_weapon = weaponError;
-
-  const filledError = validateRequiredDate(form.filled_date ?? "");
-  if (filledError) errors.filled_date = filledError;
-
-  return errors;
+  return {
+    filled: fields.filter((field) => field.done).length,
+    total: fields.length,
+    missing: fields.filter((field) => !field.done).map((field) => field.key),
+  };
 }

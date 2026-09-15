@@ -25,7 +25,7 @@ export default function NewQuestionnairePage() {
       router.replace(`/questionnaires/${created.id}`);
     } catch (error) {
       setToast({
-        message: error instanceof ApiRequestError ? error.message : "Не удалось сохранить анкету",
+        message: error instanceof ApiRequestError ? error.message : "Не удалось сохранить лид",
         tone: "error",
       });
     } finally {
@@ -39,16 +39,16 @@ export default function NewQuestionnairePage() {
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       ) : null}
       <PageHeader
-        title="Новая анкета"
-        subtitle="Сохраняется сразу, даже если клиент ещё не заведён в договоры"
-        back={<BackLink href="/questionnaires">К списку анкет</BackLink>}
+        title="Новый лид"
+        subtitle="Заведите карточку прямо во время звонка — достаточно телефона, остальное допишете потом"
+        back={<BackLink href="/questionnaires">К списку лидов</BackLink>}
       />
       <QuestionnaireForm
         value={form}
         onChange={setForm}
         onSubmit={() => void handleSubmit()}
         saving={saving}
-        submitLabel="Сохранить анкету"
+        submitLabel="Сохранить лид"
       />
     </div>
   );

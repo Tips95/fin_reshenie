@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -6,22 +7,34 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_legal_staff
 from app.core.database import get_db
+from app.models.enums import LeadStatus
 from app.models.user import User
 from app.schemas.questionnaire import (
+    LeadStatsResponse,
+    QuestionnaireAssignRequest,
     QuestionnaireBrief,
+    QuestionnaireCallCreate,
     QuestionnaireCreate,
     QuestionnaireCreateClientRequest,
+    QuestionnaireManagerOption,
     QuestionnaireResponse,
+    QuestionnaireUnqualifyRequest,
     QuestionnaireUpdate,
 )
 from app.services.questionnaires import (
+    assign_questionnaire,
     create_client_from_questionnaire,
     create_questionnaire,
+    daily_lead_stats,
     delete_questionnaire,
     ensure_bankruptcy_org,
     get_organization_questionnaire,
+    list_lead_managers,
     list_questionnaires,
+    log_questionnaire_call,
+    mark_questionnaire_unqualified,
     pdf_content_disposition,
+    reopen_questionnaire,
     to_questionnaire_response,
     update_questionnaire,
 )
@@ -46,11 +59,39 @@ def _to_brief(item) -> QuestionnaireBrief:
 def get_questionnaires(
     client_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None, min_length=2),
+    lead_status: LeadStatus | None = Query(default=None),
+    manager_id: UUID | None = Query(default=None),
+    due_only: bool = Query(default=False),
     current_user: User = Depends(_require_legal_staff),
     db: Session = Depends(get_db),
 ) -> list[QuestionnaireBrief]:
-    items = list_questionnaires(db, current_user, client_id=client_id, search=search)
+    items = list_questionnaires(
+        db,
+        current_user,
+        client_id=client_id,
+        search=search,
+        lead_status=lead_status,
+        manager_id=manager_id,
+        due_only=due_only,
+    )
     return [_to_brief(item) for item in items]
+
+
+@router.get("/stats/daily", response_model=LeadStatsResponse)
+def get_daily_lead_stats(
+    day: date | None = Query(default=None),
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> LeadStatsResponse:
+    return daily_lead_stats(db, current_user, day=day)
+
+
+@router.get("/managers", response_model=list[QuestionnaireManagerOption])
+def get_lead_managers(
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> list[QuestionnaireManagerOption]:
+    return list_lead_managers(db, current_user)
 
 
 @router.post("", response_model=QuestionnaireResponse, status_code=status.HTTP_201_CREATED)
@@ -95,6 +136,49 @@ def remove_questionnaire(
     db: Session = Depends(get_db),
 ) -> None:
     delete_questionnaire(db, current_user, questionnaire_id)
+
+
+@router.post("/{questionnaire_id}/calls", response_model=QuestionnaireResponse)
+def post_questionnaire_call(
+    questionnaire_id: UUID,
+    payload: QuestionnaireCallCreate,
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> QuestionnaireResponse:
+    item = log_questionnaire_call(db, current_user, questionnaire_id, payload)
+    return to_questionnaire_response(item)
+
+
+@router.post("/{questionnaire_id}/unqualify", response_model=QuestionnaireResponse)
+def post_questionnaire_unqualify(
+    questionnaire_id: UUID,
+    payload: QuestionnaireUnqualifyRequest,
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> QuestionnaireResponse:
+    item = mark_questionnaire_unqualified(db, current_user, questionnaire_id, payload)
+    return to_questionnaire_response(item)
+
+
+@router.post("/{questionnaire_id}/reopen", response_model=QuestionnaireResponse)
+def post_questionnaire_reopen(
+    questionnaire_id: UUID,
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> QuestionnaireResponse:
+    item = reopen_questionnaire(db, current_user, questionnaire_id)
+    return to_questionnaire_response(item)
+
+
+@router.post("/{questionnaire_id}/assign", response_model=QuestionnaireResponse)
+def post_questionnaire_assign(
+    questionnaire_id: UUID,
+    payload: QuestionnaireAssignRequest,
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> QuestionnaireResponse:
+    item = assign_questionnaire(db, current_user, questionnaire_id, payload)
+    return to_questionnaire_response(item)
 
 
 @router.post("/{questionnaire_id}/create-client", response_model=QuestionnaireResponse)

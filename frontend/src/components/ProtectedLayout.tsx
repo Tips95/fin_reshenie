@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { RetailShell } from "@/components/RetailShell";
 import { LoadingState } from "@/components/ui";
-import { isCollectionStaff, legalHomePath } from "@/lib/organization-features";
+import { isCollectionStaff, isLeadSupervisor, legalHomePath } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function isRetailPath(pathname: string): boolean {
@@ -15,6 +15,10 @@ function isRetailPath(pathname: string): boolean {
 
 function isCivilCasesPath(pathname: string): boolean {
   return pathname.startsWith("/civil-cases");
+}
+
+function isLeadsPath(pathname: string): boolean {
+  return pathname.startsWith("/questionnaires");
 }
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +44,10 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
     }
     if (!retailUser && user.role === "executor" && !isCivilCasesPath(pathname)) {
       router.replace("/civil-cases");
+      return;
+    }
+    if (!retailUser && isLeadSupervisor(user) && !isLeadsPath(pathname)) {
+      router.replace(legalHomePath(user));
       return;
     }
     if (!retailUser && isCollectionStaff(user) && pathname === "/") {

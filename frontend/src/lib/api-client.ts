@@ -33,6 +33,10 @@ import type {
   User,
   Questionnaire,
   QuestionnaireBrief,
+  LeadCallOutcome,
+  LeadManagerOption,
+  LeadStats,
+  LeadStatus,
   CivilCase,
   CivilCaseBrief,
   CivilCaseDocumentKind,
@@ -519,14 +523,46 @@ export const documentCollectionApi = {
 };
 
 export const questionnairesApi = {
-  list: (params?: { client_id?: string; search?: string }) => {
+  list: (params?: {
+    client_id?: string;
+    search?: string;
+    lead_status?: LeadStatus;
+    manager_id?: string;
+    due_only?: boolean;
+  }) => {
     const search = new URLSearchParams();
     if (params?.client_id) search.set("client_id", params.client_id);
     if (params?.search) search.set("search", params.search);
+    if (params?.lead_status) search.set("lead_status", params.lead_status);
+    if (params?.manager_id) search.set("manager_id", params.manager_id);
+    if (params?.due_only) search.set("due_only", "true");
     const query = search.toString();
     return apiFetch<QuestionnaireBrief[]>(`/questionnaires${query ? `?${query}` : ""}`);
   },
   get: (id: string) => apiFetch<Questionnaire>(`/questionnaires/${id}`),
+  logCall: (
+    id: string,
+    data: { outcome: LeadCallOutcome; comment?: string | null; next_call_at?: string | null },
+  ) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}/calls`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  unqualify: (id: string, reason: string) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}/unqualify`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  reopen: (id: string) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}/reopen`, { method: "POST" }),
+  assign: (id: string, managerId: string | null) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ manager_id: managerId }),
+    }),
+  managers: () => apiFetch<LeadManagerOption[]>("/questionnaires/managers"),
+  dailyStats: (day?: string) =>
+    apiFetch<LeadStats>(`/questionnaires/stats/daily${day ? `?day=${day}` : ""}`),
   create: (data: Record<string, unknown>) =>
     apiFetch<Questionnaire>("/questionnaires", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: Record<string, unknown>) =>

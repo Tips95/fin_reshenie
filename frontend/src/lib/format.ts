@@ -45,7 +45,20 @@ export function digitsOnly(value: string): string {
 }
 
 export function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+export function isLeadCallbackDue(item: {
+  lead_status: string;
+  next_call_at: string | null;
+}): boolean {
+  if (item.lead_status !== "no_answer" || !item.next_call_at) return false;
+  return item.next_call_at.slice(0, 10) <= todayIsoDate();
 }
 
 export function formatShortName(fullName: string): string {
@@ -97,6 +110,7 @@ export function statusLabel(status: string): string {
     overdue: "Просрочен",
     owner: "Руководитель",
     manager: "Менеджер",
+    head_manager: "Начальник отдела",
     call_center: "Сбор документов",
     investor: "Инвестор",
     executor: "Исполнитель",
@@ -117,6 +131,24 @@ export function statusLabel(status: string): string {
     delete: "Удаление",
   };
   return labels[status] ?? status;
+}
+
+export function leadStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    new: "Новый",
+    in_progress: "В работе",
+    no_answer: "Не дозвонились",
+    unqualified: "Некачественный",
+    converted: "Клиент",
+  };
+  return labels[status] ?? status;
+}
+
+export function leadStatusTone(status: string): "default" | "success" | "warning" | "danger" {
+  if (status === "converted") return "success";
+  if (status === "no_answer") return "warning";
+  if (status === "unqualified") return "danger";
+  return "default";
 }
 
 export function engagementStageLabel(stage: string): string {

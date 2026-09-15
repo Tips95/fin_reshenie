@@ -1,23 +1,38 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 from urllib.parse import quote
 
 from fastapi import HTTPException, status
-from sqlalchemy import exists, or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import exists, func, or_, select
+from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.core.time import local_day_bounds, local_today
 from app.models.client import Client
-from app.models.client_questionnaire import ClientQuestionnaire
-from app.models.enums import AuditAction, EngagementStage, OrganizationType, UserRole
+from app.models.client_questionnaire import ClientQuestionnaire, QuestionnaireCall
+from app.models.enums import (
+    AuditAction,
+    EngagementStage,
+    LeadCallOutcome,
+    LeadStatus,
+    OrganizationType,
+    UserRole,
+)
 from app.models.user import User
 from app.schemas.questionnaire import (
+    LeadStatsResponse,
+    LeadStatsRow,
+    QuestionnaireAssignRequest,
     QuestionnaireBase,
+    QuestionnaireCallCreate,
+    QuestionnaireCallResponse,
     QuestionnaireCreate,
     QuestionnaireCreateClientRequest,
+    QuestionnaireManagerOption,
     QuestionnaireResponse,
+    QuestionnaireUnqualifyRequest,
     QuestionnaireUpdate,
 )
 from app.services.access import ensure_client_read_access, ensure_client_write_access
@@ -67,6 +82,10 @@ def _family_logic_fields(payload: QuestionnaireBase) -> dict[str, object]:
     }
 
 
+LEAD_SUPERVISOR_ROLES = {UserRole.OWNER, UserRole.HEAD_MANAGER}
+LEAD_OWNER_ROLES = {UserRole.MANAGER, UserRole.HEAD_MANAGER}
+
+
 def ensure_bankruptcy_org(user: User) -> None:
     organization = user.organization
     if organization is None or organization.organization_type != OrganizationType.BANKRUPTCY:
@@ -77,11 +96,11 @@ def ensure_bankruptcy_org(user: User) -> None:
 
 
 def manager_can_access_questionnaire(item: ClientQuestionnaire, user: User) -> bool:
-    """Менеджер видит свои черновики и анкеты закреплённых за ним клиентов.
-    Руководитель и сотрудник сбора документов видят все анкеты организации."""
+    """Менеджер видит свои лиды и анкеты закреплённых за ним клиентов. Руководитель,
+    начальник отдела и сотрудник сбора документов видят все анкеты организации."""
     if user.role != UserRole.MANAGER:
         return True
-    if item.created_by_id == user.id:
+    if item.created_by_id == user.id or item.assigned_manager_id == user.id:
         return True
     client = item.client
     return client is not None and client.assigned_manager_id == user.id
@@ -99,8 +118,18 @@ def _apply_questionnaire_visibility_filter(stmt, user: User):
     return stmt.where(
         or_(
             ClientQuestionnaire.created_by_id == user.id,
+            ClientQuestionnaire.assigned_manager_id == user.id,
             assigned_to_manager,
         )
+    )
+
+
+def _questionnaire_load_options():
+    return (
+        joinedload(ClientQuestionnaire.created_by),
+        joinedload(ClientQuestionnaire.assigned_manager),
+        joinedload(ClientQuestionnaire.client),
+        selectinload(ClientQuestionnaire.calls).joinedload(QuestionnaireCall.created_by),
     )
 
 
@@ -112,7 +141,10 @@ def get_organization_questionnaire(
 ) -> ClientQuestionnaire:
     item = db.scalar(
         select(ClientQuestionnaire)
-        .options(joinedload(ClientQuestionnaire.created_by), joinedload(ClientQuestionnaire.client))
+        .options(*_questionnaire_load_options())
+        # Журнал звонков дописывается отдельными вставками, поэтому коллекцию
+        # нужно перечитывать, а не брать из identity map.
+        .execution_options(populate_existing=True)
         .where(
             ClientQuestionnaire.id == questionnaire_id,
             ClientQuestionnaire.organization_id == user.organization_id,
@@ -129,16 +161,28 @@ def list_questionnaires(
     *,
     client_id: UUID | None = None,
     search: str | None = None,
+    lead_status: LeadStatus | None = None,
+    manager_id: UUID | None = None,
+    due_only: bool = False,
 ) -> list[ClientQuestionnaire]:
     stmt = (
         select(ClientQuestionnaire)
-        .options(joinedload(ClientQuestionnaire.created_by), joinedload(ClientQuestionnaire.client))
+        .options(*_questionnaire_load_options())
         .where(ClientQuestionnaire.organization_id == user.organization_id)
         .order_by(ClientQuestionnaire.created_at.desc())
     )
     stmt = _apply_questionnaire_visibility_filter(stmt, user)
     if client_id is not None:
         stmt = stmt.where(ClientQuestionnaire.client_id == client_id)
+    if lead_status is not None:
+        stmt = stmt.where(ClientQuestionnaire.lead_status == lead_status)
+    if manager_id is not None:
+        stmt = stmt.where(ClientQuestionnaire.assigned_manager_id == manager_id)
+    if due_only:
+        stmt = stmt.where(
+            ClientQuestionnaire.lead_status == LeadStatus.NO_ANSWER,
+            ClientQuestionnaire.next_call_at <= local_today(),
+        )
     if search:
         term = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -174,6 +218,8 @@ def create_questionnaire(
         organization_id=user.organization_id,
         client_id=client_id,
         created_by_id=user.id,
+        assigned_manager_id=user.id if user.role in LEAD_OWNER_ROLES else None,
+        lead_status=LeadStatus.NEW,
         full_name=payload.full_name,
         service_cost=payload.service_cost,
         phone=payload.phone,
@@ -343,6 +389,9 @@ def create_client_from_questionnaire(
     db.flush()
     create_document_collection(db, client.id)
     item.client_id = client.id
+    item.lead_status = LeadStatus.CONVERTED
+    item.converted_at = datetime.now(timezone.utc)
+    item.converted_by_id = user.id
     log_audit(
         db,
         user=user,
@@ -357,6 +406,242 @@ def create_client_from_questionnaire(
     try_ensure_first_payment_task_for_manager_client(db, client=client, actor=user)
     item = get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
     return item, client
+
+
+def _ensure_lead_open(item: ClientQuestionnaire) -> None:
+    if item.lead_status == LeadStatus.CONVERTED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Лид уже переведён в клиента",
+        )
+
+
+def log_questionnaire_call(
+    db: Session,
+    user: User,
+    questionnaire_id: UUID,
+    payload: QuestionnaireCallCreate,
+) -> ClientQuestionnaire:
+    item = get_organization_questionnaire(db, questionnaire_id=questionnaire_id, user=user)
+    now = datetime.now(timezone.utc)
+    db.add(
+        QuestionnaireCall(
+            organization_id=item.organization_id,
+            questionnaire_id=item.id,
+            created_by_id=user.id,
+            outcome=payload.outcome,
+            comment=payload.comment,
+        )
+    )
+    item.call_attempts = (item.call_attempts or 0) + 1
+    item.last_call_at = now
+
+    if payload.outcome == LeadCallOutcome.NO_ANSWER:
+        # Недозвон не теряется: лид уходит в очередь перезвона на конкретную дату.
+        item.next_call_at = payload.next_call_at or local_today()
+        if item.lead_status in {LeadStatus.NEW, LeadStatus.IN_PROGRESS}:
+            item.lead_status = LeadStatus.NO_ANSWER
+    else:
+        item.next_call_at = payload.next_call_at
+        if item.lead_status in {LeadStatus.NEW, LeadStatus.NO_ANSWER}:
+            item.lead_status = LeadStatus.IN_PROGRESS
+
+    db.commit()
+    return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
+
+
+def mark_questionnaire_unqualified(
+    db: Session,
+    user: User,
+    questionnaire_id: UUID,
+    payload: QuestionnaireUnqualifyRequest,
+) -> ClientQuestionnaire:
+    item = get_organization_questionnaire(db, questionnaire_id=questionnaire_id, user=user)
+    _ensure_lead_open(item)
+    item.lead_status = LeadStatus.UNQUALIFIED
+    item.unqualified_reason = payload.reason
+    item.unqualified_at = datetime.now(timezone.utc)
+    item.unqualified_by_id = user.id
+    item.next_call_at = None
+    log_audit(
+        db,
+        user=user,
+        entity_type="client_questionnaire",
+        entity_id=item.id,
+        action=AuditAction.UPDATE,
+        field_name="lead_status",
+        new_value=f"{LeadStatus.UNQUALIFIED.value}: {payload.reason}",
+    )
+    db.commit()
+    return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
+
+
+def reopen_questionnaire(db: Session, user: User, questionnaire_id: UUID) -> ClientQuestionnaire:
+    item = get_organization_questionnaire(db, questionnaire_id=questionnaire_id, user=user)
+    _ensure_lead_open(item)
+    item.lead_status = LeadStatus.IN_PROGRESS if item.call_attempts else LeadStatus.NEW
+    item.unqualified_reason = None
+    item.unqualified_at = None
+    item.unqualified_by_id = None
+    db.commit()
+    return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
+
+
+def assign_questionnaire(
+    db: Session,
+    user: User,
+    questionnaire_id: UUID,
+    payload: QuestionnaireAssignRequest,
+) -> ClientQuestionnaire:
+    if user.role not in LEAD_SUPERVISOR_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Переназначать лиды может руководитель или начальник отдела",
+        )
+    item = get_organization_questionnaire(db, questionnaire_id=questionnaire_id, user=user)
+    if payload.manager_id is None:
+        item.assigned_manager_id = None
+    else:
+        manager = db.scalar(
+            select(User).where(
+                User.id == payload.manager_id,
+                User.organization_id == user.organization_id,
+                User.is_active.is_(True),
+            )
+        )
+        if manager is None or manager.role not in LEAD_OWNER_ROLES | {UserRole.OWNER}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Лид можно закрепить только за менеджером",
+            )
+        item.assigned_manager_id = manager.id
+    db.commit()
+    return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
+
+
+def list_lead_managers(db: Session, user: User) -> list[QuestionnaireManagerOption]:
+    rows = db.scalars(
+        select(User)
+        .where(
+            User.organization_id == user.organization_id,
+            User.is_active.is_(True),
+            User.role.in_([UserRole.MANAGER, UserRole.HEAD_MANAGER, UserRole.OWNER]),
+        )
+        .order_by(User.full_name)
+    )
+    return [
+        QuestionnaireManagerOption(id=row.id, full_name=row.full_name, role=row.role.value)
+        for row in rows
+    ]
+
+
+def daily_lead_stats(db: Session, user: User, *, day: date | None = None) -> LeadStatsResponse:
+    """Срез за сутки по каждому менеджеру: сколько лидов завёл, сколько звонил,
+    сколько дозвонился, сколько отсеял и сколько довёл до клиента."""
+    target_day = day or local_today()
+    start, end = local_day_bounds(target_day)
+    organization_id = user.organization_id
+    only_self = user.id if user.role not in LEAD_SUPERVISOR_ROLES else None
+
+    rows: dict[UUID | None, LeadStatsRow] = {}
+    names: dict[UUID | None, str] = {}
+
+    def bucket(manager_id: UUID | None) -> LeadStatsRow:
+        if manager_id not in rows:
+            rows[manager_id] = LeadStatsRow(
+                manager_id=manager_id,
+                manager_name=names.get(manager_id) or "Без менеджера",
+            )
+        return rows[manager_id]
+
+    def scoped(stmt, actor_column):
+        stmt = stmt.where(ClientQuestionnaire.organization_id == organization_id)
+        if only_self is not None:
+            stmt = stmt.where(actor_column == only_self)
+        return stmt
+
+    for staff in db.scalars(
+        select(User).where(
+            User.organization_id == organization_id,
+            User.role.in_([UserRole.MANAGER, UserRole.HEAD_MANAGER, UserRole.OWNER]),
+        )
+    ):
+        names[staff.id] = staff.full_name
+
+    added = db.execute(
+        scoped(
+            select(ClientQuestionnaire.created_by_id, func.count())
+            .where(
+                ClientQuestionnaire.created_at >= start,
+                ClientQuestionnaire.created_at < end,
+            )
+            .group_by(ClientQuestionnaire.created_by_id),
+            ClientQuestionnaire.created_by_id,
+        )
+    )
+    for manager_id, count in added:
+        bucket(manager_id).leads_added = count
+
+    calls_stmt = (
+        select(QuestionnaireCall.created_by_id, QuestionnaireCall.outcome, func.count())
+        .where(
+            QuestionnaireCall.organization_id == organization_id,
+            QuestionnaireCall.created_at >= start,
+            QuestionnaireCall.created_at < end,
+        )
+        .group_by(QuestionnaireCall.created_by_id, QuestionnaireCall.outcome)
+    )
+    if only_self is not None:
+        calls_stmt = calls_stmt.where(QuestionnaireCall.created_by_id == only_self)
+    for manager_id, outcome, count in db.execute(calls_stmt):
+        row = bucket(manager_id)
+        row.calls_total += count
+        if outcome == LeadCallOutcome.ANSWERED:
+            row.calls_answered += count
+        else:
+            row.calls_no_answer += count
+
+    unqualified = db.execute(
+        scoped(
+            select(ClientQuestionnaire.unqualified_by_id, func.count())
+            .where(
+                ClientQuestionnaire.unqualified_at >= start,
+                ClientQuestionnaire.unqualified_at < end,
+            )
+            .group_by(ClientQuestionnaire.unqualified_by_id),
+            ClientQuestionnaire.unqualified_by_id,
+        )
+    )
+    for manager_id, count in unqualified:
+        bucket(manager_id).unqualified = count
+
+    converted = db.execute(
+        scoped(
+            select(ClientQuestionnaire.converted_by_id, func.count())
+            .where(
+                ClientQuestionnaire.converted_at >= start,
+                ClientQuestionnaire.converted_at < end,
+            )
+            .group_by(ClientQuestionnaire.converted_by_id),
+            ClientQuestionnaire.converted_by_id,
+        )
+    )
+    for manager_id, count in converted:
+        bucket(manager_id).converted = count
+
+    for manager_id, row in rows.items():
+        row.manager_name = names.get(manager_id) or "Без менеджера"
+
+    ordered = sorted(rows.values(), key=lambda row: row.manager_name)
+    totals = LeadStatsRow(manager_id=None, manager_name="Итого")
+    for row in ordered:
+        totals.leads_added += row.leads_added
+        totals.calls_total += row.calls_total
+        totals.calls_answered += row.calls_answered
+        totals.calls_no_answer += row.calls_no_answer
+        totals.unqualified += row.unqualified
+        totals.converted += row.converted
+    return LeadStatsResponse(day=target_day, rows=ordered, totals=totals)
 
 
 def to_questionnaire_response(item: ClientQuestionnaire) -> QuestionnaireResponse:
@@ -374,6 +659,26 @@ def to_questionnaire_response(item: ClientQuestionnaire) -> QuestionnaireRespons
         created_by_name=created_by_name,
         created_at=item.created_at,
         updated_at=item.updated_at,
+        lead_status=item.lead_status,
+        unqualified_reason=item.unqualified_reason,
+        next_call_at=item.next_call_at,
+        last_call_at=item.last_call_at,
+        call_attempts=item.call_attempts or 0,
+        assigned_manager_id=item.assigned_manager_id,
+        assigned_manager_name=(
+            item.assigned_manager.full_name if item.assigned_manager is not None else None
+        ),
+        calls=[
+            QuestionnaireCallResponse(
+                id=call.id,
+                outcome=call.outcome,
+                comment=call.comment,
+                created_by_id=call.created_by_id,
+                created_by_name=call.created_by.full_name if call.created_by else None,
+                created_at=call.created_at,
+            )
+            for call in item.calls
+        ],
         fake_income_documents=item.fake_income_documents,
         bank_accounts=item.bank_accounts,
         has_guarantee_or_collateral=item.has_guarantee_or_collateral,

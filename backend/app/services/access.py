@@ -65,6 +65,11 @@ def ensure_bankruptcy_client_module(user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Исполнитель работает только с разделом «Гражданские дела»",
         )
+    if user.role == UserRole.HEAD_MANAGER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Начальник отдела работает только с лидами и статистикой",
+        )
 
 
 def apply_client_visibility_filter(stmt: Select, user: User) -> Select:

@@ -10,6 +10,7 @@ import {
   hadRegisteredMarriage,
   hasAnyProperty,
   hasSpouse,
+  questionnaireCompleteness,
   removeDebtRow,
   validateQuestionnaireForm,
   type QuestionnaireFormValue,
@@ -152,7 +153,8 @@ export function QuestionnaireForm({
   const married = hasSpouse(value);
   const showSpouseProperty = hadRegisteredMarriage(value);
   const showEncumbrance = hasAnyProperty(value);
-  const remaining = Object.keys(validateQuestionnaireForm(value)).length;
+  const progress = questionnaireCompleteness(value);
+  const ready = progress.filled === progress.total;
 
   function patch(partial: Partial<QuestionnaireFormValue>) {
     const next = { ...value, ...partial };
@@ -225,9 +227,14 @@ export function QuestionnaireForm({
     >
       {hasErrors(errors) ? (
         <p className="alert-danger mb-2">
-          Осталось заполнить: {Object.keys(errors).length}. Прокрутите к подсвеченным полям.
+          Проверьте подсвеченные поля — остальное можно оставить пустым.
         </p>
-      ) : null}
+      ) : (
+        <p className="mb-2 rounded-lg border border-border bg-surface-muted/60 px-3 py-2 text-[11px] leading-snug text-muted">
+          Сохранить можно в любой момент — обязателен только телефон. Звёздочкой отмечено то,
+          что понадобится, чтобы перевести лид в клиента.
+        </p>
+      )}
 
       <div className="surface-card divide-y divide-border overflow-hidden">
         <section className="px-3 py-2.5 lg:px-4">
@@ -723,10 +730,12 @@ export function QuestionnaireForm({
             {saving ? "Сохранение..." : submitLabel}
           </Button>
           {extraActions}
-          {remaining > 0 ? (
-            <p className="text-[11px] text-muted">Осталось: {remaining}</p>
+          {ready ? (
+            <p className="text-[11px] text-status-success-text">Анкета заполнена полностью</p>
           ) : (
-            <p className="text-[11px] text-status-success-text">Можно сохранять</p>
+            <p className="text-[11px] text-muted">
+              Заполнено {progress.filled} из {progress.total}
+            </p>
           )}
         </div>
       </div>

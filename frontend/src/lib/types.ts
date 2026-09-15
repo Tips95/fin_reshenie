@@ -1,4 +1,10 @@
-export type UserRole = "owner" | "manager" | "call_center" | "investor" | "executor";
+export type UserRole =
+  | "owner"
+  | "manager"
+  | "head_manager"
+  | "call_center"
+  | "investor"
+  | "executor";
 
 export type OrganizationType = "bankruptcy" | "retail";
 
@@ -609,6 +615,41 @@ export interface QuestionnaireDocumentItem {
   extra_info: string;
 }
 
+export type LeadStatus = "new" | "in_progress" | "no_answer" | "unqualified" | "converted";
+export type LeadCallOutcome = "answered" | "no_answer";
+
+export interface QuestionnaireCall {
+  id: string;
+  outcome: LeadCallOutcome;
+  comment: string | null;
+  created_by_id: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface LeadManagerOption {
+  id: string;
+  full_name: string;
+  role: UserRole | string;
+}
+
+export interface LeadStatsRow {
+  manager_id: string | null;
+  manager_name: string;
+  leads_added: number;
+  calls_total: number;
+  calls_answered: number;
+  calls_no_answer: number;
+  unqualified: number;
+  converted: number;
+}
+
+export interface LeadStats {
+  day: string;
+  rows: LeadStatsRow[];
+  totals: LeadStatsRow;
+}
+
 export interface QuestionnaireBrief {
   id: string;
   organization_id: string;
@@ -622,6 +663,13 @@ export interface QuestionnaireBrief {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+  lead_status: LeadStatus;
+  unqualified_reason: string | null;
+  next_call_at: string | null;
+  last_call_at: string | null;
+  call_attempts: number;
+  assigned_manager_id: string | null;
+  assigned_manager_name: string | null;
 }
 
 export interface Questionnaire extends QuestionnaireBrief {
@@ -646,6 +694,7 @@ export interface Questionnaire extends QuestionnaireBrief {
   debts: QuestionnaireDebt[];
   assets?: QuestionnaireAsset[];
   documents?: QuestionnaireDocumentItem[];
+  calls: QuestionnaireCall[];
 }
 
 export type CivilCaseStage = "intake" | "documents" | "submitted" | "completed";

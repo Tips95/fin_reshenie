@@ -17,9 +17,24 @@ export function isCivilExecutor(user: User | null | undefined): boolean {
   return user?.role === "executor";
 }
 
+/** Начальник отдела менеджеров: видит все лиды и дневную статистику, но не финансы. */
+export function isLeadSupervisor(user: User | null | undefined): boolean {
+  return user?.role === "head_manager";
+}
+
+export function canSuperviseLeads(user: User | null | undefined): boolean {
+  return user?.role === "owner" || isLeadSupervisor(user);
+}
+
+export function canOpenClientCards(user: User | null | undefined): boolean {
+  return !isCivilExecutor(user) && !isLeadSupervisor(user);
+}
+
 export function canUseQuestionnaires(user: User | null | undefined): boolean {
   const role = user?.role?.toLowerCase();
-  return role === "owner" || role === "manager" || role === "call_center";
+  return (
+    role === "owner" || role === "manager" || role === "head_manager" || role === "call_center"
+  );
 }
 
 export function canUseCivilCases(user: User | null | undefined): boolean {
@@ -53,5 +68,6 @@ export function civilExecutorGroups(items: CivilCaseExecutorOption[]) {
 
 export function legalHomePath(user: User | null | undefined): string {
   if (isCivilExecutor(user)) return "/civil-cases";
+  if (isLeadSupervisor(user)) return "/questionnaires/stats";
   return isCollectionStaff(user) ? "/questionnaires" : "/";
 }

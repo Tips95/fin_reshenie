@@ -9,6 +9,7 @@ class OrganizationType(str, enum.Enum):
 class UserRole(str, enum.Enum):
     OWNER = "owner"
     MANAGER = "manager"
+    HEAD_MANAGER = "head_manager"
     CALL_CENTER = "call_center"
     INVESTOR = "investor"
     EXECUTOR = "executor"
@@ -139,3 +140,16 @@ class CivilCaseStage(str, enum.Enum):
 class CivilCaseDocumentKind(str, enum.Enum):
     CLIENT = "client"
     PREPARED = "prepared"
+
+
+class LeadStatus(str, enum.Enum):
+    NEW = "new"
+    IN_PROGRESS = "in_progress"
+    NO_ANSWER = "no_answer"
+    UNQUALIFIED = "unqualified"
+    CONVERTED = "converted"
+
+
+class LeadCallOutcome(str, enum.Enum):
+    ANSWERED = "answered"
+    NO_ANSWER = "no_answer"

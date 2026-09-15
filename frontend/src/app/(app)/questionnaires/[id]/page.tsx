@@ -6,13 +6,15 @@ import { useParams, useRouter } from "next/navigation";
 import { BackLink, Button, LoadingState, PageHeader, Toast } from "@/components/ui";
 import { ApiRequestError, getDuplicateClientId, questionnairesApi } from "@/lib/api-client";
 import { QuestionnaireForm } from "@/modules/questionnaires/QuestionnaireForm";
+import { LeadPanel } from "@/modules/questionnaires/LeadPanel";
 import {
   formToPayload,
   questionnaireToForm,
   type QuestionnaireFormValue,
 } from "@/modules/questionnaires/defaults";
+import { canOpenClientCards, canSuperviseLeads } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
-import type { Questionnaire } from "@/lib/types";
+import type { LeadManagerOption, Questionnaire } from "@/lib/types";
 
 export default function QuestionnaireDetailPage() {
   const params = useParams<{ id: string }>();
@@ -20,6 +22,7 @@ export default function QuestionnaireDetailPage() {
   const { user } = useAuth();
   const [item, setItem] = useState<Questionnaire | null>(null);
   const [form, setForm] = useState<QuestionnaireFormValue | null>(null);
+  const [managers, setManagers] = useState<LeadManagerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -46,6 +49,17 @@ export default function QuestionnaireDetailPage() {
       }
     })();
   }, [params.id]);
+
+  useEffect(() => {
+    if (!canSuperviseLeads(user)) return;
+    void (async () => {
+      try {
+        setManagers(await questionnairesApi.managers());
+      } catch {
+        setManagers([]);
+      }
+    })();
+  }, [user]);
 
   async function handleSubmit() {
     if (!form) return;
@@ -135,9 +149,9 @@ export default function QuestionnaireDetailPage() {
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       ) : null}
       <PageHeader
-        title={item.full_name}
+        title={item.full_name || item.phone || "Лид без имени"}
         subtitle={item.client_id ? "Привязана к карточке клиента" : "Клиент ещё не заведён"}
-        back={<BackLink href="/questionnaires">К списку анкет</BackLink>}
+        back={<BackLink href="/questionnaires">К списку лидов</BackLink>}
         action={
           user?.role === "owner" ? (
             <Button type="button" variant="danger" disabled={deleting} onClick={() => void handleDelete()}>
@@ -145,6 +159,16 @@ export default function QuestionnaireDetailPage() {
             </Button>
           ) : undefined
         }
+      />
+      <LeadPanel
+        item={item}
+        managers={managers}
+        canAssign={canSuperviseLeads(user)}
+        onUpdated={(next) => {
+          setItem(next);
+          setForm(questionnaireToForm(next));
+        }}
+        onError={(message) => setToast({ message, tone: "error" })}
       />
       <QuestionnaireForm
         value={form}
@@ -158,9 +182,15 @@ export default function QuestionnaireDetailPage() {
               {downloading ? "PDF..." : "Скачать PDF"}
             </Button>
             {item.client_id ? (
-              <Button type="button" variant="secondary" onClick={() => router.push(`/clients/${item.client_id}`)}>
-                Карточка клиента
-              </Button>
+              canOpenClientCards(user) ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => router.push(`/clients/${item.client_id}`)}
+                >
+                  Карточка клиента
+                </Button>
+              ) : null
             ) : (
               <Button
                 type="button"

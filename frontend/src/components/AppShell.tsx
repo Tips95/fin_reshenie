@@ -8,7 +8,7 @@ import { LogoMark } from "@/components/ui";
 import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { canUseCivilCases, canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff, isCivilExecutor } from "@/lib/organization-features";
+import { canUseCivilCases, canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff, isCivilExecutor, isLeadSupervisor } from "@/lib/organization-features";
 import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -17,9 +17,16 @@ const navItems = [
   { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд", hideFor: ["call_center"] },
   {
     href: "/questionnaires",
-    label: "Анкеты",
+    label: "Лиды и анкеты",
     icon: "▤",
-    shortLabel: "Анкеты",
+    shortLabel: "Лиды",
+  },
+  {
+    href: "/questionnaires/stats",
+    label: "Статистика лидов",
+    icon: "◍",
+    shortLabel: "Статист.",
+    roles: ["owner", "manager", "head_manager"],
   },
   {
     href: "/civil-cases",
@@ -86,7 +93,8 @@ const navItems = [
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
-  if (pathname.startsWith("/questionnaires")) return "Анкеты";
+  if (pathname.startsWith("/questionnaires/stats")) return "Статистика лидов";
+  if (pathname.startsWith("/questionnaires")) return "Лиды и анкеты";
   if (pathname.startsWith("/civil-cases")) return "Гражданские дела";
   if (pathname.startsWith("/clients/collection")) return "Сбор документов";
   if (pathname.startsWith("/clients/contracts")) return "Договоры";
@@ -104,6 +112,9 @@ function pageTitle(pathname: string): string {
 
 function isNavActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
+  if (href === "/questionnaires") {
+    return pathname.startsWith("/questionnaires") && !pathname.startsWith("/questionnaires/stats");
+  }
   if (href === "/clients/collection") return pathname.startsWith("/clients/collection");
   if (href === "/clients/contracts") {
     return (
@@ -123,6 +134,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const visibleNav = navItems.filter((item) => {
     if (isCivilExecutor(user)) return item.href === "/civil-cases";
+    if (isLeadSupervisor(user)) return item.href.startsWith("/questionnaires");
     if (item.hideFor?.includes(user?.role ?? "")) return false;
     if (item.href === "/questionnaires") return canUseQuestionnaires(user);
     if (item.href === "/civil-cases") return canUseCivilCases(user);
@@ -135,9 +147,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mobilePrimary = (
     isCivilExecutor(user)
       ? ["/civil-cases"]
-      : isCollectionStaff(user)
-        ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
-        : ["/", "/questionnaires", "/civil-cases", "/clients/contracts"]
+      : isLeadSupervisor(user)
+        ? ["/questionnaires/stats", "/questionnaires"]
+        : isCollectionStaff(user)
+          ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
+          : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
   ).filter((href) => visibleNav.some((item) => item.href === href));
 
   return (

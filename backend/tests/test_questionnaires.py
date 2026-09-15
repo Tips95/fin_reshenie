@@ -3,19 +3,39 @@ from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.time import local_today
 from app.models import Base, Client, ClientQuestionnaire, Organization, User
-from app.models.enums import EngagementStage, OrganizationType, UserRole
-from app.schemas.questionnaire import QuestionnaireCreate
+from app.models.enums import (
+    EngagementStage,
+    LeadCallOutcome,
+    LeadStatus,
+    OrganizationType,
+    UserRole,
+)
+from app.schemas.questionnaire import (
+    QuestionnaireAssignRequest,
+    QuestionnaireCallCreate,
+    QuestionnaireCreate,
+    QuestionnaireCreateClientRequest,
+    QuestionnaireUnqualifyRequest,
+)
 from app.services.questionnaire_defaults import empty_debts
 from app.services.questionnaire_pdf import build_questionnaire_pdf, display_or_absent
 from app.services.questionnaires import (
+    assign_questionnaire,
+    create_client_from_questionnaire,
     create_questionnaire,
+    daily_lead_stats,
     get_organization_questionnaire,
     list_questionnaires,
+    log_questionnaire_call,
+    mark_questionnaire_unqualified,
+    reopen_questionnaire,
     to_questionnaire_response,
 )
 
@@ -313,6 +333,198 @@ class TestQuestionnaireVisibility:
         with pytest.raises(HTTPException) as error:
             create_questionnaire(db, second, _minimal_payload(client_id=client.id))
         assert error.value.status_code == 403
+
+
+class TestLeadPipeline:
+    def test_lead_saves_with_phone_only(self, db):
+        user = _org_user(db)
+        item = create_questionnaire(db, user, QuestionnaireCreate(phone="+7 928 000-00-00"))
+        assert item.full_name == ""
+        assert item.lead_status == LeadStatus.NEW
+        assert item.assigned_manager_id == user.id
+        assert item.call_attempts == 0
+
+    def test_lead_without_phone_is_rejected(self):
+        with pytest.raises(ValidationError):
+            QuestionnaireCreate(full_name="Иванов Иван", phone="   ")
+
+    def test_no_answer_queues_lead_for_a_later_call(self, db):
+        user = _org_user(db)
+        item = create_questionnaire(db, user, _minimal_payload())
+        item = log_questionnaire_call(
+            db,
+            user,
+            item.id,
+            QuestionnaireCallCreate(
+                outcome=LeadCallOutcome.NO_ANSWER,
+                next_call_at=date(2026, 9, 20),
+                comment="Сбросил",
+            ),
+        )
+        assert item.lead_status == LeadStatus.NO_ANSWER
+        assert item.next_call_at == date(2026, 9, 20)
+        assert item.call_attempts == 1
+        assert item.last_call_at is not None
+
+        due = list_questionnaires(db, user, due_only=True)
+        assert [row.id for row in due] == []
+
+        item = log_questionnaire_call(
+            db, user, item.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.NO_ANSWER)
+        )
+        assert item.next_call_at == local_today()
+        assert item.call_attempts == 2
+        assert [row.id for row in list_questionnaires(db, user, due_only=True)] == [item.id]
+
+    def test_answered_call_returns_lead_to_work(self, db):
+        user = _org_user(db)
+        item = create_questionnaire(db, user, _minimal_payload())
+        log_questionnaire_call(
+            db, user, item.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.NO_ANSWER)
+        )
+        item = log_questionnaire_call(
+            db,
+            user,
+            item.id,
+            QuestionnaireCallCreate(outcome=LeadCallOutcome.ANSWERED, comment="Согласен встретиться"),
+        )
+        assert item.lead_status == LeadStatus.IN_PROGRESS
+        assert item.next_call_at is None
+
+        response = to_questionnaire_response(item)
+        assert [call.outcome for call in response.calls] == [
+            LeadCallOutcome.ANSWERED,
+            LeadCallOutcome.NO_ANSWER,
+        ]
+        assert response.calls[0].comment == "Согласен встретиться"
+        assert response.calls[0].created_by_name == "Менеджер Тестов"
+
+    def test_unqualified_lead_keeps_its_reason_until_reopened(self, db):
+        user = _org_user(db)
+        item = create_questionnaire(db, user, _minimal_payload())
+        item = mark_questionnaire_unqualified(
+            db,
+            user,
+            item.id,
+            QuestionnaireUnqualifyRequest(reason="Долг 90 тысяч, банкротство не окупится"),
+        )
+        assert item.lead_status == LeadStatus.UNQUALIFIED
+        assert item.unqualified_reason == "Долг 90 тысяч, банкротство не окупится"
+        assert item.unqualified_by_id == user.id
+        assert item.next_call_at is None
+
+        item = reopen_questionnaire(db, user, item.id)
+        assert item.lead_status == LeadStatus.NEW
+        assert item.unqualified_reason is None
+
+    def test_unqualify_reason_cannot_be_blank(self):
+        with pytest.raises(ValidationError):
+            QuestionnaireUnqualifyRequest(reason="   ")
+
+    def test_converted_lead_cannot_be_marked_unqualified(self, db):
+        user = _org_user(db)
+        item = create_questionnaire(
+            db, user, _minimal_payload(full_name="Иванов Иван Иванович")
+        )
+        item, _client = create_client_from_questionnaire(
+            db, user, item.id, QuestionnaireCreateClientRequest()
+        )
+        assert item.lead_status == LeadStatus.CONVERTED
+        assert item.converted_by_id == user.id
+
+        with pytest.raises(HTTPException) as error:
+            mark_questionnaire_unqualified(
+                db, user, item.id, QuestionnaireUnqualifyRequest(reason="Передумал")
+            )
+        assert error.value.status_code == 409
+
+    def test_head_manager_sees_every_lead(self, db):
+        head = _org_user(
+            db,
+            role=UserRole.HEAD_MANAGER,
+            email="head@test.local",
+            full_name="Начальник Отдела",
+        )
+        manager = _org_user(
+            db,
+            email="manager@test.local",
+            full_name="Менеджер Тестов",
+            organization=head.organization,
+        )
+        foreign = create_questionnaire(db, manager, _minimal_payload(full_name="Чужой лид"))
+        assert foreign.id in {row.id for row in list_questionnaires(db, head)}
+        assert get_organization_questionnaire(db, questionnaire_id=foreign.id, user=head).id == foreign.id
+
+    def test_only_supervisors_reassign_leads(self, db):
+        head = _org_user(
+            db,
+            role=UserRole.HEAD_MANAGER,
+            email="head@test.local",
+            full_name="Начальник Отдела",
+        )
+        first = _org_user(
+            db, email="first@test.local", full_name="Первый Менеджер", organization=head.organization
+        )
+        second = _org_user(
+            db, email="second@test.local", full_name="Второй Менеджер", organization=head.organization
+        )
+        item = create_questionnaire(db, first, _minimal_payload())
+
+        with pytest.raises(HTTPException) as error:
+            assign_questionnaire(db, first, item.id, QuestionnaireAssignRequest(manager_id=second.id))
+        assert error.value.status_code == 403
+
+        item = assign_questionnaire(
+            db, head, item.id, QuestionnaireAssignRequest(manager_id=second.id)
+        )
+        assert item.assigned_manager_id == second.id
+        assert item.id in {row.id for row in list_questionnaires(db, second)}
+
+    def test_daily_stats_split_work_by_manager(self, db):
+        head = _org_user(
+            db,
+            role=UserRole.HEAD_MANAGER,
+            email="head@test.local",
+            full_name="Начальник Отдела",
+        )
+        first = _org_user(
+            db, email="first@test.local", full_name="Алиев Алий", organization=head.organization
+        )
+        second = _org_user(
+            db, email="second@test.local", full_name="Борисов Борис", organization=head.organization
+        )
+
+        one = create_questionnaire(db, first, _minimal_payload(full_name="Иванов Иван Иванович"))
+        log_questionnaire_call(
+            db, first, one.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.NO_ANSWER)
+        )
+        log_questionnaire_call(
+            db, first, one.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.ANSWERED)
+        )
+        create_client_from_questionnaire(db, first, one.id, QuestionnaireCreateClientRequest())
+
+        two = create_questionnaire(db, second, _minimal_payload(full_name="Петров Пётр"))
+        log_questionnaire_call(
+            db, second, two.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.ANSWERED)
+        )
+        mark_questionnaire_unqualified(
+            db, second, two.id, QuestionnaireUnqualifyRequest(reason="Не тот регион")
+        )
+
+        stats = daily_lead_stats(db, head)
+        by_name = {row.manager_name: row for row in stats.rows}
+        assert by_name["Алиев Алий"].leads_added == 1
+        assert by_name["Алиев Алий"].calls_total == 2
+        assert by_name["Алиев Алий"].calls_answered == 1
+        assert by_name["Алиев Алий"].calls_no_answer == 1
+        assert by_name["Алиев Алий"].converted == 1
+        assert by_name["Борисов Борис"].unqualified == 1
+        assert stats.totals.calls_total == 3
+        assert stats.totals.leads_added == 2
+
+        own = daily_lead_stats(db, second)
+        assert [row.manager_name for row in own.rows] == ["Борисов Борис"]
+        assert own.totals.calls_total == 1
 
 
 class TestQuestionnairePdf:

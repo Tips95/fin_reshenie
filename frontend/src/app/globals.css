@@ -358,6 +358,14 @@ body {
     border-left: 3px solid var(--status-danger-stripe);
   }
 
+  .data-table tbody tr.is-callback-due {
+    @apply bg-status-warning-bg hover:bg-status-warning-bg;
+  }
+
+  .data-table tbody tr.is-callback-due td:first-child {
+    border-left: 3px solid var(--status-warning-solid);
+  }
+
   /* На телефоне таблица разворачивается в карточки: каждая ячейка получает
      подпись из data-label вместо шапки, горизонтальный скролл не нужен. */
   @media (max-width: 1023px) {
@@ -387,6 +395,15 @@ body {
     }
 
     .table-cards tbody tr.is-overdue td:first-child {
+      border-left: 0;
+    }
+
+    .table-cards tbody tr.is-callback-due {
+      @apply border-status-warning-border bg-status-warning-bg;
+      border-left: 3px solid var(--status-warning-solid);
+    }
+
+    .table-cards tbody tr.is-callback-due td:first-child {
       border-left: 0;
     }
 
