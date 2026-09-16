@@ -10,7 +10,9 @@ from app.core.database import get_db
 from app.models.enums import LeadStatus
 from app.models.user import User
 from app.schemas.questionnaire import (
+    LeadCountsByDayResponse,
     LeadStatsResponse,
+    QuestionnaireAppointmentRequest,
     QuestionnaireAssignRequest,
     QuestionnaireBrief,
     QuestionnaireCallCreate,
@@ -29,12 +31,14 @@ from app.services.questionnaires import (
     delete_questionnaire,
     ensure_bankruptcy_org,
     get_organization_questionnaire,
+    lead_counts_by_day,
     list_lead_managers,
     list_questionnaires,
     log_questionnaire_call,
     mark_questionnaire_unqualified,
     pdf_content_disposition,
     reopen_questionnaire,
+    set_questionnaire_appointment,
     to_questionnaire_response,
     update_questionnaire,
 )
@@ -61,7 +65,10 @@ def get_questionnaires(
     search: str | None = Query(default=None, min_length=2),
     lead_status: LeadStatus | None = Query(default=None),
     manager_id: UUID | None = Query(default=None),
+    created_by_id: UUID | None = Query(default=None),
+    created_on: date | None = Query(default=None),
     due_only: bool = Query(default=False),
+    appointment_due: bool = Query(default=False),
     current_user: User = Depends(_require_legal_staff),
     db: Session = Depends(get_db),
 ) -> list[QuestionnaireBrief]:
@@ -72,7 +79,10 @@ def get_questionnaires(
         search=search,
         lead_status=lead_status,
         manager_id=manager_id,
+        created_by_id=created_by_id,
+        created_on=created_on,
         due_only=due_only,
+        appointment_due=appointment_due,
     )
     return [_to_brief(item) for item in items]
 
@@ -84,6 +94,23 @@ def get_daily_lead_stats(
     db: Session = Depends(get_db),
 ) -> LeadStatsResponse:
     return daily_lead_stats(db, current_user, day=day)
+
+
+@router.get("/stats/by-day", response_model=LeadCountsByDayResponse)
+def get_lead_counts_by_day(
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    manager_id: UUID | None = Query(default=None),
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> LeadCountsByDayResponse:
+    return lead_counts_by_day(
+        db,
+        current_user,
+        date_from=date_from,
+        date_to=date_to,
+        manager_id=manager_id,
+    )
 
 
 @router.get("/managers", response_model=list[QuestionnaireManagerOption])
@@ -178,6 +205,17 @@ def post_questionnaire_assign(
     db: Session = Depends(get_db),
 ) -> QuestionnaireResponse:
     item = assign_questionnaire(db, current_user, questionnaire_id, payload)
+    return to_questionnaire_response(item)
+
+
+@router.post("/{questionnaire_id}/appointment", response_model=QuestionnaireResponse)
+def post_questionnaire_appointment(
+    questionnaire_id: UUID,
+    payload: QuestionnaireAppointmentRequest,
+    current_user: User = Depends(_require_legal_staff),
+    db: Session = Depends(get_db),
+) -> QuestionnaireResponse:
+    item = set_questionnaire_appointment(db, current_user, questionnaire_id, payload)
     return to_questionnaire_response(item)
 
 

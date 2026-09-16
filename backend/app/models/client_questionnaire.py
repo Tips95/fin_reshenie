@@ -74,6 +74,9 @@ class ClientQuestionnaire(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         default=0,
         server_default="0",
     )
+    # Клиент обещал подойти — напоминание менеджеру, отдельно от next_call_at.
+    appointment_at: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    appointment_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     service_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     phone: Mapped[str] = mapped_column(String(32), nullable=False, default="")

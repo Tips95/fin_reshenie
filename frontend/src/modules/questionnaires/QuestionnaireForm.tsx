@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { Button, FormField, Input, PhoneInput } from "@/components/ui";
 import { filterDecimalInput, filterPersonName, hasErrors } from "@/lib/validation";
 import { cn } from "@/lib/cn";
+import { addDaysIsoDate, todayIsoDate } from "@/lib/format";
 import {
   addDebtRow,
   hadRegisteredMarriage,
@@ -279,6 +280,52 @@ export function QuestionnaireForm({
                   placeholder="Чеченская Республика"
                 />
               </FormField>
+            </div>
+          </div>
+          <div className="mt-2.5 grid gap-x-3 gap-y-2 sm:grid-cols-[170px_1fr] sm:items-end">
+            <FormField label="Запись на приём">
+              <Input
+                className={fieldClass}
+                type="date"
+                min={todayIsoDate()}
+                value={value.appointment_at ?? ""}
+                onChange={(event) => patch({ appointment_at: event.target.value || null })}
+              />
+            </FormField>
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { label: "Завтра", days: 1 },
+                    { label: "Через неделю", days: 7 },
+                    { label: "Через месяц", days: 30 },
+                  ] as const
+                ).map((preset) => (
+                  <button
+                    key={preset.days}
+                    type="button"
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted hover:border-brand-600 hover:text-brand-700"
+                    onClick={() => patch({ appointment_at: addDaysIsoDate(preset.days) })}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                {value.appointment_at ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted hover:text-status-danger-text"
+                    onClick={() => patch({ appointment_at: null, appointment_note: "" })}
+                  >
+                    Сбросить
+                  </button>
+                ) : null}
+              </div>
+              <Input
+                className={fieldClass}
+                value={value.appointment_note ?? ""}
+                onChange={(event) => patch({ appointment_note: event.target.value })}
+                placeholder="Комментарий к визиту (необязательно)"
+              />
             </div>
           </div>
         </section>

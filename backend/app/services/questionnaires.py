@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 from urllib.parse import quote
@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.core.time import local_day_bounds, local_today
+from app.core.time import local_day_bounds, local_today, to_local_date
 from app.models.client import Client
 from app.models.client_questionnaire import ClientQuestionnaire, QuestionnaireCall
 from app.models.enums import (
@@ -22,8 +22,12 @@ from app.models.enums import (
 )
 from app.models.user import User
 from app.schemas.questionnaire import (
+    LeadCountsByDayResponse,
+    LeadDayCountManager,
+    LeadDayCountRow,
     LeadStatsResponse,
     LeadStatsRow,
+    QuestionnaireAppointmentRequest,
     QuestionnaireAssignRequest,
     QuestionnaireBase,
     QuestionnaireCallCreate,
@@ -163,7 +167,10 @@ def list_questionnaires(
     search: str | None = None,
     lead_status: LeadStatus | None = None,
     manager_id: UUID | None = None,
+    created_by_id: UUID | None = None,
+    created_on: date | None = None,
     due_only: bool = False,
+    appointment_due: bool = False,
 ) -> list[ClientQuestionnaire]:
     stmt = (
         select(ClientQuestionnaire)
@@ -178,10 +185,26 @@ def list_questionnaires(
         stmt = stmt.where(ClientQuestionnaire.lead_status == lead_status)
     if manager_id is not None:
         stmt = stmt.where(ClientQuestionnaire.assigned_manager_id == manager_id)
+    if created_by_id is not None:
+        stmt = stmt.where(ClientQuestionnaire.created_by_id == created_by_id)
+    if created_on is not None:
+        day_start, day_end = local_day_bounds(created_on)
+        stmt = stmt.where(
+            ClientQuestionnaire.created_at >= day_start,
+            ClientQuestionnaire.created_at < day_end,
+        )
     if due_only:
         stmt = stmt.where(
             ClientQuestionnaire.lead_status == LeadStatus.NO_ANSWER,
             ClientQuestionnaire.next_call_at <= local_today(),
+        )
+    if appointment_due:
+        stmt = stmt.where(
+            ClientQuestionnaire.appointment_at.is_not(None),
+            ClientQuestionnaire.appointment_at <= local_today(),
+            ClientQuestionnaire.lead_status.notin_(
+                [LeadStatus.CONVERTED, LeadStatus.UNQUALIFIED]
+            ),
         )
     if search:
         term = f"%{search.strip()}%"
@@ -219,7 +242,7 @@ def create_questionnaire(
         client_id=client_id,
         created_by_id=user.id,
         assigned_manager_id=user.id if user.role in LEAD_OWNER_ROLES else None,
-        lead_status=LeadStatus.NEW,
+        lead_status=LeadStatus.IN_PROGRESS if payload.appointment_at else LeadStatus.NEW,
         full_name=payload.full_name,
         service_cost=payload.service_cost,
         phone=payload.phone,
@@ -241,6 +264,8 @@ def create_questionnaire(
         weapon_details=payload.weapon_details,
         notes=payload.notes,
         filled_date=payload.filled_date or date.today(),
+        appointment_at=payload.appointment_at,
+        appointment_note=payload.appointment_note,
         debts=[row.model_dump(mode="json") for row in payload.debts] or empty_debts(),
         assets=(
             [row.model_dump(mode="json") for row in payload.assets]
@@ -300,6 +325,8 @@ def update_questionnaire(
     item.weapon_details = payload.weapon_details
     item.notes = payload.notes
     item.filled_date = payload.filled_date
+    item.appointment_at = payload.appointment_at
+    item.appointment_note = payload.appointment_note
     item.debts = [row.model_dump(mode="json") for row in payload.debts]
     if payload.assets is not None:
         item.assets = [row.model_dump(mode="json") for row in payload.assets]
@@ -463,6 +490,8 @@ def mark_questionnaire_unqualified(
     item.unqualified_at = datetime.now(timezone.utc)
     item.unqualified_by_id = user.id
     item.next_call_at = None
+    item.appointment_at = None
+    item.appointment_note = None
     log_audit(
         db,
         user=user,
@@ -472,6 +501,28 @@ def mark_questionnaire_unqualified(
         field_name="lead_status",
         new_value=f"{LeadStatus.UNQUALIFIED.value}: {payload.reason}",
     )
+    db.commit()
+    return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
+
+
+def set_questionnaire_appointment(
+    db: Session,
+    user: User,
+    questionnaire_id: UUID,
+    payload: QuestionnaireAppointmentRequest,
+) -> ClientQuestionnaire:
+    """Запись на приём / сброс — напоминание менеджеру в день визита."""
+    item = get_organization_questionnaire(db, questionnaire_id=questionnaire_id, user=user)
+    _ensure_lead_open(item)
+    if item.lead_status == LeadStatus.UNQUALIFIED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Сначала верните лид в работу",
+        )
+    item.appointment_at = payload.appointment_at
+    item.appointment_note = payload.appointment_note
+    if item.appointment_at and item.lead_status == LeadStatus.NEW:
+        item.lead_status = LeadStatus.IN_PROGRESS
     db.commit()
     return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
 
@@ -644,6 +695,94 @@ def daily_lead_stats(db: Session, user: User, *, day: date | None = None) -> Lea
     return LeadStatsResponse(day=target_day, rows=ordered, totals=totals)
 
 
+MAX_LEAD_COUNTS_RANGE_DAYS = 93
+
+
+def lead_counts_by_day(
+    db: Session,
+    user: User,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    manager_id: UUID | None = None,
+) -> LeadCountsByDayResponse:
+    """Сколько анкет завели по календарным дням (местное время). Только для руководителя и начальника."""
+    if user.role not in LEAD_SUPERVISOR_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Сводку по датам смотрят руководитель и начальник отдела",
+        )
+
+    end_day = date_to or local_today()
+    start_day = date_from or (end_day - timedelta(days=13))
+    if start_day > end_day:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Дата «с» не может быть позже даты «по»",
+        )
+    if (end_day - start_day).days > MAX_LEAD_COUNTS_RANGE_DAYS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Период не больше {MAX_LEAD_COUNTS_RANGE_DAYS} дней",
+        )
+
+    range_start, _ = local_day_bounds(start_day)
+    _, range_end = local_day_bounds(end_day)
+
+    names: dict[UUID | None, str] = {None: "Без менеджера"}
+    for staff in db.scalars(
+        select(User).where(
+            User.organization_id == user.organization_id,
+            User.role.in_([UserRole.MANAGER, UserRole.HEAD_MANAGER, UserRole.OWNER]),
+        )
+    ):
+        names[staff.id] = staff.full_name
+
+    stmt = select(ClientQuestionnaire.created_at, ClientQuestionnaire.created_by_id).where(
+        ClientQuestionnaire.organization_id == user.organization_id,
+        ClientQuestionnaire.created_at >= range_start,
+        ClientQuestionnaire.created_at < range_end,
+    )
+    if manager_id is not None:
+        stmt = stmt.where(ClientQuestionnaire.created_by_id == manager_id)
+
+    # day -> manager_id -> count
+    buckets: dict[date, dict[UUID | None, int]] = {}
+    for created_at, created_by_id in db.execute(stmt):
+        day = to_local_date(created_at)
+        day_bucket = buckets.setdefault(day, {})
+        day_bucket[created_by_id] = day_bucket.get(created_by_id, 0) + 1
+
+    rows: list[LeadDayCountRow] = []
+    totals = 0
+    cursor = start_day
+    while cursor <= end_day:
+        day_bucket = buckets.get(cursor, {})
+        by_manager = [
+            LeadDayCountManager(
+                manager_id=mid,
+                manager_name=names.get(mid) or "Без менеджера",
+                leads_added=count,
+            )
+            for mid, count in sorted(
+                day_bucket.items(),
+                key=lambda item: names.get(item[0]) or "Без менеджера",
+            )
+        ]
+        day_total = sum(day_bucket.values())
+        totals += day_total
+        rows.append(LeadDayCountRow(day=cursor, leads_added=day_total, by_manager=by_manager))
+        cursor += timedelta(days=1)
+
+    rows.reverse()  # свежие дни сверху
+    return LeadCountsByDayResponse(
+        date_from=start_day,
+        date_to=end_day,
+        rows=rows,
+        totals=totals,
+    )
+
+
 def to_questionnaire_response(item: ClientQuestionnaire) -> QuestionnaireResponse:
     created_by_name = item.created_by.full_name if item.created_by is not None else None
     return QuestionnaireResponse(
@@ -664,6 +803,8 @@ def to_questionnaire_response(item: ClientQuestionnaire) -> QuestionnaireRespons
         next_call_at=item.next_call_at,
         last_call_at=item.last_call_at,
         call_attempts=item.call_attempts or 0,
+        appointment_at=item.appointment_at,
+        appointment_note=item.appointment_note,
         assigned_manager_id=item.assigned_manager_id,
         assigned_manager_name=(
             item.assigned_manager.full_name if item.assigned_manager is not None else None

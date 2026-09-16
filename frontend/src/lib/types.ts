@@ -650,6 +650,25 @@ export interface LeadStats {
   totals: LeadStatsRow;
 }
 
+export interface LeadDayCountManager {
+  manager_id: string | null;
+  manager_name: string;
+  leads_added: number;
+}
+
+export interface LeadDayCountRow {
+  day: string;
+  leads_added: number;
+  by_manager: LeadDayCountManager[];
+}
+
+export interface LeadCountsByDay {
+  date_from: string;
+  date_to: string;
+  rows: LeadDayCountRow[];
+  totals: number;
+}
+
 export interface QuestionnaireBrief {
   id: string;
   organization_id: string;
@@ -668,6 +687,8 @@ export interface QuestionnaireBrief {
   next_call_at: string | null;
   last_call_at: string | null;
   call_attempts: number;
+  appointment_at: string | null;
+  appointment_note: string | null;
   assigned_manager_id: string | null;
   assigned_manager_name: string | null;
 }

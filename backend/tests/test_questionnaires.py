@@ -18,6 +18,7 @@ from app.models.enums import (
     UserRole,
 )
 from app.schemas.questionnaire import (
+    QuestionnaireAppointmentRequest,
     QuestionnaireAssignRequest,
     QuestionnaireCallCreate,
     QuestionnaireCreate,
@@ -36,6 +37,7 @@ from app.services.questionnaires import (
     log_questionnaire_call,
     mark_questionnaire_unqualified,
     reopen_questionnaire,
+    set_questionnaire_appointment,
     to_questionnaire_response,
 )
 
@@ -376,6 +378,42 @@ class TestLeadPipeline:
         assert item.call_attempts == 2
         assert [row.id for row in list_questionnaires(db, user, due_only=True)] == [item.id]
 
+    def test_appointment_on_create_and_due_filter(self, db):
+        user = _org_user(db)
+        visit = local_today()
+        item = create_questionnaire(
+            db,
+            user,
+            _minimal_payload(
+                appointment_at=visit,
+                appointment_note="Подойдёт после обеда",
+            ),
+        )
+        assert item.appointment_at == visit
+        assert item.appointment_note == "Подойдёт после обеда"
+        assert item.lead_status == LeadStatus.IN_PROGRESS
+        assert [row.id for row in list_questionnaires(db, user, appointment_due=True)] == [item.id]
+
+        item = set_questionnaire_appointment(
+            db,
+            user,
+            item.id,
+            QuestionnaireAppointmentRequest(appointment_at=date(2099, 1, 15), appointment_note=None),
+        )
+        assert item.appointment_at == date(2099, 1, 15)
+        assert item.lead_status == LeadStatus.IN_PROGRESS
+        assert list_questionnaires(db, user, appointment_due=True) == []
+
+        item = set_questionnaire_appointment(
+            db,
+            user,
+            item.id,
+            QuestionnaireAppointmentRequest(appointment_at=None, appointment_note=None),
+        )
+        assert item.appointment_at is None
+        response = to_questionnaire_response(item)
+        assert response.appointment_at is None
+
     def test_answered_call_returns_lead_to_work(self, db):
         user = _org_user(db)
         item = create_questionnaire(db, user, _minimal_payload())
@@ -525,6 +563,90 @@ class TestLeadPipeline:
         own = daily_lead_stats(db, second)
         assert [row.manager_name for row in own.rows] == ["Борисов Борис"]
         assert own.totals.calls_total == 1
+
+    def test_lead_counts_by_day_for_supervisors(self, db):
+        from datetime import timedelta
+
+        from app.core.time import local_today
+        from app.services.questionnaires import lead_counts_by_day
+        from fastapi import HTTPException
+
+        head = _org_user(
+            db,
+            role=UserRole.HEAD_MANAGER,
+            email="head-days@test.local",
+            full_name="Начальник Отдела",
+        )
+        first = _org_user(
+            db,
+            email="first-days@test.local",
+            full_name="Алиев Алий",
+            organization=head.organization,
+        )
+        second = _org_user(
+            db,
+            email="second-days@test.local",
+            full_name="Борисов Борис",
+            organization=head.organization,
+        )
+        create_questionnaire(db, first, _minimal_payload(full_name="Один"))
+        create_questionnaire(db, first, _minimal_payload(full_name="Два"))
+        create_questionnaire(db, second, _minimal_payload(full_name="Три"))
+
+        today = local_today()
+        counts = lead_counts_by_day(db, head, date_from=today, date_to=today)
+        assert counts.totals == 3
+        assert counts.rows[0].day == today
+        assert counts.rows[0].leads_added == 3
+        by_name = {row.manager_name: row.leads_added for row in counts.rows[0].by_manager}
+        assert by_name["Алиев Алий"] == 2
+        assert by_name["Борисов Борис"] == 1
+
+        filtered = lead_counts_by_day(
+            db, head, date_from=today, date_to=today, manager_id=first.id
+        )
+        assert filtered.totals == 2
+
+        with pytest.raises(HTTPException) as forbidden:
+            lead_counts_by_day(db, first, date_from=today, date_to=today)
+        assert forbidden.value.status_code == 403
+
+        with pytest.raises(HTTPException) as too_long:
+            lead_counts_by_day(
+                db,
+                head,
+                date_from=today - timedelta(days=100),
+                date_to=today,
+            )
+        assert too_long.value.status_code == 422
+
+    def test_list_filters_by_created_on(self, db):
+        from datetime import timedelta
+
+        from app.core.time import local_today
+
+        head = _org_user(
+            db,
+            role=UserRole.HEAD_MANAGER,
+            email="head-created-on@test.local",
+            full_name="Начальник",
+        )
+        manager = _org_user(
+            db,
+            email="mgr-created-on@test.local",
+            full_name="Менеджер",
+            organization=head.organization,
+        )
+        today_item = create_questionnaire(db, manager, _minimal_payload(full_name="Сегодняшний"))
+        today = local_today()
+        rows = list_questionnaires(db, head, created_on=today)
+        assert {item.id for item in rows} == {today_item.id}
+        rows_by_author = list_questionnaires(
+            db, head, created_on=today, created_by_id=manager.id
+        )
+        assert {item.id for item in rows_by_author} == {today_item.id}
+        empty = list_questionnaires(db, head, created_on=today - timedelta(days=40))
+        assert empty == []
 
 
 class TestQuestionnairePdf:

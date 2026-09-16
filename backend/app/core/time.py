@@ -17,3 +17,9 @@ def local_day_bounds(day: date) -> tuple[datetime, datetime]:
     """Границы местных суток, переведённые в UTC — в таком виде их сравнивают колонки created_at."""
     start = datetime.combine(day, time.min, tzinfo=LOCAL_TZ).astimezone(timezone.utc)
     return start, start + timedelta(days=1)
+
+
+def to_local_date(value: datetime) -> date:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(LOCAL_TZ).date()

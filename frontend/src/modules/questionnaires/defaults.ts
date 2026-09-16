@@ -133,6 +133,8 @@ export function emptyQuestionnaireForm(
     has_property_spouse: null,
     was_divorced: null,
     notes: "",
+    appointment_at: null,
+    appointment_note: "",
     ...partial,
   };
 }
@@ -171,6 +173,8 @@ export function questionnaireToForm(item: Questionnaire): QuestionnaireFormValue
     has_weapon: item.has_weapon ?? null,
     weapon_details: item.weapon_details ?? "",
     notes: item.notes ?? "",
+    appointment_at: item.appointment_at,
+    appointment_note: item.appointment_note ?? "",
     debts: debts.length > 0 ? debts : [emptyDebt()],
     has_property_debtor: choiceFromStoredText(item.property_debtor),
     has_property_spouse: keepSpouseProperty ? choiceFromStoredText(item.property_spouse) : null,
@@ -227,6 +231,8 @@ export function formToPayload(form: QuestionnaireFormValue): Record<string, unkn
     has_weapon: form.has_weapon,
     weapon_details: form.has_weapon ? trimmedOrNull(form.weapon_details) : null,
     notes: trimmedOrNull(form.notes),
+    appointment_at: form.appointment_at || null,
+    appointment_note: trimmedOrNull(form.appointment_note),
     debts: form.debts.map((row) => ({
       creditor: row.creditor,
       origin_date: row.origin_date || null,

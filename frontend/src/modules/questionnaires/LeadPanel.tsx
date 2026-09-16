@@ -5,23 +5,23 @@ import { useState } from "react";
 import { Badge, Button, FormField, Input, Select } from "@/components/ui";
 import { ApiRequestError, questionnairesApi } from "@/lib/api-client";
 import {
+  addDaysIsoDate,
   formatDate,
   formatDateTime,
+  isLeadAppointmentDue,
   leadStatusLabel,
   leadStatusTone,
   todayIsoDate,
 } from "@/lib/format";
 import type { LeadManagerOption, Questionnaire } from "@/lib/types";
 
-type OpenForm = "answered" | "no_answer" | "unqualified" | null;
+type OpenForm = "answered" | "no_answer" | "unqualified" | "appointment" | null;
 
 const textareaClass =
   "interactive min-h-[56px] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20";
 
 function tomorrowIsoDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().slice(0, 10);
+  return addDaysIsoDate(1);
 }
 
 export function LeadPanel({
@@ -40,15 +40,26 @@ export function LeadPanel({
   const [openForm, setOpenForm] = useState<OpenForm>(null);
   const [comment, setComment] = useState("");
   const [nextCallAt, setNextCallAt] = useState(tomorrowIsoDate());
+  const [appointmentAt, setAppointmentAt] = useState(item.appointment_at?.slice(0, 10) || tomorrowIsoDate());
+  const [appointmentNote, setAppointmentNote] = useState(item.appointment_note || "");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const converted = item.lead_status === "converted";
+  const appointmentDue = isLeadAppointmentDue(item);
 
   function closeForm() {
     setOpenForm(null);
     setComment("");
     setReason("");
     setNextCallAt(tomorrowIsoDate());
+    setAppointmentAt(item.appointment_at?.slice(0, 10) || tomorrowIsoDate());
+    setAppointmentNote(item.appointment_note || "");
+  }
+
+  function openAppointmentForm() {
+    setAppointmentAt(item.appointment_at?.slice(0, 10) || tomorrowIsoDate());
+    setAppointmentNote(item.appointment_note || "");
+    setOpenForm("appointment");
   }
 
   async function run(action: () => Promise<Questionnaire>, fallback: string) {
@@ -76,7 +87,25 @@ export function LeadPanel({
             Перезвонить {formatDate(item.next_call_at)}
           </span>
         ) : null}
+        {item.appointment_at ? (
+          <span
+            className={
+              appointmentDue
+                ? "text-[11px] font-semibold text-status-danger-text"
+                : "text-[11px] font-semibold text-brand-700"
+            }
+          >
+            Приём {formatDate(item.appointment_at)}
+            {appointmentDue ? " · сегодня" : ""}
+          </span>
+        ) : null}
       </div>
+
+      {item.appointment_note ? (
+        <p className="rounded-md bg-surface-muted/60 px-2.5 py-2 text-[11px] leading-snug text-muted">
+          К визиту: {item.appointment_note}
+        </p>
+      ) : null}
 
       {item.lead_status === "unqualified" && item.unqualified_reason ? (
         <p className="rounded-md bg-status-danger-bg px-2.5 py-2 text-[11px] leading-snug text-status-danger-text">
@@ -101,6 +130,15 @@ export function LeadPanel({
             onClick={() => setOpenForm("no_answer")}
           >
             Не дозвонились
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={busy || item.lead_status === "unqualified"}
+            onClick={openAppointmentForm}
+          >
+            {item.appointment_at ? "Изменить приём" : "Записать на приём"}
           </Button>
           {item.lead_status === "unqualified" ? (
             <Button
@@ -168,6 +206,88 @@ export function LeadPanel({
             >
               {busy ? "Сохранение..." : "Записать звонок"}
             </Button>
+            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={closeForm}>
+              Отмена
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {openForm === "appointment" ? (
+        <div className="space-y-2 rounded-md border border-border bg-surface-muted/30 px-2.5 py-2">
+          <div className="grid gap-2 sm:grid-cols-[170px_1fr]">
+            <FormField label="Дата приёма">
+              <Input
+                type="date"
+                min={todayIsoDate()}
+                value={appointmentAt}
+                onChange={(event) => setAppointmentAt(event.target.value)}
+              />
+            </FormField>
+            <FormField label="Комментарий">
+              <Input
+                value={appointmentNote}
+                onChange={(event) => setAppointmentNote(event.target.value)}
+                placeholder="Подойдёт после обеда, с супругой..."
+              />
+            </FormField>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                { label: "Завтра", days: 1 },
+                { label: "Через неделю", days: 7 },
+                { label: "Через месяц", days: 30 },
+              ] as const
+            ).map((preset) => (
+              <button
+                key={preset.days}
+                type="button"
+                className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted hover:border-brand-600 hover:text-brand-700"
+                onClick={() => setAppointmentAt(addDaysIsoDate(preset.days))}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || !appointmentAt}
+              onClick={() =>
+                void run(
+                  () =>
+                    questionnairesApi.setAppointment(item.id, {
+                      appointment_at: appointmentAt,
+                      appointment_note: appointmentNote.trim() || null,
+                    }),
+                  "Не удалось записать на приём",
+                )
+              }
+            >
+              {busy ? "Сохранение..." : "Сохранить запись"}
+            </Button>
+            {item.appointment_at ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () =>
+                      questionnairesApi.setAppointment(item.id, {
+                        appointment_at: null,
+                        appointment_note: null,
+                      }),
+                    "Не удалось снять запись",
+                  )
+                }
+              >
+                Снять запись
+              </Button>
+            ) : null}
             <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={closeForm}>
               Отмена
             </Button>

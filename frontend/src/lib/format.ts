@@ -53,12 +53,39 @@ export function todayIsoDate(): string {
   }).format(new Date());
 }
 
+/** Calendar day in Moscow, shifted by `deltaDays` from today (negative = past). */
+export function moscowIsoDateOffset(deltaDays: number): string {
+  const now = new Date();
+  const moscowNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Moscow" }));
+  moscowNow.setDate(moscowNow.getDate() + deltaDays);
+  const year = moscowNow.getFullYear();
+  const month = String(moscowNow.getMonth() + 1).padStart(2, "0");
+  const day = String(moscowNow.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function isLeadCallbackDue(item: {
   lead_status: string;
   next_call_at: string | null;
 }): boolean {
   if (item.lead_status !== "no_answer" || !item.next_call_at) return false;
   return item.next_call_at.slice(0, 10) <= todayIsoDate();
+}
+
+export function isLeadAppointmentDue(item: {
+  lead_status: string;
+  appointment_at: string | null;
+}): boolean {
+  if (!item.appointment_at) return false;
+  if (item.lead_status === "converted" || item.lead_status === "unqualified") return false;
+  return item.appointment_at.slice(0, 10) <= todayIsoDate();
+}
+
+export function addDaysIsoDate(deltaDays: number, from = todayIsoDate()): string {
+  const [year, month, day] = from.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + deltaDays);
+  return date.toISOString().slice(0, 10);
 }
 
 export function formatShortName(fullName: string): string {

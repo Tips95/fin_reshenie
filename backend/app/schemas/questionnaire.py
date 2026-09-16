@@ -63,6 +63,8 @@ class QuestionnaireBase(BaseModel):
     weapon_details: str | None = None
     notes: str | None = None
     filled_date: date | None = None
+    appointment_at: date | None = None
+    appointment_note: str | None = Field(default=None, max_length=2000)
     debts: list[QuestionnaireDebt] = Field(default_factory=lambda: [
         QuestionnaireDebt.model_validate(row) for row in empty_debts()
     ])
@@ -81,6 +83,12 @@ class QuestionnaireBase(BaseModel):
         if not phone:
             raise ValueError("Укажите телефон — по нему лид найдут для повторного звонка")
         return phone
+
+    @field_validator("appointment_note")
+    @classmethod
+    def normalize_appointment_note(cls, value: str | None) -> str | None:
+        text = (value or "").strip()
+        return text or None
 
     @field_validator("debts", mode="before")
     @classmethod
@@ -142,6 +150,17 @@ class QuestionnaireAssignRequest(BaseModel):
     manager_id: UUID | None = None
 
 
+class QuestionnaireAppointmentRequest(BaseModel):
+    appointment_at: date | None = None
+    appointment_note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("appointment_note")
+    @classmethod
+    def normalize_appointment_note(cls, value: str | None) -> str | None:
+        text = (value or "").strip()
+        return text or None
+
+
 class QuestionnaireCallResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -170,6 +189,25 @@ class LeadStatsResponse(BaseModel):
     totals: LeadStatsRow
 
 
+class LeadDayCountManager(BaseModel):
+    manager_id: UUID | None
+    manager_name: str
+    leads_added: int = 0
+
+
+class LeadDayCountRow(BaseModel):
+    day: date
+    leads_added: int = 0
+    by_manager: list[LeadDayCountManager] = Field(default_factory=list)
+
+
+class LeadCountsByDayResponse(BaseModel):
+    date_from: date
+    date_to: date
+    rows: list[LeadDayCountRow]
+    totals: int = 0
+
+
 class QuestionnaireManagerOption(BaseModel):
     id: UUID
     full_name: str
@@ -196,6 +234,8 @@ class QuestionnaireBrief(BaseModel):
     next_call_at: date | None = None
     last_call_at: datetime | None = None
     call_attempts: int = 0
+    appointment_at: date | None = None
+    appointment_note: str | None = None
     assigned_manager_id: UUID | None = None
     assigned_manager_name: str | None = None
 

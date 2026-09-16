@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   Badge,
@@ -14,7 +14,7 @@ import {
   Select,
 } from "@/components/ui";
 import { ApiRequestError, questionnairesApi } from "@/lib/api-client";
-import { formatDate, formatMoney, isLeadCallbackDue, leadStatusLabel, leadStatusTone } from "@/lib/format";
+import { formatDate, formatMoney, isLeadAppointmentDue, isLeadCallbackDue, leadStatusLabel, leadStatusTone } from "@/lib/format";
 import { formatPhoneDisplay, phoneToTelHref } from "@/lib/phone";
 import type { LeadManagerOption, LeadStatus, QuestionnaireBrief } from "@/lib/types";
 import {
@@ -25,11 +25,12 @@ import {
 } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
-type StatusFilter = LeadStatus | "all" | "due";
+type StatusFilter = LeadStatus | "all" | "due" | "appointment";
 
 const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "Все" },
   { value: "due", label: "Пора перезвонить" },
+  { value: "appointment", label: "Приём сегодня" },
   { value: "new", label: "Новые" },
   { value: "in_progress", label: "В работе" },
   { value: "no_answer", label: "Не дозвонились" },
@@ -45,17 +46,19 @@ function leadTitle(item: QuestionnaireBrief): string {
 }
 
 function leadQueueRank(item: QuestionnaireBrief): number {
-  if (isLeadCallbackDue(item)) return 0;
-  if (item.lead_status === "new") return 1;
-  if (item.lead_status === "in_progress") return 2;
-  if (item.lead_status === "no_answer") return 3;
-  if (item.lead_status === "unqualified") return 4;
-  return 5;
+  if (isLeadAppointmentDue(item)) return 0;
+  if (isLeadCallbackDue(item)) return 1;
+  if (item.lead_status === "new") return 2;
+  if (item.lead_status === "in_progress") return 3;
+  if (item.lead_status === "no_answer") return 4;
+  if (item.lead_status === "unqualified") return 5;
+  return 6;
 }
 
 function matchesStatus(item: QuestionnaireBrief, filter: StatusFilter): boolean {
   if (filter === "all") return true;
   if (filter === "due") return isLeadCallbackDue(item);
+  if (filter === "appointment") return isLeadAppointmentDue(item);
   return item.lead_status === filter;
 }
 
@@ -66,20 +69,44 @@ function formatCallbackCell(nextCallAt: string | null): { text: string; due: boo
   return { text: formatDate(day), due };
 }
 
-export default function QuestionnairesPage() {
+function formatAppointmentCell(item: QuestionnaireBrief): { text: string; due: boolean } {
+  if (!item.appointment_at) return { text: "—", due: false };
+  return {
+    text: formatDate(item.appointment_at.slice(0, 10)),
+    due: isLeadAppointmentDue(item),
+  };
+}
+
+function QuestionnairesPageContent() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<QuestionnaireBrief[]>([]);
   const [managers, setManagers] = useState<LeadManagerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [managerFilter, setManagerFilter] = useState("");
   const canEdit = canUseQuestionnaires(user);
   const hideAmounts = isCollectionStaff(user);
   const supervises = canSuperviseLeads(user);
   const showClientLinks = canOpenClientCards(user);
+
+  const createdOn = searchParams.get("created_on") || "";
+  const createdBy = searchParams.get("created_by") || "";
+  const assignedManager = searchParams.get("manager_id") || "";
+  // При просмотре «за день» менеджер = кто завёл; иначе — закреплённый.
+  const managerFilter = createdOn ? createdBy : assignedManager;
+
+  function patchQuery(next: { created_on?: string; created_by?: string; manager_id?: string }) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(next)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    const query = params.toString();
+    router.replace(query ? `/questionnaires?${query}` : "/questionnaires");
+  }
 
   useEffect(() => {
     if (!canEdit && user) {
@@ -106,7 +133,9 @@ export default function QuestionnairesPage() {
         try {
           const data = await questionnairesApi.list({
             search: search.trim().length >= 2 ? search.trim() : undefined,
-            manager_id: managerFilter || undefined,
+            created_on: createdOn || undefined,
+            created_by_id: createdOn && createdBy ? createdBy : undefined,
+            manager_id: !createdOn && assignedManager ? assignedManager : undefined,
           });
           setItems(data);
           setError(null);
@@ -118,12 +147,13 @@ export default function QuestionnairesPage() {
       })();
     }, search.trim().length >= 2 ? 250 : 0);
     return () => window.clearTimeout(handle);
-  }, [canEdit, search, managerFilter]);
+  }, [canEdit, search, createdOn, createdBy, assignedManager]);
 
   const counts = useMemo(() => {
     const next: Record<StatusFilter, number> = {
       all: items.length,
       due: 0,
+      appointment: 0,
       new: 0,
       in_progress: 0,
       no_answer: 0,
@@ -133,6 +163,7 @@ export default function QuestionnairesPage() {
     for (const item of items) {
       next[item.lead_status] += 1;
       if (isLeadCallbackDue(item)) next.due += 1;
+      if (isLeadAppointmentDue(item)) next.appointment += 1;
     }
     return next;
   }, [items]);
@@ -145,10 +176,14 @@ export default function QuestionnairesPage() {
         .sort((left, right) => {
           const rank = leadQueueRank(left) - leadQueueRank(right);
           if (rank !== 0) return rank;
+          const appointmentCmp = (left.appointment_at || "").localeCompare(right.appointment_at || "");
+          if (appointmentCmp !== 0) return appointmentCmp;
           return (left.next_call_at || "").localeCompare(right.next_call_at || "");
         }),
     [items, statusFilter],
   );
+
+  const creatorName = managers.find((manager) => manager.id === createdBy)?.full_name;
 
   if (!canEdit) {
     return <LoadingState text="Загрузка..." />;
@@ -169,6 +204,30 @@ export default function QuestionnairesPage() {
           </Button>
         }
       />
+
+      {createdOn ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-soft">
+          <span>
+            Анкеты за <span className="font-semibold">{formatDate(createdOn)}</span>
+            {creatorName ? (
+              <>
+                {" "}
+                · завёл <span className="font-semibold">{creatorName}</span>
+              </>
+            ) : null}
+          </span>
+          <button
+            type="button"
+            className="interactive text-brand-700 hover:text-brand-600"
+            onClick={() => patchQuery({ created_on: "", created_by: "" })}
+          >
+            Сбросить дату
+          </button>
+          <Link id="link-back-stats" href="/questionnaires/stats" className="link-brand">
+            К статистике
+          </Link>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         {STATUS_FILTERS.map((filter) => {
@@ -195,15 +254,47 @@ export default function QuestionnairesPage() {
         })}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-[1fr_220px]">
+      <div
+        className={
+          supervises
+            ? "grid gap-2 sm:grid-cols-[1fr_160px_220px]"
+            : "grid gap-2 sm:grid-cols-[1fr]"
+        }
+      >
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Поиск по ФИО или телефону"
         />
         {supervises ? (
-          <Select value={managerFilter} onChange={(event) => setManagerFilter(event.target.value)}>
-            <option value="">Все менеджеры</option>
+          <Input
+            type="date"
+            value={createdOn}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(event) => {
+              const value = event.target.value;
+              patchQuery({
+                created_on: value,
+                created_by: value ? createdBy : "",
+                manager_id: value ? "" : assignedManager,
+              });
+            }}
+            title="Дата заведения"
+          />
+        ) : null}
+        {supervises ? (
+          <Select
+            value={managerFilter}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (createdOn) {
+                patchQuery({ created_by: value });
+              } else {
+                patchQuery({ manager_id: value });
+              }
+            }}
+          >
+            <option value="">{createdOn ? "Все, кто завёл" : "Все менеджеры"}</option>
             {managers.map((manager) => (
               <option key={manager.id} value={manager.id}>
                 {manager.full_name}
@@ -220,12 +311,20 @@ export default function QuestionnairesPage() {
       ) : items.length === 0 ? (
         <EmptyState
           action={
-            <Button type="button" onClick={() => router.push("/questionnaires/new")}>
-              Добавить лид
-            </Button>
+            createdOn ? (
+              <Button type="button" onClick={() => patchQuery({ created_on: "", created_by: "" })}>
+                Показать все лиды
+              </Button>
+            ) : (
+              <Button type="button" onClick={() => router.push("/questionnaires/new")}>
+                Добавить лид
+              </Button>
+            )
           }
         >
-          Здесь пусто. Заводите лид сразу, как набрали номер — даже если разговор не состоялся.
+          {createdOn
+            ? "За эту дату анкет нет."
+            : "Здесь пусто. Заводите лид сразу, как набрали номер — даже если разговор не состоялся."}
         </EmptyState>
       ) : visibleItems.length === 0 ? (
         <EmptyState>В этом статусе сейчас никого нет.</EmptyState>
@@ -239,6 +338,7 @@ export default function QuestionnairesPage() {
                 <th>Статус</th>
                 <th>Звонки</th>
                 <th>Перезвон</th>
+                <th>Приём</th>
                 <th>Менеджер</th>
                 {hideAmounts ? null : <th>Стоимость</th>}
                 <th>Клиент заведён</th>
@@ -246,8 +346,9 @@ export default function QuestionnairesPage() {
             </thead>
             <tbody>
               {visibleItems.map((item) => {
-                const due = isLeadCallbackDue(item);
+                const due = isLeadCallbackDue(item) || isLeadAppointmentDue(item);
                 const callback = formatCallbackCell(item.next_call_at);
+                const appointment = formatAppointmentCell(item);
                 const tel = phoneToTelHref(item.phone);
                 const phoneLabel = formatPhoneDisplay(item.phone);
                 return (
@@ -262,13 +363,17 @@ export default function QuestionnairesPage() {
                         </p>
                       ) : null}
                     </td>
-                    <td data-label="Телефон">
+                    <td data-label="Телефон" className="whitespace-nowrap">
                       {tel ? (
-                        <a id={`tel-${item.id}`} href={tel} className="tabular-nums text-foreground">
+                        <a
+                          id={`tel-${item.id}`}
+                          href={tel}
+                          className="inline-block whitespace-nowrap tabular-nums text-foreground"
+                        >
                           {phoneLabel}
                         </a>
                       ) : (
-                        <span className="tabular-nums">{phoneLabel}</span>
+                        <span className="inline-block whitespace-nowrap tabular-nums">{phoneLabel}</span>
                       )}
                     </td>
                     <td data-label="Статус">
@@ -280,6 +385,11 @@ export default function QuestionnairesPage() {
                     <td data-label="Перезвон">
                       <span className={callback.due ? "font-semibold text-status-warning-text" : undefined}>
                         {callback.text}
+                      </span>
+                    </td>
+                    <td data-label="Приём">
+                      <span className={appointment.due ? "font-semibold text-status-danger-text" : undefined}>
+                        {appointment.text}
                       </span>
                     </td>
                     <td data-label="Менеджер">
@@ -313,5 +423,13 @@ export default function QuestionnairesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function QuestionnairesPage() {
+  return (
+    <Suspense fallback={<LoadingState text="Загрузка..." />}>
+      <QuestionnairesPageContent />
+    </Suspense>
   );
 }

@@ -34,6 +34,7 @@ import type {
   Questionnaire,
   QuestionnaireBrief,
   LeadCallOutcome,
+  LeadCountsByDay,
   LeadManagerOption,
   LeadStats,
   LeadStatus,
@@ -528,14 +529,20 @@ export const questionnairesApi = {
     search?: string;
     lead_status?: LeadStatus;
     manager_id?: string;
+    created_by_id?: string;
+    created_on?: string;
     due_only?: boolean;
+    appointment_due?: boolean;
   }) => {
     const search = new URLSearchParams();
     if (params?.client_id) search.set("client_id", params.client_id);
     if (params?.search) search.set("search", params.search);
     if (params?.lead_status) search.set("lead_status", params.lead_status);
     if (params?.manager_id) search.set("manager_id", params.manager_id);
+    if (params?.created_by_id) search.set("created_by_id", params.created_by_id);
+    if (params?.created_on) search.set("created_on", params.created_on);
     if (params?.due_only) search.set("due_only", "true");
+    if (params?.appointment_due) search.set("appointment_due", "true");
     const query = search.toString();
     return apiFetch<QuestionnaireBrief[]>(`/questionnaires${query ? `?${query}` : ""}`);
   },
@@ -545,6 +552,14 @@ export const questionnairesApi = {
     data: { outcome: LeadCallOutcome; comment?: string | null; next_call_at?: string | null },
   ) =>
     apiFetch<Questionnaire>(`/questionnaires/${id}/calls`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  setAppointment: (
+    id: string,
+    data: { appointment_at?: string | null; appointment_note?: string | null },
+  ) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}/appointment`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -563,6 +578,14 @@ export const questionnairesApi = {
   managers: () => apiFetch<LeadManagerOption[]>("/questionnaires/managers"),
   dailyStats: (day?: string) =>
     apiFetch<LeadStats>(`/questionnaires/stats/daily${day ? `?day=${day}` : ""}`),
+  countsByDay: (params?: { date_from?: string; date_to?: string; manager_id?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.date_from) search.set("date_from", params.date_from);
+    if (params?.date_to) search.set("date_to", params.date_to);
+    if (params?.manager_id) search.set("manager_id", params.manager_id);
+    const query = search.toString();
+    return apiFetch<LeadCountsByDay>(`/questionnaires/stats/by-day${query ? `?${query}` : ""}`);
+  },
   create: (data: Record<string, unknown>) =>
     apiFetch<Questionnaire>("/questionnaires", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: Record<string, unknown>) =>
