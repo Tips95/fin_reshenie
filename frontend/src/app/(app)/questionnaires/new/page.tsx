@@ -58,7 +58,7 @@ export default function NewQuestionnairePage() {
       ) : null}
       <PageHeader
         title="Новый лид"
-        subtitle="Заведите карточку прямо во время звонка — достаточно телефона, ФИО можно дописать позже"
+        subtitle="Заведите карточку прямо во время звонка — достаточно телефона, остальное допишете потом"
         back={<BackLink href="/questionnaires">К списку лидов</BackLink>}
       />
       <QuestionnaireForm
@@ -66,7 +66,9 @@ export default function NewQuestionnairePage() {
         onChange={setForm}
         onSubmit={() => void saveLead().catch(() => undefined)}
         saving={saving}
+        dirty={dirty}
         submitLabel="Сохранить лид"
+        showAppointmentInContacts
       />
     </div>
   );

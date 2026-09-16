@@ -3,10 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-import { BackLink, Button, LoadingState, PageHeader, Toast } from "@/components/ui";
+import { BackLink, Button, LoadingState, Toast } from "@/components/ui";
 import { ApiRequestError, getDuplicateClientId, questionnairesApi } from "@/lib/api-client";
+import { canOpenClientCards, canSuperviseLeads } from "@/lib/organization-features";
+import { useAuth } from "@/modules/auth/AuthProvider";
+import { CallHistoryTimeline } from "@/modules/questionnaires/CallHistoryTimeline";
+import {
+  DeleteLeadModal,
+  LeadClientHeader,
+} from "@/modules/questionnaires/LeadClientHeader";
+import { LeadOverview } from "@/modules/questionnaires/LeadOverview";
+import { LeadPanel, type LeadPanelOpenForm } from "@/modules/questionnaires/LeadPanel";
+import { LeadSectionNav, useActiveLeadSection } from "@/modules/questionnaires/LeadSectionNav";
 import { QuestionnaireForm } from "@/modules/questionnaires/QuestionnaireForm";
-import { LeadPanel } from "@/modules/questionnaires/LeadPanel";
 import {
   formToPayload,
   questionnaireToForm,
@@ -16,8 +25,6 @@ import {
   UnsavedChangesGuard,
   questionnaireFormSnapshot,
 } from "@/modules/questionnaires/UnsavedChangesGuard";
-import { canOpenClientCards, canSuperviseLeads } from "@/lib/organization-features";
-import { useAuth } from "@/modules/auth/AuthProvider";
 import type { LeadManagerOption, Questionnaire } from "@/lib/types";
 
 export default function QuestionnaireDetailPage() {
@@ -33,10 +40,13 @@ export default function QuestionnaireDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [creatingClient, setCreatingClient] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [panelForm, setPanelForm] = useState<LeadPanelOpenForm>(null);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
     null,
   );
   const [leaveHref, setLeaveHref] = useState<string | null>(null);
+  const { active, scrollTo } = useActiveLeadSection();
 
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
@@ -83,7 +93,7 @@ export default function QuestionnaireDetailPage() {
       setItem(updated);
       setForm(nextForm);
       setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
-      setToast({ message: "Анкета сохранена", tone: "success" });
+      setToast({ message: "Изменения сохранены", tone: "success" });
     } catch (error) {
       setToast({
         message: error instanceof ApiRequestError ? error.message : "Не удалось сохранить",
@@ -93,6 +103,13 @@ export default function QuestionnaireDetailPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function discardChanges() {
+    if (!item) return;
+    const nextForm = questionnaireToForm(item);
+    setForm(nextForm);
+    setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
   }
 
   async function handlePdf() {
@@ -150,7 +167,6 @@ export default function QuestionnaireDetailPage() {
   }
 
   async function handleDelete() {
-    if (!window.confirm("Удалить анкету? Карточка клиента не будет затронута.")) return;
     setDeleting(true);
     try {
       await questionnairesApi.remove(params.id);
@@ -161,11 +177,12 @@ export default function QuestionnaireDetailPage() {
         tone: "error",
       });
       setDeleting(false);
+      setDeleteOpen(false);
     }
   }
 
   if (loading || !form || !item) {
-    return <LoadingState text="Загрузка анкеты..." />;
+    return <LoadingState text="Загрузка карточки..." />;
   }
 
   return (
@@ -179,71 +196,99 @@ export default function QuestionnaireDetailPage() {
         title="Сохранить анкету перед выходом?"
         description="Есть несохранённые изменения. Если уйдёте сейчас — они пропадут."
       />
+      <DeleteLeadModal
+        open={deleteOpen}
+        deleting={deleting}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => void handleDelete()}
+      />
       {toast ? (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       ) : null}
-      <PageHeader
-        title={item.full_name || item.phone || "Лид без имени"}
-        subtitle={item.client_id ? "Привязана к карточке клиента" : "Клиент ещё не заведён"}
-        back={<BackLink href="/questionnaires">К списку лидов</BackLink>}
-        action={
-          user?.role === "owner" ? (
-            <Button type="button" variant="danger" disabled={deleting} onClick={() => void handleDelete()}>
-              {deleting ? "Удаление..." : "Удалить"}
-            </Button>
-          ) : undefined
-        }
-      />
-      <LeadPanel
+
+      <BackLink href="/questionnaires">К списку лидов</BackLink>
+
+      <LeadClientHeader
         item={item}
-        managers={managers}
-        canAssign={canSuperviseLeads(user)}
-        onUpdated={(next) => {
-          setItem(next);
-          const nextForm = questionnaireToForm(next);
-          setForm(nextForm);
-          setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
+        canDelete={user?.role === "owner"}
+        deleting={deleting}
+        creatingClient={creatingClient || saving}
+        canOpenClient={canOpenClientCards(user)}
+        onCallAnswered={() => setPanelForm("answered")}
+        onCallNoAnswer={() => setPanelForm("no_answer")}
+        onBookAppointment={() => setPanelForm("appointment")}
+        onCreateClient={() => void handleCreateClient()}
+        onOpenClient={() => {
+          const href = `/clients/${item.client_id}`;
+          if (dirty) setLeaveHref(href);
+          else router.push(href);
         }}
-        onError={(message) => setToast({ message, tone: "error" })}
+        onDelete={() => setDeleteOpen(true)}
       />
-      <QuestionnaireForm
-        value={form}
-        onChange={setForm}
-        onSubmit={() => void saveQuestionnaire().catch(() => undefined)}
-        saving={saving}
-        submitLabel="Сохранить анкету"
-        extraActions={
-          <>
-            <Button type="button" variant="secondary" disabled={downloading} onClick={() => void handlePdf()}>
-              {downloading ? "PDF..." : "Скачать PDF"}
-            </Button>
-            {item.client_id ? (
-              canOpenClientCards(user) ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    const href = `/clients/${item.client_id}`;
-                    if (dirty) setLeaveHref(href);
-                    else router.push(href);
-                  }}
-                >
-                  Карточка клиента
-                </Button>
-              ) : null
-            ) : (
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <LeadSectionNav active={active} onSelect={scrollTo} />
+
+        <div className="min-w-0 flex-1 space-y-4">
+          <LeadOverview item={item} form={form} />
+
+          <div id="status-panel" className="scroll-mt-24">
+            <LeadPanel
+              item={item}
+              managers={managers}
+              canAssign={canSuperviseLeads(user)}
+              openForm={panelForm}
+              onOpenFormChange={setPanelForm}
+              onUpdated={(next) => {
+                setItem(next);
+                const nextForm = questionnaireToForm(next);
+                // Preserve unsaved form edits outside lead-status fields when possible:
+                // appointment/lead fields come from server; merge phone/name etc from current form only if clean.
+                if (!dirty) {
+                  setForm(nextForm);
+                  setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
+                } else {
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          appointment_at: next.appointment_at,
+                          appointment_note: next.appointment_note ?? "",
+                        }
+                      : nextForm,
+                  );
+                }
+              }}
+              onError={(message) => setToast({ message, tone: "error" })}
+            />
+          </div>
+
+          <QuestionnaireForm
+            value={form}
+            onChange={setForm}
+            onSubmit={() => void saveQuestionnaire().catch(() => undefined)}
+            saving={saving}
+            dirty={dirty}
+            onDiscard={discardChanges}
+            submitLabel="Сохранить изменения"
+            showAppointmentInContacts={false}
+            hideHistoryHint
+            extraActions={
               <Button
                 type="button"
                 variant="secondary"
-                disabled={creatingClient || saving}
-                onClick={() => void handleCreateClient()}
+                size="sm"
+                disabled={downloading}
+                onClick={() => void handlePdf()}
               >
-                {creatingClient || saving ? "Сохранение..." : "Создать клиента"}
+                {downloading ? "PDF..." : "Скачать PDF"}
               </Button>
-            )}
-          </>
-        }
-      />
+            }
+          />
+
+          <CallHistoryTimeline calls={item.calls} />
+        </div>
+      </div>
     </div>
   );
 }

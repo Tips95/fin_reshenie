@@ -13,16 +13,10 @@ import {
   leadStatusTone,
   todayIsoDate,
 } from "@/lib/format";
+import { fieldClass } from "@/modules/questionnaires/form-ui";
 import type { LeadManagerOption, Questionnaire } from "@/lib/types";
 
-type OpenForm = "answered" | "no_answer" | "unqualified" | "appointment" | null;
-
-const textareaClass =
-  "interactive min-h-[56px] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20";
-
-function tomorrowIsoDate(): string {
-  return addDaysIsoDate(1);
-}
+type OpenForm = "answered" | "no_answer" | "unqualify" | "appointment" | null;
 
 export function LeadPanel({
   item,
@@ -30,17 +24,29 @@ export function LeadPanel({
   canAssign,
   onUpdated,
   onError,
+  openForm: controlledOpen,
+  onOpenFormChange,
 }: {
   item: Questionnaire;
   managers: LeadManagerOption[];
   canAssign: boolean;
   onUpdated: (next: Questionnaire) => void;
   onError: (message: string) => void;
+  openForm?: OpenForm;
+  onOpenFormChange?: (next: OpenForm) => void;
 }) {
-  const [openForm, setOpenForm] = useState<OpenForm>(null);
+  const [internalOpen, setInternalOpen] = useState<OpenForm>(null);
+  const openForm = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  function setOpenForm(next: OpenForm) {
+    onOpenFormChange?.(next);
+    if (controlledOpen === undefined) setInternalOpen(next);
+  }
+
   const [comment, setComment] = useState("");
-  const [nextCallAt, setNextCallAt] = useState(tomorrowIsoDate());
-  const [appointmentAt, setAppointmentAt] = useState(item.appointment_at?.slice(0, 10) || tomorrowIsoDate());
+  const [nextCallAt, setNextCallAt] = useState(addDaysIsoDate(1));
+  const [appointmentAt, setAppointmentAt] = useState(
+    item.appointment_at?.slice(0, 10) || addDaysIsoDate(1),
+  );
   const [appointmentNote, setAppointmentNote] = useState(item.appointment_note || "");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,15 +57,9 @@ export function LeadPanel({
     setOpenForm(null);
     setComment("");
     setReason("");
-    setNextCallAt(tomorrowIsoDate());
-    setAppointmentAt(item.appointment_at?.slice(0, 10) || tomorrowIsoDate());
+    setNextCallAt(addDaysIsoDate(1));
+    setAppointmentAt(item.appointment_at?.slice(0, 10) || addDaysIsoDate(1));
     setAppointmentNote(item.appointment_note || "");
-  }
-
-  function openAppointmentForm() {
-    setAppointmentAt(item.appointment_at?.slice(0, 10) || tomorrowIsoDate());
-    setAppointmentNote(item.appointment_note || "");
-    setOpenForm("appointment");
   }
 
   async function run(action: () => Promise<Questionnaire>, fallback: string) {
@@ -75,15 +75,15 @@ export function LeadPanel({
   }
 
   return (
-    <div className="surface-card space-y-3 px-3 py-2.5 lg:px-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+    <div className="space-y-3 rounded-xl border border-border bg-surface p-4 shadow-card sm:p-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Badge tone={leadStatusTone(item.lead_status)}>{leadStatusLabel(item.lead_status)}</Badge>
-        <span className="text-[11px] text-muted">
-          Попыток дозвона: {item.call_attempts}
-          {item.last_call_at ? ` · последний ${formatDateTime(item.last_call_at)}` : ""}
+        <span className="text-xs text-muted">
+          Попыток: {item.call_attempts}
+          {item.last_call_at ? ` · ${formatDateTime(item.last_call_at)}` : ""}
         </span>
         {item.next_call_at ? (
-          <span className="text-[11px] font-semibold text-status-warning-text">
+          <span className="text-xs font-semibold text-status-warning-text">
             Перезвонить {formatDate(item.next_call_at)}
           </span>
         ) : null}
@@ -91,8 +91,8 @@ export function LeadPanel({
           <span
             className={
               appointmentDue
-                ? "text-[11px] font-semibold text-status-danger-text"
-                : "text-[11px] font-semibold text-brand-700"
+                ? "text-xs font-semibold text-status-danger-text"
+                : "text-xs font-semibold text-brand-700"
             }
           >
             Приём {formatDate(item.appointment_at)}
@@ -102,74 +102,91 @@ export function LeadPanel({
       </div>
 
       {item.appointment_note ? (
-        <p className="rounded-md bg-surface-muted/60 px-2.5 py-2 text-[11px] leading-snug text-muted">
+        <p className="rounded-lg bg-surface-muted/70 px-3 py-2 text-xs leading-snug text-muted">
           К визиту: {item.appointment_note}
         </p>
       ) : null}
 
       {item.lead_status === "unqualified" && item.unqualified_reason ? (
-        <p className="rounded-md bg-status-danger-bg px-2.5 py-2 text-[11px] leading-snug text-status-danger-text">
+        <p className="rounded-lg bg-status-danger-bg px-3 py-2 text-xs leading-snug text-status-danger-text">
           Некачественный лид: {item.unqualified_reason}
         </p>
       ) : null}
 
       {converted ? (
-        <p className="text-[11px] text-muted">
-          Лид переведён в клиента — статусы обзвона больше не меняются.
-        </p>
+        <p className="text-xs text-muted">Лид переведён в клиента — статусы обзвона больше не меняются.</p>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" disabled={busy} onClick={() => setOpenForm("answered")}>
-            Дозвонились
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => setOpenForm("no_answer")}
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Статус звонка</p>
+          <div
+            role="group"
+            aria-label="Статус звонка"
+            className="inline-flex flex-wrap rounded-lg border border-border bg-surface-muted p-0.5"
           >
-            Не дозвонились
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={busy || item.lead_status === "unqualified"}
-            onClick={openAppointmentForm}
-          >
-            {item.appointment_at ? "Изменить приём" : "Записать на приём"}
-          </Button>
-          {item.lead_status === "unqualified" ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-surface hover:text-foreground disabled:opacity-50"
+              onClick={() => setOpenForm("answered")}
+            >
+              ✓ Дозвонились
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-surface hover:text-foreground disabled:opacity-50"
+              onClick={() => setOpenForm("no_answer")}
+            >
+              Не дозвонились
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
             <Button
               type="button"
               size="sm"
               variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                void run(() => questionnairesApi.reopen(item.id), "Не удалось вернуть лид в работу")
-              }
+              disabled={busy || item.lead_status === "unqualified"}
+              onClick={() => {
+                setAppointmentAt(item.appointment_at?.slice(0, 10) || addDaysIsoDate(1));
+                setAppointmentNote(item.appointment_note || "");
+                setOpenForm("appointment");
+              }}
             >
-              Вернуть в работу
+              {item.appointment_at ? "Изменить приём" : "Записать на приём"}
             </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant="danger"
-              disabled={busy}
-              onClick={() => setOpenForm("unqualified")}
-            >
-              Некачественный
-            </Button>
-          )}
+            {item.lead_status === "unqualified" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() =>
+                  void run(() => questionnairesApi.reopen(item.id), "Не удалось вернуть лид в работу")
+                }
+              >
+                Вернуть в работу
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => setOpenForm("unqualify")}
+              >
+                Некачественный
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
       {openForm === "answered" || openForm === "no_answer" ? (
-        <div className="grid gap-2 rounded-md border border-border bg-surface-muted/30 px-2.5 py-2 sm:grid-cols-[1fr_170px]">
+        <div className="grid gap-3 rounded-xl border border-border bg-surface-muted/40 p-3 sm:grid-cols-[1fr_180px]">
           <FormField label="Комментарий к звонку">
             <Input
+              className={fieldClass}
               value={comment}
               onChange={(event) => setComment(event.target.value)}
               placeholder={
@@ -177,10 +194,9 @@ export function LeadPanel({
               }
             />
           </FormField>
-          <FormField
-            label={openForm === "no_answer" ? "Перезвонить" : "Перезвонить (если нужно)"}
-          >
+          <FormField label={openForm === "no_answer" ? "Перезвонить" : "Перезвонить (если нужно)"}>
             <Input
+              className={fieldClass}
               type="date"
               min={todayIsoDate()}
               value={openForm === "answered" && !nextCallAt ? "" : nextCallAt}
@@ -214,10 +230,11 @@ export function LeadPanel({
       ) : null}
 
       {openForm === "appointment" ? (
-        <div className="space-y-2 rounded-md border border-border bg-surface-muted/30 px-2.5 py-2">
-          <div className="grid gap-2 sm:grid-cols-[170px_1fr]">
+        <div className="space-y-3 rounded-xl border border-border bg-surface-muted/40 p-3">
+          <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
             <FormField label="Дата приёма">
               <Input
+                className={fieldClass}
                 type="date"
                 min={todayIsoDate()}
                 value={appointmentAt}
@@ -226,6 +243,7 @@ export function LeadPanel({
             </FormField>
             <FormField label="Комментарий">
               <Input
+                className={fieldClass}
                 value={appointmentNote}
                 onChange={(event) => setAppointmentNote(event.target.value)}
                 placeholder="Подойдёт после обеда, с супругой..."
@@ -243,14 +261,14 @@ export function LeadPanel({
               <button
                 key={preset.days}
                 type="button"
-                className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted hover:border-brand-600 hover:text-brand-700"
+                className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-muted hover:border-brand-600 hover:text-brand-700"
                 onClick={() => setAppointmentAt(addDaysIsoDate(preset.days))}
               >
                 {preset.label}
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
@@ -295,17 +313,17 @@ export function LeadPanel({
         </div>
       ) : null}
 
-      {openForm === "unqualified" ? (
-        <div className="space-y-2 rounded-md border border-border bg-surface-muted/30 px-2.5 py-2">
+      {openForm === "unqualify" ? (
+        <div className="space-y-3 rounded-xl border border-border bg-surface-muted/40 p-3">
           <FormField label="Почему лид некачественный">
             <textarea
-              className={textareaClass}
+              className="interactive min-h-[88px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm outline-none placeholder:text-muted/80 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/15"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               placeholder="Не тот регион, долг меньше 300 тысяч, ошиблись номером..."
             />
           </FormField>
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
             <Button
               type="button"
               size="sm"
@@ -348,36 +366,12 @@ export function LeadPanel({
           </Select>
         </FormField>
       ) : (
-        <p className="text-[11px] text-muted">
+        <p className="text-xs text-muted">
           Менеджер: {item.assigned_manager_name || item.created_by_name || "не закреплён"}
         </p>
       )}
-
-      {item.calls.length > 0 ? (
-        <div className="space-y-1 border-t border-border pt-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-            История звонков
-          </p>
-          <ul className="space-y-1">
-            {item.calls.map((call) => (
-              <li key={call.id} className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
-                <span
-                  className={
-                    call.outcome === "answered"
-                      ? "font-semibold text-status-success-text"
-                      : "font-semibold text-status-warning-text"
-                  }
-                >
-                  {call.outcome === "answered" ? "Дозвон" : "Недозвон"}
-                </span>
-                <span className="text-muted">{formatDateTime(call.created_at)}</span>
-                <span className="text-muted">{call.created_by_name || "—"}</span>
-                {call.comment ? <span className="text-foreground">{call.comment}</span> : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }
+
+export type LeadPanelOpenForm = OpenForm;
