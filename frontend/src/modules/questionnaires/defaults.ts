@@ -3,6 +3,7 @@ import { PHONE_PREFIX } from "@/lib/phone";
 import { todayIsoDate } from "@/lib/format";
 import {
   validateFullName,
+  validateLeadPersonName,
   validatePhone,
   validatePositiveAmount,
   validateRequiredDate,
@@ -263,10 +264,8 @@ export function validateQuestionnaireForm(form: QuestionnaireFormValue): Record<
   const phoneError = validatePhone(form.phone);
   if (phoneError) errors.phone = phoneError;
 
-  if (form.full_name.trim()) {
-    const nameError = validateFullName(form.full_name);
-    if (nameError) errors.full_name = nameError;
-  }
+  const nameError = validateLeadPersonName(form.full_name);
+  if (nameError) errors.full_name = nameError;
 
   const cost = (form.service_cost ?? "").trim();
   if (cost) {

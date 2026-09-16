@@ -57,6 +57,19 @@ export function validateFullName(value: string): string | null {
   return null;
 }
 
+/** Для лида: ФИО можно не указывать или вписать только имя — фамилию допишут позже. */
+export function validateLeadPersonName(value: string): string | null {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) return null;
+  if (/\d/.test(normalized)) {
+    return "ФИО не должно содержать цифры";
+  }
+  if (!FULL_NAME_RE.test(normalized)) {
+    return "ФИО: только буквы, пробелы и дефис";
+  }
+  return null;
+}
+
 export function validateEmail(value: string, required = false): string | null {
   const trimmed = value.trim();
   if (!trimmed) {

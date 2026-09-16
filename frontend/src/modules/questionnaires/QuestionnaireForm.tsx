@@ -232,8 +232,8 @@ export function QuestionnaireForm({
         </p>
       ) : (
         <p className="mb-2 rounded-lg border border-border bg-surface-muted/60 px-3 py-2 text-[11px] leading-snug text-muted">
-          Сохранить можно в любой момент — обязателен только телефон. Звёздочкой отмечено то,
-          что понадобится, чтобы перевести лид в клиента.
+          Сохранить можно в любой момент — обязателен только телефон. ФИО и остальное
+          допишете позже; звёздочкой отмечено то, что понадобится для перевода в клиента.
         </p>
       )}
 
@@ -242,12 +242,12 @@ export function QuestionnaireForm({
           <StepHeader step={1} title="Клиент" />
           <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2 xl:grid-cols-4">
             <div data-field="full_name">
-              <FormField label="ФИО" required error={errors.full_name}>
+              <FormField label="ФИО" error={errors.full_name}>
                 <Input
                   className={fieldClass}
                   value={value.full_name}
                   onChange={(event) => patch({ full_name: filterPersonName(event.target.value) })}
-                  placeholder="Иванов Иван Иванович"
+                  placeholder="Можно только имя — фамилию допишете потом"
                 />
               </FormField>
             </div>

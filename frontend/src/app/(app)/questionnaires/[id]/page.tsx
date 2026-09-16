@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { BackLink, Button, LoadingState, PageHeader, Toast } from "@/components/ui";
@@ -12,6 +12,10 @@ import {
   questionnaireToForm,
   type QuestionnaireFormValue,
 } from "@/modules/questionnaires/defaults";
+import {
+  UnsavedChangesGuard,
+  questionnaireFormSnapshot,
+} from "@/modules/questionnaires/UnsavedChangesGuard";
 import { canOpenClientCards, canSuperviseLeads } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 import type { LeadManagerOption, Questionnaire } from "@/lib/types";
@@ -22,6 +26,7 @@ export default function QuestionnaireDetailPage() {
   const { user } = useAuth();
   const [item, setItem] = useState<Questionnaire | null>(null);
   const [form, setForm] = useState<QuestionnaireFormValue | null>(null);
+  const [baseline, setBaseline] = useState<string>("");
   const [managers, setManagers] = useState<LeadManagerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,14 +36,22 @@ export default function QuestionnaireDetailPage() {
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
     null,
   );
+  const [leaveHref, setLeaveHref] = useState<string | null>(null);
+
+  const dirty = useMemo(() => {
+    if (!form || !baseline) return false;
+    return questionnaireFormSnapshot(formToPayload(form)) !== baseline;
+  }, [form, baseline]);
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
       try {
         const data = await questionnairesApi.get(params.id);
+        const nextForm = questionnaireToForm(data);
         setItem(data);
-        setForm(questionnaireToForm(data));
+        setForm(nextForm);
+        setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
       } catch (error) {
         setToast({
           message: error instanceof ApiRequestError ? error.message : "Анкета не найдена",
@@ -61,19 +74,22 @@ export default function QuestionnaireDetailPage() {
     })();
   }, [user]);
 
-  async function handleSubmit() {
+  async function saveQuestionnaire() {
     if (!form) return;
     setSaving(true);
     try {
       const updated = await questionnairesApi.update(params.id, formToPayload(form));
+      const nextForm = questionnaireToForm(updated);
       setItem(updated);
-      setForm(questionnaireToForm(updated));
+      setForm(nextForm);
+      setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
       setToast({ message: "Анкета сохранена", tone: "success" });
     } catch (error) {
       setToast({
         message: error instanceof ApiRequestError ? error.message : "Не удалось сохранить",
         tone: "error",
       });
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -94,11 +110,20 @@ export default function QuestionnaireDetailPage() {
   }
 
   async function handleCreateClient() {
+    if (dirty) {
+      try {
+        await saveQuestionnaire();
+      } catch {
+        return;
+      }
+    }
     setCreatingClient(true);
     try {
       const updated = await questionnairesApi.createClient(params.id);
       setItem(updated);
-      setForm(questionnaireToForm(updated));
+      const nextForm = questionnaireToForm(updated);
+      setForm(nextForm);
+      setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
       if (updated.client_id) {
         router.push(`/clients/${updated.client_id}`);
       }
@@ -145,6 +170,15 @@ export default function QuestionnaireDetailPage() {
 
   return (
     <div className="page-stack">
+      <UnsavedChangesGuard
+        dirty={dirty && !saving && !deleting}
+        saving={saving}
+        onSave={saveQuestionnaire}
+        requestHref={leaveHref}
+        onRequestHandled={() => setLeaveHref(null)}
+        title="Сохранить анкету перед выходом?"
+        description="Есть несохранённые изменения. Если уйдёте сейчас — они пропадут."
+      />
       {toast ? (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       ) : null}
@@ -166,14 +200,16 @@ export default function QuestionnaireDetailPage() {
         canAssign={canSuperviseLeads(user)}
         onUpdated={(next) => {
           setItem(next);
-          setForm(questionnaireToForm(next));
+          const nextForm = questionnaireToForm(next);
+          setForm(nextForm);
+          setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
         }}
         onError={(message) => setToast({ message, tone: "error" })}
       />
       <QuestionnaireForm
         value={form}
         onChange={setForm}
-        onSubmit={() => void handleSubmit()}
+        onSubmit={() => void saveQuestionnaire().catch(() => undefined)}
         saving={saving}
         submitLabel="Сохранить анкету"
         extraActions={
@@ -186,7 +222,11 @@ export default function QuestionnaireDetailPage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => router.push(`/clients/${item.client_id}`)}
+                  onClick={() => {
+                    const href = `/clients/${item.client_id}`;
+                    if (dirty) setLeaveHref(href);
+                    else router.push(href);
+                  }}
                 >
                   Карточка клиента
                 </Button>
@@ -195,10 +235,10 @@ export default function QuestionnaireDetailPage() {
               <Button
                 type="button"
                 variant="secondary"
-                disabled={creatingClient}
+                disabled={creatingClient || saving}
                 onClick={() => void handleCreateClient()}
               >
-                {creatingClient ? "Создание..." : "Создать клиента"}
+                {creatingClient || saving ? "Сохранение..." : "Создать клиента"}
               </Button>
             )}
           </>
