@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -346,6 +346,17 @@ class TestLeadPipeline:
         assert item.assigned_manager_id == user.id
         assert item.call_attempts == 0
 
+    def test_cannot_create_duplicate_lead_by_phone(self, db):
+        user = _org_user(db)
+        first = create_questionnaire(db, user, _minimal_payload(phone="+7 928 111-22-33"))
+        with pytest.raises(HTTPException) as error:
+            create_questionnaire(db, user, _minimal_payload(phone="+79281112233", full_name="Другое имя"))
+        assert error.value.status_code == 409
+        detail = error.value.detail
+        assert isinstance(detail, dict)
+        assert detail["code"] == "duplicate_questionnaire"
+        assert detail["questionnaire_id"] == str(first.id)
+
     def test_lead_without_phone_is_rejected(self):
         with pytest.raises(ValidationError):
             QuestionnaireCreate(full_name="Иванов Иван", phone="   ")
@@ -374,9 +385,9 @@ class TestLeadPipeline:
         item = log_questionnaire_call(
             db, user, item.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.NO_ANSWER)
         )
-        assert item.next_call_at == local_today()
+        assert item.next_call_at == local_today() + timedelta(days=1)
         assert item.call_attempts == 2
-        assert [row.id for row in list_questionnaires(db, user, due_only=True)] == [item.id]
+        assert list_questionnaires(db, user, due_only=True) == []
 
     def test_appointment_on_create_and_due_filter(self, db):
         user = _org_user(db)

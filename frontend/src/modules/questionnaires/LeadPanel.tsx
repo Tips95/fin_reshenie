@@ -2,21 +2,17 @@
 
 import { useState } from "react";
 
-import { Badge, Button, FormField, Input, Select } from "@/components/ui";
+import { Badge, Button, FormField, Select } from "@/components/ui";
 import { ApiRequestError, questionnairesApi } from "@/lib/api-client";
 import {
-  addDaysIsoDate,
   formatDate,
   formatDateTime,
   isLeadAppointmentDue,
   leadStatusLabel,
   leadStatusTone,
-  todayIsoDate,
 } from "@/lib/format";
-import { fieldClass } from "@/modules/questionnaires/form-ui";
+import type { LeadActionKind } from "@/modules/questionnaires/LeadActionModal";
 import type { LeadManagerOption, Questionnaire } from "@/lib/types";
-
-type OpenForm = "answered" | "no_answer" | "unqualify" | "appointment" | null;
 
 export function LeadPanel({
   item,
@@ -24,58 +20,43 @@ export function LeadPanel({
   canAssign,
   onUpdated,
   onError,
-  openForm: controlledOpen,
-  onOpenFormChange,
+  onOpenAction,
 }: {
   item: Questionnaire;
   managers: LeadManagerOption[];
   canAssign: boolean;
   onUpdated: (next: Questionnaire) => void;
   onError: (message: string) => void;
-  openForm?: OpenForm;
-  onOpenFormChange?: (next: OpenForm) => void;
+  onOpenAction: (kind: Exclude<LeadActionKind, null>) => void;
 }) {
-  const [internalOpen, setInternalOpen] = useState<OpenForm>(null);
-  const openForm = controlledOpen !== undefined ? controlledOpen : internalOpen;
-  function setOpenForm(next: OpenForm) {
-    onOpenFormChange?.(next);
-    if (controlledOpen === undefined) setInternalOpen(next);
-  }
-
-  const [comment, setComment] = useState("");
-  const [nextCallAt, setNextCallAt] = useState(addDaysIsoDate(1));
-  const [appointmentAt, setAppointmentAt] = useState(
-    item.appointment_at?.slice(0, 10) || addDaysIsoDate(1),
-  );
-  const [appointmentNote, setAppointmentNote] = useState(item.appointment_note || "");
-  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const converted = item.lead_status === "converted";
   const appointmentDue = isLeadAppointmentDue(item);
 
-  function closeForm() {
-    setOpenForm(null);
-    setComment("");
-    setReason("");
-    setNextCallAt(addDaysIsoDate(1));
-    setAppointmentAt(item.appointment_at?.slice(0, 10) || addDaysIsoDate(1));
-    setAppointmentNote(item.appointment_note || "");
-  }
-
-  async function run(action: () => Promise<Questionnaire>, fallback: string) {
+  async function reopen() {
     setBusy(true);
     try {
-      onUpdated(await action());
-      closeForm();
+      onUpdated(await questionnairesApi.reopen(item.id));
     } catch (error) {
-      onError(error instanceof ApiRequestError ? error.message : fallback);
+      onError(error instanceof ApiRequestError ? error.message : "Не удалось вернуть лид в работу");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assign(managerId: string | null) {
+    setBusy(true);
+    try {
+      onUpdated(await questionnairesApi.assign(item.id, managerId));
+    } catch (error) {
+      onError(error instanceof ApiRequestError ? error.message : "Не удалось переназначить лид");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-surface p-4 shadow-card sm:p-5">
+    <div id="status-panel" className="scroll-mt-24 space-y-3 rounded-xl border border-border bg-surface p-4 shadow-card sm:p-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Badge tone={leadStatusTone(item.lead_status)}>{leadStatusLabel(item.lead_status)}</Badge>
         <span className="text-xs text-muted">
@@ -117,245 +98,60 @@ export function LeadPanel({
         <p className="text-xs text-muted">Лид переведён в клиента — статусы обзвона больше не меняются.</p>
       ) : (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Статус звонка</p>
-          <div
-            role="group"
-            aria-label="Статус звонка"
-            className="inline-flex flex-wrap rounded-lg border border-border bg-surface-muted p-0.5"
-          >
-            <button
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Действия</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
               type="button"
+              size="sm"
+              variant="secondary"
               disabled={busy}
-              className="rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-surface hover:text-foreground disabled:opacity-50"
-              onClick={() => setOpenForm("answered")}
+              onClick={() => onOpenAction("answered")}
             >
-              ✓ Дозвонились
-            </button>
-            <button
+              Дозвонились
+            </Button>
+            <Button
               type="button"
+              size="sm"
+              variant="secondary"
               disabled={busy}
-              className="rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-surface hover:text-foreground disabled:opacity-50"
-              onClick={() => setOpenForm("no_answer")}
+              onClick={() => onOpenAction("no_answer")}
             >
               Не дозвонились
-            </button>
-          </div>
-
-          <div className="flex flex-wrap gap-2 pt-1">
+            </Button>
             <Button
               type="button"
               size="sm"
               variant="secondary"
               disabled={busy || item.lead_status === "unqualified"}
-              onClick={() => {
-                setAppointmentAt(item.appointment_at?.slice(0, 10) || addDaysIsoDate(1));
-                setAppointmentNote(item.appointment_note || "");
-                setOpenForm("appointment");
-              }}
+              onClick={() => onOpenAction("appointment")}
             >
               {item.appointment_at ? "Изменить приём" : "Записать на приём"}
             </Button>
             {item.lead_status === "unqualified" ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={busy}
-                onClick={() =>
-                  void run(() => questionnairesApi.reopen(item.id), "Не удалось вернуть лид в работу")
-                }
-              >
+              <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void reopen()}>
                 Вернуть в работу
               </Button>
             ) : (
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="danger"
                 disabled={busy}
-                onClick={() => setOpenForm("unqualify")}
+                onClick={() => onOpenAction("unqualify")}
               >
-                Некачественный
+                Некачественный лид
               </Button>
             )}
           </div>
         </div>
       )}
 
-      {openForm === "answered" || openForm === "no_answer" ? (
-        <div className="grid gap-3 rounded-xl border border-border bg-surface-muted/40 p-3 sm:grid-cols-[1fr_180px]">
-          <FormField label="Комментарий к звонку">
-            <Input
-              className={fieldClass}
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-              placeholder={
-                openForm === "answered" ? "О чём договорились" : "Сбросил, вне зоны, занят..."
-              }
-            />
-          </FormField>
-          <FormField label={openForm === "no_answer" ? "Перезвонить" : "Перезвонить (если нужно)"}>
-            <Input
-              className={fieldClass}
-              type="date"
-              min={todayIsoDate()}
-              value={openForm === "answered" && !nextCallAt ? "" : nextCallAt}
-              onChange={(event) => setNextCallAt(event.target.value)}
-            />
-          </FormField>
-          <div className="flex items-center gap-2 sm:col-span-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy}
-              onClick={() =>
-                void run(
-                  () =>
-                    questionnairesApi.logCall(item.id, {
-                      outcome: openForm,
-                      comment: comment.trim() || null,
-                      next_call_at: nextCallAt || null,
-                    }),
-                  "Не удалось записать звонок",
-                )
-              }
-            >
-              {busy ? "Сохранение..." : "Записать звонок"}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={closeForm}>
-              Отмена
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {openForm === "appointment" ? (
-        <div className="space-y-3 rounded-xl border border-border bg-surface-muted/40 p-3">
-          <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-            <FormField label="Дата приёма">
-              <Input
-                className={fieldClass}
-                type="date"
-                min={todayIsoDate()}
-                value={appointmentAt}
-                onChange={(event) => setAppointmentAt(event.target.value)}
-              />
-            </FormField>
-            <FormField label="Комментарий">
-              <Input
-                className={fieldClass}
-                value={appointmentNote}
-                onChange={(event) => setAppointmentNote(event.target.value)}
-                placeholder="Подойдёт после обеда, с супругой..."
-              />
-            </FormField>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {(
-              [
-                { label: "Завтра", days: 1 },
-                { label: "Через неделю", days: 7 },
-                { label: "Через месяц", days: 30 },
-              ] as const
-            ).map((preset) => (
-              <button
-                key={preset.days}
-                type="button"
-                className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-muted hover:border-brand-600 hover:text-brand-700"
-                onClick={() => setAppointmentAt(addDaysIsoDate(preset.days))}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy || !appointmentAt}
-              onClick={() =>
-                void run(
-                  () =>
-                    questionnairesApi.setAppointment(item.id, {
-                      appointment_at: appointmentAt,
-                      appointment_note: appointmentNote.trim() || null,
-                    }),
-                  "Не удалось записать на приём",
-                )
-              }
-            >
-              {busy ? "Сохранение..." : "Сохранить запись"}
-            </Button>
-            {item.appointment_at ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={busy}
-                onClick={() =>
-                  void run(
-                    () =>
-                      questionnairesApi.setAppointment(item.id, {
-                        appointment_at: null,
-                        appointment_note: null,
-                      }),
-                    "Не удалось снять запись",
-                  )
-                }
-              >
-                Снять запись
-              </Button>
-            ) : null}
-            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={closeForm}>
-              Отмена
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {openForm === "unqualify" ? (
-        <div className="space-y-3 rounded-xl border border-border bg-surface-muted/40 p-3">
-          <FormField label="Почему лид некачественный">
-            <textarea
-              className="interactive min-h-[88px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm outline-none placeholder:text-muted/80 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/15"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Не тот регион, долг меньше 300 тысяч, ошиблись номером..."
-            />
-          </FormField>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="danger"
-              disabled={busy || !reason.trim()}
-              onClick={() =>
-                void run(
-                  () => questionnairesApi.unqualify(item.id, reason.trim()),
-                  "Не удалось отметить лид",
-                )
-              }
-            >
-              {busy ? "Сохранение..." : "Отметить некачественным"}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={closeForm}>
-              Отмена
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
       {canAssign ? (
         <FormField label="Закреплён за менеджером">
           <Select
             value={item.assigned_manager_id ?? ""}
             disabled={busy}
-            onChange={(event) =>
-              void run(
-                () => questionnairesApi.assign(item.id, event.target.value || null),
-                "Не удалось переназначить лид",
-              )
-            }
+            onChange={(event) => void assign(event.target.value || null)}
           >
             <option value="">Не закреплён</option>
             {managers.map((manager) => (
@@ -373,5 +169,3 @@ export function LeadPanel({
     </div>
   );
 }
-
-export type LeadPanelOpenForm = OpenForm;

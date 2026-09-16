@@ -34,6 +34,13 @@ export function buildLeadOverview(form: QuestionnaireFormValue) {
   const hasWeapon =
     form.has_weapon === true ? "Есть" : form.has_weapon === false ? "Нет" : "Не указано";
 
+  const zagsLabel =
+    form.is_married === true
+      ? "Есть"
+      : form.is_married === false
+        ? "Нет"
+        : "Не указано";
+
   return {
     creditorsCount: activeDebts.length,
     debtTotalLabel: debtTotal > 0 ? formatMoney(debtTotal) : activeDebts.length ? "—" : "Не указано",
@@ -41,6 +48,7 @@ export function buildLeadOverview(form: QuestionnaireFormValue) {
     dependentsLabel: displayOrUnset(form.dependents),
     propertyLabel: hasProperty,
     weaponLabel: hasWeapon,
+    zagsLabel,
     regionLabel: displayOrUnset(form.registration_region),
     serviceCostLabel: form.service_cost?.trim()
       ? formatMoney(form.service_cost)

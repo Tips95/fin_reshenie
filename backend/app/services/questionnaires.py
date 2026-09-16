@@ -46,6 +46,7 @@ from app.services.client_duplicates import (
     duplicate_client_payload,
     find_existing_client,
     phone_has_minimum_digits,
+    phones_equivalent,
 )
 from app.services.document_collection import create_document_collection
 from app.services.funnel import try_ensure_first_payment_task_for_manager_client
@@ -231,11 +232,62 @@ def _maybe_bind_client(
     return client.id
 
 
+def find_existing_questionnaire_by_phone(
+    db: Session,
+    *,
+    organization_id: UUID,
+    phone: str,
+    exclude_id: UUID | None = None,
+) -> ClientQuestionnaire | None:
+    """Один номер — один лид в организации. Сравнение по последним 10 цифрам."""
+    if not phone_has_minimum_digits(phone):
+        return None
+    stmt = select(ClientQuestionnaire).where(
+        ClientQuestionnaire.organization_id == organization_id,
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(ClientQuestionnaire.id != exclude_id)
+    for item in db.scalars(stmt):
+        if phones_equivalent(item.phone, phone):
+            return item
+    return None
+
+
+def duplicate_questionnaire_payload(item: ClientQuestionnaire) -> dict[str, str]:
+    title = (item.full_name or "").strip() or item.phone
+    return {
+        "code": "duplicate_questionnaire",
+        "message": (
+            f"Лид с этим телефоном уже есть: {title}. "
+            "Откройте существующую карточку — повторно создавать не нужно."
+        ),
+        "questionnaire_id": str(item.id),
+        "full_name": item.full_name or "",
+        "phone": item.phone,
+    }
+
+
 def create_questionnaire(
     db: Session,
     user: User,
     payload: QuestionnaireCreate,
 ) -> ClientQuestionnaire:
+    if not phone_has_minimum_digits(payload.phone):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=INCOMPLETE_PHONE_MESSAGE,
+        )
+    existing = find_existing_questionnaire_by_phone(
+        db,
+        organization_id=user.organization_id,
+        phone=payload.phone,
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=duplicate_questionnaire_payload(existing),
+        )
+
     client_id = _maybe_bind_client(db, user, payload.client_id)
     item = ClientQuestionnaire(
         organization_id=user.organization_id,
@@ -464,8 +516,8 @@ def log_questionnaire_call(
     item.last_call_at = now
 
     if payload.outcome == LeadCallOutcome.NO_ANSWER:
-        # Недозвон не теряется: лид уходит в очередь перезвона на конкретную дату.
-        item.next_call_at = payload.next_call_at or local_today()
+        # Недозвон — перезвон на следующий день (не в тот же, когда звонили).
+        item.next_call_at = payload.next_call_at or (local_today() + timedelta(days=1))
         if item.lead_status in {LeadStatus.NEW, LeadStatus.IN_PROGRESS}:
             item.lead_status = LeadStatus.NO_ANSWER
     else:

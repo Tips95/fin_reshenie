@@ -12,8 +12,9 @@ import {
   DeleteLeadModal,
   LeadClientHeader,
 } from "@/modules/questionnaires/LeadClientHeader";
+import { LeadActionModal, type LeadActionKind } from "@/modules/questionnaires/LeadActionModal";
 import { LeadOverview } from "@/modules/questionnaires/LeadOverview";
-import { LeadPanel, type LeadPanelOpenForm } from "@/modules/questionnaires/LeadPanel";
+import { LeadPanel } from "@/modules/questionnaires/LeadPanel";
 import { LeadSectionNav, useActiveLeadSection } from "@/modules/questionnaires/LeadSectionNav";
 import { QuestionnaireForm } from "@/modules/questionnaires/QuestionnaireForm";
 import {
@@ -41,7 +42,7 @@ export default function QuestionnaireDetailPage() {
   const [creatingClient, setCreatingClient] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [panelForm, setPanelForm] = useState<LeadPanelOpenForm>(null);
+  const [panelForm, setPanelForm] = useState<LeadActionKind>(null);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
     null,
   );
@@ -202,6 +203,30 @@ export default function QuestionnaireDetailPage() {
         onClose={() => setDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
       />
+      <LeadActionModal
+        item={item}
+        kind={panelForm}
+        onClose={() => setPanelForm(null)}
+        onUpdated={(next) => {
+          setItem(next);
+          const nextForm = questionnaireToForm(next);
+          if (!dirty) {
+            setForm(nextForm);
+            setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
+          } else {
+            setForm((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    appointment_at: next.appointment_at,
+                    appointment_note: next.appointment_note ?? "",
+                  }
+                : nextForm,
+            );
+          }
+        }}
+        onError={(message) => setToast({ message, tone: "error" })}
+      />
       {toast ? (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       ) : null}
@@ -217,6 +242,7 @@ export default function QuestionnaireDetailPage() {
         onCallAnswered={() => setPanelForm("answered")}
         onCallNoAnswer={() => setPanelForm("no_answer")}
         onBookAppointment={() => setPanelForm("appointment")}
+        onUnqualify={() => setPanelForm("unqualify")}
         onCreateClient={() => void handleCreateClient()}
         onOpenClient={() => {
           const href = `/clients/${item.client_id}`;
@@ -232,36 +258,31 @@ export default function QuestionnaireDetailPage() {
         <div className="min-w-0 flex-1 space-y-4">
           <LeadOverview item={item} form={form} />
 
-          <div id="status-panel" className="scroll-mt-24">
-            <LeadPanel
-              item={item}
-              managers={managers}
-              canAssign={canSuperviseLeads(user)}
-              openForm={panelForm}
-              onOpenFormChange={setPanelForm}
-              onUpdated={(next) => {
-                setItem(next);
-                const nextForm = questionnaireToForm(next);
-                // Preserve unsaved form edits outside lead-status fields when possible:
-                // appointment/lead fields come from server; merge phone/name etc from current form only if clean.
-                if (!dirty) {
-                  setForm(nextForm);
-                  setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
-                } else {
-                  setForm((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          appointment_at: next.appointment_at,
-                          appointment_note: next.appointment_note ?? "",
-                        }
-                      : nextForm,
-                  );
-                }
-              }}
-              onError={(message) => setToast({ message, tone: "error" })}
-            />
-          </div>
+          <LeadPanel
+            item={item}
+            managers={managers}
+            canAssign={canSuperviseLeads(user)}
+            onOpenAction={setPanelForm}
+            onUpdated={(next) => {
+              setItem(next);
+              const nextForm = questionnaireToForm(next);
+              if (!dirty) {
+                setForm(nextForm);
+                setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
+              } else {
+                setForm((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        appointment_at: next.appointment_at,
+                        appointment_note: next.appointment_note ?? "",
+                      }
+                    : nextForm,
+                );
+              }
+            }}
+            onError={(message) => setToast({ message, tone: "error" })}
+          />
 
           <QuestionnaireForm
             value={form}

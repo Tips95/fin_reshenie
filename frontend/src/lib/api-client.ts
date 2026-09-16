@@ -78,6 +78,20 @@ export function getDuplicateClientId(error: unknown): string | null {
   return null;
 }
 
+export function getDuplicateQuestionnaireId(error: unknown): string | null {
+  if (!(error instanceof ApiRequestError)) return null;
+  const detail = error.detail;
+  if (
+    typeof detail === "object" &&
+    detail !== null &&
+    "questionnaire_id" in detail &&
+    typeof (detail as { questionnaire_id: unknown }).questionnaire_id === "string"
+  ) {
+    return (detail as { questionnaire_id: string }).questionnaire_id;
+  }
+  return null;
+}
+
 function messageFromDetail(detail: unknown): string {
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {

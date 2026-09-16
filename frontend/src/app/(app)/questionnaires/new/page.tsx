@@ -4,7 +4,11 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { BackLink, PageHeader, Toast } from "@/components/ui";
-import { ApiRequestError, questionnairesApi } from "@/lib/api-client";
+import {
+  ApiRequestError,
+  getDuplicateQuestionnaireId,
+  questionnairesApi,
+} from "@/lib/api-client";
 import { QuestionnaireForm } from "@/modules/questionnaires/QuestionnaireForm";
 import {
   emptyQuestionnaireForm,
@@ -20,26 +24,44 @@ export default function NewQuestionnairePage() {
   const router = useRouter();
   const [form, setForm] = useState<QuestionnaireFormValue>(() => emptyQuestionnaireForm());
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
+    null,
+  );
   const baselineRef = useRef(questionnaireFormSnapshot(formToPayload(emptyQuestionnaireForm())));
+  const savingLockRef = useRef(false);
   const dirty = useMemo(
     () => questionnaireFormSnapshot(formToPayload(form)) !== baselineRef.current,
     [form],
   );
 
   async function saveLead() {
+    if (savingLockRef.current) return;
+    savingLockRef.current = true;
     setSaving(true);
     try {
       const created = await questionnairesApi.create(formToPayload(form));
       baselineRef.current = questionnaireFormSnapshot(formToPayload(form));
       router.replace(`/questionnaires/${created.id}`);
     } catch (error) {
+      const existingId = getDuplicateQuestionnaireId(error);
+      if (existingId) {
+        setToast({
+          message:
+            error instanceof ApiRequestError
+              ? error.message
+              : "Лид с этим телефоном уже есть — открываем карточку",
+          tone: "info",
+        });
+        router.replace(`/questionnaires/${existingId}`);
+        return;
+      }
       setToast({
         message: error instanceof ApiRequestError ? error.message : "Не удалось сохранить лид",
         tone: "error",
       });
       throw error;
     } finally {
+      savingLockRef.current = false;
       setSaving(false);
     }
   }

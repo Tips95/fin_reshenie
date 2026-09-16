@@ -44,9 +44,9 @@ export function LeadOverview({
         <MetricTile label="Стоимость услуги" value={metrics.serviceCostLabel} />
         <MetricTile label="Банки" value={metrics.bankAccountsLabel} />
         <MetricTile
-          label="Попыток дозвона"
-          value={String(item.call_attempts || 0)}
-          hint={item.last_call_at ? undefined : "Звонков ещё не было"}
+          label="ЗАГС"
+          value={metrics.zagsLabel}
+          hint="Зарегистрированный брак"
         />
       </div>
     </SectionCard>

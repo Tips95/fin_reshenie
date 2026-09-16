@@ -26,6 +26,7 @@ export function LeadClientHeader({
   onCallAnswered,
   onCallNoAnswer,
   onBookAppointment,
+  onUnqualify,
   onCreateClient,
   onOpenClient,
   onDelete,
@@ -38,6 +39,7 @@ export function LeadClientHeader({
   onCallAnswered: () => void;
   onCallNoAnswer: () => void;
   onBookAppointment: () => void;
+  onUnqualify: () => void;
   onCreateClient: () => void;
   onOpenClient: () => void;
   onDelete: () => void;
@@ -48,83 +50,37 @@ export function LeadClientHeader({
   const tel = phoneToTelHref(item.phone);
   const appointmentDue = isLeadAppointmentDue(item);
   const converted = item.lead_status === "converted";
+  const unqualified = item.lead_status === "unqualified";
 
   return (
     <header className="rounded-xl border border-border bg-surface p-4 shadow-card sm:p-5">
-      <div className="flex flex-wrap items-start gap-4">
+      <div className="flex flex-wrap items-start gap-3 sm:gap-4">
         <InitialsAvatar name={item.full_name} phone={item.phone} />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-[12rem]">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
               {title}
             </h1>
             <Badge tone={leadStatusTone(item.lead_status)}>{leadStatusLabel(item.lead_status)}</Badge>
           </div>
-
           <p className="mt-1 text-sm text-muted">
             {item.client_id ? "Привязан к карточке клиента" : "Клиент ещё не заведён"}
             {item.assigned_manager_name || item.created_by_name
               ? ` · ${item.assigned_manager_name || item.created_by_name}`
               : ""}
           </p>
-
-          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <dt className="text-xs text-muted">Телефон</dt>
-              <dd className="mt-0.5 font-medium tabular-nums">
-                {tel ? (
-                  <a href={tel} className="text-foreground hover:text-brand-700">
-                    {phoneLabel}
-                  </a>
-                ) : (
-                  phoneLabel
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Регион</dt>
-              <dd className="mt-0.5 font-medium">
-                {item.registration_region?.trim() || "Не указано"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Последний контакт</dt>
-              <dd className="mt-0.5 font-medium">
-                {item.last_call_at ? formatDateTime(item.last_call_at) : "Ещё не звонили"}
-              </dd>
-            </div>
-            {item.next_call_at ? (
-              <div>
-                <dt className="text-xs text-muted">Перезвонить</dt>
-                <dd className="mt-0.5 font-semibold text-status-warning-text">
-                  {formatDate(item.next_call_at)}
-                </dd>
-              </div>
-            ) : null}
-            {item.appointment_at ? (
-              <div>
-                <dt className="text-xs text-muted">Приём</dt>
-                <dd
-                  className={
-                    appointmentDue
-                      ? "mt-0.5 font-semibold text-status-danger-text"
-                      : "mt-0.5 font-semibold text-brand-700"
-                  }
-                >
-                  {formatDate(item.appointment_at)}
-                  {appointmentDue ? " · сегодня" : ""}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:max-w-full sm:justify-end">
           {tel ? (
-            <Button type="button" size="sm" onClick={() => {
-              window.location.href = tel;
-            }}>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                window.location.href = tel;
+              }}
+            >
               Позвонить
             </Button>
           ) : null}
@@ -139,6 +95,11 @@ export function LeadClientHeader({
               <Button type="button" size="sm" variant="secondary" onClick={onBookAppointment}>
                 {item.appointment_at ? "Изменить приём" : "Записать на приём"}
               </Button>
+              {!unqualified ? (
+                <Button type="button" size="sm" variant="danger" onClick={onUnqualify}>
+                  Некачественный
+                </Button>
+              ) : null}
             </>
           ) : null}
           {item.client_id ? (
@@ -165,6 +126,56 @@ export function LeadClientHeader({
             </ActionMenu>
           ) : null}
         </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="min-w-0">
+          <p className="text-xs text-muted">Телефон</p>
+          <p className="mt-0.5 truncate text-sm font-medium tabular-nums">
+            {tel ? (
+              <a href={tel} className="text-foreground hover:text-brand-700">
+                {phoneLabel}
+              </a>
+            ) : (
+              phoneLabel
+            )}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted">Регион</p>
+          <p className="mt-0.5 truncate text-sm font-medium">
+            {item.registration_region?.trim() || "Не указано"}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted">Последний контакт</p>
+          <p className="mt-0.5 truncate text-sm font-medium">
+            {item.last_call_at ? formatDateTime(item.last_call_at) : "Ещё не звонили"}
+          </p>
+        </div>
+        {item.next_call_at ? (
+          <div className="min-w-0">
+            <p className="text-xs text-muted">Перезвонить</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-status-warning-text">
+              {formatDate(item.next_call_at)}
+            </p>
+          </div>
+        ) : null}
+        {item.appointment_at ? (
+          <div className="min-w-0">
+            <p className="text-xs text-muted">Приём</p>
+            <p
+              className={
+                appointmentDue
+                  ? "mt-0.5 truncate text-sm font-semibold text-status-danger-text"
+                  : "mt-0.5 truncate text-sm font-semibold text-brand-700"
+              }
+            >
+              {formatDate(item.appointment_at)}
+              {appointmentDue ? " · сегодня" : ""}
+            </p>
+          </div>
+        ) : null}
       </div>
     </header>
   );
