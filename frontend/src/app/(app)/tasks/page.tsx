@@ -8,6 +8,7 @@ import { Badge, Button, Card, LoadingState, PageHeader, SectionTitle } from "@/c
 import { ApiRequestError, funnelApi, tasksApi } from "@/lib/api-client";
 import { formatDate, formatMoney, overdueBucketLabel, procedureStageLabel, statusLabel } from "@/lib/format";
 import type { FunnelOverview, ManagerTask, ProcedureStage } from "@/lib/types";
+import { canManageClients } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function bucketTone(days: number | null): "default" | "success" | "warning" | "danger" {
@@ -28,7 +29,7 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState<ProcedureStage | "">("");
 
-  const canUseTasks = user?.role === "owner" || user?.role === "manager";
+  const canUseTasks = canManageClients(user);
 
   const loadData = useCallback(async () => {
     setLoading(true);

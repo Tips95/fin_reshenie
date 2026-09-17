@@ -18,6 +18,7 @@ import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
 import type { Client, ClientBrief, ClientDueMonthSummary, ClientStatus, ProcedureStage, User } from "@/lib/types";
+import { canManageClients } from "@/lib/organization-features";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
 type SortField = ClientListSortField;
@@ -320,11 +321,11 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
     }
   }
 
-  const canCreate = user?.role === "owner" || user?.role === "manager";
+  const canCreate = canManageClients(user);
   const canEdit = canCreate;
   const isManager = user?.role === "manager";
   const canAssignManager = user?.role === "owner";
-  const canSeeClientAmounts = user?.role === "owner" || user?.role === "manager";
+  const canSeeClientAmounts = canManageClients(user);
   const isCollectionStaff = user?.role === "call_center";
 
   function clientLatestNote(client: Client | ClientBrief) {

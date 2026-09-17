@@ -17,7 +17,7 @@ export function isCivilExecutor(user: User | null | undefined): boolean {
   return user?.role === "executor";
 }
 
-/** Начальник отдела менеджеров: видит все лиды и дневную статистику, но не финансы. */
+/** Начальник отдела: все лиды + статистика, плюс сбор/договоры как у менеджера. */
 export function isLeadSupervisor(user: User | null | undefined): boolean {
   return user?.role === "head_manager";
 }
@@ -26,8 +26,14 @@ export function canSuperviseLeads(user: User | null | undefined): boolean {
   return user?.role === "owner" || isLeadSupervisor(user);
 }
 
+/** Создание/редактирование клиентов, сбор → банкротство, графики (без орг.финансов владельца). */
+export function canManageClients(user: User | null | undefined): boolean {
+  const role = user?.role;
+  return role === "owner" || role === "manager" || role === "head_manager";
+}
+
 export function canOpenClientCards(user: User | null | undefined): boolean {
-  return !isCivilExecutor(user) && !isLeadSupervisor(user);
+  return !isCivilExecutor(user);
 }
 
 export function canUseQuestionnaires(user: User | null | undefined): boolean {

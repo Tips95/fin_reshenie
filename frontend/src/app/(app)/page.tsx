@@ -29,7 +29,7 @@ import type {
   MandatoryPaymentBreakdown,
 } from "@/lib/types";
 import { clientListPath } from "@/lib/client-list-filters";
-import { canUseQuestionnaires } from "@/lib/organization-features";
+import { canManageClients, canUseQuestionnaires } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const DASHBOARD_SECTIONS = [
@@ -237,7 +237,7 @@ export default function DashboardPage() {
   const [cashSaving, setCashSaving] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
   const isOwner = user?.role === "owner";
-  const canManageClients = isOwner || user?.role === "manager";
+  const canEditClients = canManageClients(user);
   const showQuestionnaires = canUseQuestionnaires(user);
   const showOrgFinance = isOwner;
   const monthLabel = formatMonthLabel(month);
@@ -316,7 +316,7 @@ export default function DashboardPage() {
           title="Дашборд"
           subtitle={`Добро пожаловать, ${user?.full_name}`}
           action={
-            canManageClients ? (
+            canEditClients ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 <Input
                   type="month"
@@ -803,7 +803,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {canManageClients && (
+      {canEditClients && (
         <Card>
           <SectionTitle
             title="Клиенты с просрочкой"

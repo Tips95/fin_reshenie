@@ -65,7 +65,11 @@ def require_roles(*allowed_roles: UserRole):
 
 
 require_owner = require_roles(UserRole.OWNER)
-require_owner_or_manager = require_roles(UserRole.OWNER, UserRole.MANAGER)
+require_owner_or_manager = require_roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.HEAD_MANAGER,
+)
 require_legal_staff = require_roles(
     UserRole.OWNER,
     UserRole.MANAGER,

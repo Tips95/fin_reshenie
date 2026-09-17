@@ -8,7 +8,7 @@ import { LogoMark } from "@/components/ui";
 import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { canUseCivilCases, canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff, isCivilExecutor, isLeadSupervisor } from "@/lib/organization-features";
+import { canUseCivilCases, canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff, isCivilExecutor } from "@/lib/organization-features";
 import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -60,7 +60,7 @@ const navItems = [
     label: "Задачи",
     icon: "◐",
     shortLabel: "Задачи",
-    roles: ["owner", "manager"],
+    roles: ["owner", "manager", "head_manager"],
     feature: "tasks" as const,
   },
   {
@@ -134,7 +134,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const visibleNav = navItems.filter((item) => {
     if (isCivilExecutor(user)) return item.href === "/civil-cases";
-    if (isLeadSupervisor(user)) return item.href.startsWith("/questionnaires");
     if (item.hideFor?.includes(user?.role ?? "")) return false;
     if (item.href === "/questionnaires") return canUseQuestionnaires(user);
     if (item.href === "/civil-cases") return canUseCivilCases(user);
@@ -147,11 +146,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mobilePrimary = (
     isCivilExecutor(user)
       ? ["/civil-cases"]
-      : isLeadSupervisor(user)
-        ? ["/questionnaires/stats", "/questionnaires"]
-        : isCollectionStaff(user)
-          ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
-          : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
+      : isCollectionStaff(user)
+        ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
+        : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
   ).filter((href) => visibleNav.some((item) => item.href === href));
 
   return (

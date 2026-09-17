@@ -37,6 +37,7 @@ import {
   validateRequiredDate,
 } from "@/lib/validation";
 import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
+import { canManageClients } from "@/lib/organization-features";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 import { cn } from "@/lib/cn";
 
@@ -426,7 +427,7 @@ export default function ClientDetailPage() {
       return;
     }
     const items = client.payment_schedule ?? [];
-    const canEdit = user?.role === "owner" || user?.role === "manager";
+    const canEdit = canManageClients(user);
     // Only when switching clients: auto-open empty schedule for editing.
     // Do not collapse on refresh after payments or notes.
     setScheduleOpen(items.length === 0 && canEdit);
@@ -1294,7 +1295,7 @@ export default function ClientDetailPage() {
   const isOwner = user?.role === "owner";
   const isManager = user?.role === "manager";
   const isCollectionStaff = user?.role === "call_center";
-  const canEditClient = isOwner || isManager;
+  const canEditClient = canManageClients(user);
   const canViewClientFinances = canEditClient || isCollectionStaff;
   const canEditSchedule = canEditClient;
   const canManageMandatory = isOwner;

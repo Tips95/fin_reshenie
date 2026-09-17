@@ -4,9 +4,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.api import payments as payments_api
-from app.api.deps import require_owner
+from app.api.deps import require_owner, require_owner_or_manager
 from app.models.enums import EngagementStage, UserRole
-from app.services.access import manager_can_access_client
+from app.services.access import ensure_bankruptcy_client_module, manager_can_access_client
 
 
 ORG_ID = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -64,3 +64,23 @@ class TestManagerPaymentPermissions:
         signature = inspect.signature(payments_api.create_payment)
         dependency = signature.parameters["current_user"].default.dependency
         assert dependency is require_owner
+
+
+class TestHeadManagerClientAccess:
+    def test_bankruptcy_module_allowed(self):
+        user = SimpleNamespace(role=UserRole.HEAD_MANAGER)
+        ensure_bankruptcy_client_module(user)
+
+    def test_owner_or_manager_dependency_includes_head(self):
+        closure = {
+            name: cell.cell_contents
+            for name, cell in zip(
+                require_owner_or_manager.__code__.co_freevars,
+                require_owner_or_manager.__closure__ or (),
+            )
+        }
+        assert closure["allowed_roles"] == (
+            UserRole.OWNER,
+            UserRole.MANAGER,
+            UserRole.HEAD_MANAGER,
+        )
