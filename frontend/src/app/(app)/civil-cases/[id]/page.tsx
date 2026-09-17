@@ -65,7 +65,7 @@ function CivilDocumentSlot({
   canDelete: boolean;
   uploading: boolean;
   downloadingId: string | null;
-  onUpload: (file: File) => void;
+  onUpload: (files: File[]) => void;
   onDownload: (doc: CivilCaseDocument) => void;
   onDelete: (documentId: string) => void;
 }) {
@@ -77,15 +77,16 @@ function CivilDocumentSlot({
           <input
             type="file"
             accept={DOCUMENT_ACCEPT}
+            multiple
             className="hidden"
             disabled={uploading}
             onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) onUpload(file);
+              const selected = Array.from(event.target.files ?? []);
+              if (selected.length) onUpload(selected);
               event.target.value = "";
             }}
           />
-          {uploading ? "Загрузка..." : "Загрузить"}
+          {uploading ? "Загрузка..." : "Загрузить файлы"}
         </label>
       ) : (
         <p className="text-[11px] text-muted">Только просмотр и скачивание</p>
@@ -313,23 +314,30 @@ export default function CivilCaseDetailPage() {
     }
   }
 
-  async function handleUpload(file: File, kind: CivilCaseDocumentKind) {
-    const fileError = validateDocumentFile(file);
-    if (fileError) {
-      setToast({ message: fileError, tone: "error" });
+  async function handleUpload(files: File[], kind: CivilCaseDocumentKind) {
+    const invalid = files
+      .map((file) => ({ file, error: validateDocumentFile(file) }))
+      .find((item) => item.error);
+    if (invalid?.error) {
+      setToast({ message: `${invalid.file.name}: ${invalid.error}`, tone: "error" });
       return;
     }
     setUploading(true);
     try {
-      const updated = await civilCasesApi.uploadDocument(params.id, file, kind);
+      const updated = await civilCasesApi.uploadDocuments(params.id, files, kind);
       setItem(updated);
-      setToast({
-        message: kind === "client" ? "Документ клиента загружен" : "Подготовленный документ загружен",
-        tone: "success",
-      });
+      const label =
+        kind === "client"
+          ? files.length === 1
+            ? "Документ клиента загружен"
+            : `Загружено документов клиента: ${files.length}`
+          : files.length === 1
+            ? "Подготовленный документ загружен"
+            : `Загружено подготовленных документов: ${files.length}`;
+      setToast({ message: label, tone: "success" });
     } catch (err) {
       setToast({
-        message: err instanceof ApiRequestError ? err.message : "Не удалось загрузить документ",
+        message: err instanceof ApiRequestError ? err.message : "Не удалось загрузить документы",
         tone: "error",
       });
     } finally {
@@ -546,27 +554,27 @@ export default function CivilCaseDetailPage() {
       <div className="grid gap-3 lg:grid-cols-2">
         <CivilDocumentSlot
           title="Документы клиента"
-          description="Менеджер загружает исходники: паспорт, доверенность, материалы обращения"
+          description="Менеджер загружает исходники пакетом: паспорт, доверенность, материалы"
           emptyText="Документы клиента ещё не загружены"
           documents={item.documents.filter((doc) => doc.kind !== "prepared")}
           canUpload={canUploadClientDocs}
           canDelete={canManageIntake}
           uploading={uploading}
           downloadingId={downloadingId}
-          onUpload={(file) => void handleUpload(file, "client")}
+          onUpload={(files) => void handleUpload(files, "client")}
           onDownload={(doc) => void handleDownloadDocument(doc)}
           onDelete={(documentId) => void handleDeleteDocument(documentId)}
         />
         <CivilDocumentSlot
           title="Подготовленные документы"
-          description="Исполнитель загружает то, что подготовил: иск, жалобу, приложения"
+          description="Исполнитель загружает пакет сразу несколькими файлами: иск, жалобу, приложения"
           emptyText="Подготовленный пакет ещё не загружен"
           documents={item.documents.filter((doc) => doc.kind === "prepared")}
           canUpload={canUploadPreparedDocs}
           canDelete={canManageIntake || canUploadPreparedDocs}
           uploading={uploading}
           downloadingId={downloadingId}
-          onUpload={(file) => void handleUpload(file, "prepared")}
+          onUpload={(files) => void handleUpload(files, "prepared")}
           onDownload={(doc) => void handleDownloadDocument(doc)}
           onDelete={(documentId) => void handleDeleteDocument(documentId)}
         />

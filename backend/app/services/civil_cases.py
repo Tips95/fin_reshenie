@@ -430,7 +430,11 @@ def add_document(
 
     document_id = uuid4()
     storage_key = civil_case_document_key(user.organization_id, case.id, document_id, filename)
-    save_bytes(storage_key, content)
+    # DB is the durable store (deploy has no upload volume). Disk is a local cache only.
+    try:
+        save_bytes(storage_key, content)
+    except OSError:
+        pass
     document = CivilCaseDocument(
         id=document_id,
         civil_case_id=case.id,
@@ -439,6 +443,7 @@ def add_document(
         filename=filename,
         content_type=content_type,
         storage_key=storage_key,
+        file_data=content,
         size_bytes=len(content),
         kind=kind,
     )

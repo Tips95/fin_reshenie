@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_civil_staff
@@ -130,20 +130,35 @@ def post_movement(
 async def post_document(
     case_id: UUID,
     kind: CivilCaseDocumentKind = Query(...),
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(default=[]),
+    file: UploadFile | None = File(default=None),
     current_user: User = Depends(_require_civil_staff),
     db: Session = Depends(get_db),
 ) -> CivilCaseResponse:
-    content, filename, content_type = await read_and_validate_document(file)
-    item = add_document(
-        db,
-        current_user,
-        case_id,
-        kind=kind,
-        content=content,
-        filename=filename,
-        content_type=content_type,
-    )
+    uploads: list[UploadFile] = []
+    if files:
+        uploads.extend(item for item in files if item.filename)
+    if file is not None and file.filename:
+        uploads.append(file)
+    if not uploads:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Выберите хотя бы один файл",
+        )
+
+    item = None
+    for upload in uploads:
+        content, filename, content_type = await read_and_validate_document(upload)
+        item = add_document(
+            db,
+            current_user,
+            case_id,
+            kind=kind,
+            content=content,
+            filename=filename,
+            content_type=content_type,
+        )
+    assert item is not None
     return to_civil_case_response(item)
 
 
@@ -153,15 +168,23 @@ def download_document(
     document_id: UUID,
     current_user: User = Depends(_require_civil_staff),
     db: Session = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     document = get_case_document(db, current_user, case_id, document_id)
+    headers = {"Content-Disposition": attachment_content_disposition(document.filename)}
+    media_type = document.content_type or "application/octet-stream"
+
+    # Prefer DB bytes — durable across container redeploys without volumes.
+    payload = document.file_data
+    if payload:
+        return Response(content=payload, media_type=media_type, headers=headers)
+
     path = resolve_storage_path(document.storage_key)
-    if not path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
-    return FileResponse(
-        path,
-        media_type=document.content_type or "application/octet-stream",
-        headers={"Content-Disposition": attachment_content_disposition(document.filename)},
+    if path.exists():
+        return FileResponse(path, media_type=media_type, headers=headers)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Файл не найден — загрузите документ заново",
     )
 
 

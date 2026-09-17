@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, Enum, ForeignKey, Integer, LargeBinary, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -106,6 +106,8 @@ class CivilCaseDocument(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    # Bytes live in DB: container disk is ephemeral on Timeweb (no volumes).
+    file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     kind: Mapped[CivilCaseDocumentKind] = mapped_column(
         Enum(

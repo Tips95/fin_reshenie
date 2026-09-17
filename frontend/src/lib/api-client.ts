@@ -263,9 +263,23 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
 }
 
 export async function uploadFile<T = unknown>(path: string, file: File, fieldName = "file"): Promise<T> {
+  return uploadFiles<T>(path, [file], fieldName);
+}
+
+export async function uploadFiles<T = unknown>(
+  path: string,
+  files: File[],
+  fieldName = "file",
+): Promise<T> {
+  if (files.length === 0) {
+    throw new ApiRequestError("Выберите хотя бы один файл", 422);
+  }
+
   const send = async (): Promise<Response> => {
     const formData = new FormData();
-    formData.append(fieldName, file);
+    for (const file of files) {
+      formData.append(fieldName, file);
+    }
     const headers = new Headers();
     const accessToken = getAccessToken();
     if (accessToken) {
@@ -642,7 +656,9 @@ export const civilCasesApi = {
       body: JSON.stringify({ body }),
     }),
   uploadDocument: (id: string, file: File, kind: CivilCaseDocumentKind) =>
-    uploadFile<CivilCase>(`/civil-cases/${id}/documents?kind=${kind}`, file),
+    uploadFiles<CivilCase>(`/civil-cases/${id}/documents?kind=${kind}`, [file], "files"),
+  uploadDocuments: (id: string, files: File[], kind: CivilCaseDocumentKind) =>
+    uploadFiles<CivilCase>(`/civil-cases/${id}/documents?kind=${kind}`, files, "files"),
   downloadDocument: (caseId: string, documentId: string, fallbackFilename: string) =>
     downloadFile(`/civil-cases/${caseId}/documents/${documentId}`, fallbackFilename),
   deleteDocument: (caseId: string, documentId: string) =>

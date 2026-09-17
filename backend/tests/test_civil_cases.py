@@ -392,6 +392,39 @@ class TestCivilCases:
         assert remaining.prepared_documents_count == 0
         assert remaining.client_documents_count == 1
 
+    def test_document_bytes_persist_without_disk(self, db, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.civil_cases.save_bytes",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("no disk")),
+        )
+        manager = _user(db)
+        case = create_civil_case(
+            db,
+            manager,
+            CivilCaseCreate(
+                full_name="Сидоров Сидор",
+                phone="+7 928 111-22-33",
+                price=Decimal("25000.00"),
+                appeal_date=date(2026, 8, 1),
+                subject="Иск о разделе имущества",
+            ),
+        )
+        payload = b"%PDF-1.4 durable-bytes"
+        updated = add_document(
+            db,
+            manager,
+            case.id,
+            kind=CivilCaseDocumentKind.CLIENT,
+            content=payload,
+            filename="passport.pdf",
+            content_type="application/pdf",
+        )
+        doc_id = next(item.id for item in updated.documents)
+        db.expire_all()
+        reloaded = get_organization_civil_case(db, case_id=case.id, user=manager)
+        document = next(item for item in reloaded.documents if item.id == doc_id)
+        assert document.file_data == payload
+
     def test_concluding_manager_can_be_another_manager(self, db):
         manager = _user(db)
         closer = _user(
