@@ -26,6 +26,7 @@ from app.schemas.client import (
 )
 from app.services.access import (
     client_has_overdue_payments,
+    clients_overdue_map,
     ensure_client_read_access,
     ensure_client_write_access,
     find_pricing_tier,
@@ -39,8 +40,7 @@ from app.services.client_list import (
     CollectionViewFilter,
     SortDirection,
     clients_latest_notes_map,
-    paginate_clients,
-    query_clients,
+    query_clients_page,
 )
 from app.schemas.installment_plan import InstallmentPlanResponse
 from app.schemas.payment import PaymentAlignResult, PaymentResponse
@@ -57,13 +57,14 @@ from app.services.funnel import try_ensure_first_payment_task_for_manager_client
 from app.services.mandatory_payments import build_mandatory_payment_response, create_default_mandatory_payments
 from app.services.document_collection import (
     create_document_collection,
+    document_collections_by_client,
     get_document_collection,
     to_document_collection_response,
 )
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.payment_status import refresh_overdue_statuses
 from app.services.payment_dates import realign_client_legacy_finances
-from app.services.client_finances import get_client_contract_total
+from app.services.client_finances import contract_totals_by_client, get_client_contract_total
 from app.services.client_month_stats import compute_due_month_stats
 
 router = APIRouter()
@@ -154,16 +155,30 @@ def _to_client_response(
     document_collection=None,
     *,
     document_collection_loaded: bool = False,
+    has_overdue: bool | None = None,
+    contract_total: Decimal | None = None,
+    contract_total_loaded: bool = False,
+    commission_collector_name: str | None = None,
+    commission_collector_loaded: bool = False,
 ) -> ClientResponse:
     data = ClientResponse.model_validate(client)
-    data.has_overdue = client_has_overdue_payments(db, client.id)
+    data.has_overdue = (
+        has_overdue
+        if has_overdue is not None
+        else client_has_overdue_payments(db, client.id)
+    )
     if not document_collection_loaded:
         document_collection = get_document_collection(db, client.id)
     if document_collection is not None:
         data.document_collection_status = document_collection.status
         data.document_collection_paid_date = document_collection.paid_date
-    data.contract_total = get_client_contract_total(db, client.id)
-    if client.manager_first_commission_collected_by is not None:
+    if contract_total_loaded:
+        data.contract_total = contract_total
+    else:
+        data.contract_total = get_client_contract_total(db, client.id)
+    if commission_collector_loaded:
+        data.manager_first_commission_collected_by_name = commission_collector_name
+    elif client.manager_first_commission_collected_by is not None:
         collector = db.get(User, client.manager_first_commission_collected_by)
         if collector is not None:
             data.manager_first_commission_collected_by_name = collector.full_name
@@ -299,9 +314,11 @@ def list_clients(
     if manager_id is not None and current_user.role != UserRole.OWNER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Фильтр по менеджеру только для owner")
 
-    clients = query_clients(
+    page_clients, total, all_ids = query_clients_page(
         db,
         current_user,
+        page=page,
+        page_size=page_size,
         status_filter=status_filter,
         procedure_stage=procedure_stage,
         engagement_stage=engagement_stage,
@@ -316,7 +333,6 @@ def list_clients(
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
-    page_clients, total = paginate_clients(clients, page=page, page_size=page_size)
     total_pages = max(1, (total + page_size - 1) // page_size) if total else 1
 
     due_month_summary = None
@@ -324,17 +340,48 @@ def list_clients(
     if due_month and current_user.role != UserRole.CALL_CENTER:
         due_month_summary, month_stats_by_client = compute_due_month_stats(
             db,
-            [client.id for client in clients],
+            all_ids,
             due_month,
         )
 
+    page_ids = [client.id for client in page_clients]
+    overdue_map = clients_overdue_map(db, page_ids)
+    totals_map = contract_totals_by_client(db, page_ids)
+    collections_map = document_collections_by_client(db, page_ids)
+    collector_ids = [
+        client.manager_first_commission_collected_by
+        for client in page_clients
+        if client.manager_first_commission_collected_by is not None
+    ]
+    collectors = {
+        user.id: user.full_name
+        for user in db.scalars(select(User).where(User.id.in_(collector_ids)))
+    } if collector_ids else {}
+
     items = [
-        _apply_month_stats(_to_client_response(client, db), month_stats_by_client)
+        _apply_month_stats(
+            _to_client_response(
+                client,
+                db,
+                document_collection=collections_map.get(client.id),
+                document_collection_loaded=True,
+                has_overdue=overdue_map.get(client.id, False),
+                contract_total=totals_map.get(client.id),
+                contract_total_loaded=True,
+                commission_collector_name=collectors.get(
+                    client.manager_first_commission_collected_by
+                )
+                if client.manager_first_commission_collected_by
+                else None,
+                commission_collector_loaded=True,
+            ),
+            month_stats_by_client,
+        )
         for client in page_clients
     ]
     notes_map = clients_latest_notes_map(
         db,
-        [client.id for client in page_clients],
+        page_ids,
         due_month=due_month,
     )
     for item in items:

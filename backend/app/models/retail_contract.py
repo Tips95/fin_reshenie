@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Date, Enum, ForeignKey, Integer, LargeBinary, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -53,6 +53,9 @@ class RetailContract(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     signed_contract_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     signed_contract_pdf_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signed_contract_pdf_data: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True, deferred=True
+    )
     is_deleted: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     organization: Mapped["Organization"] = relationship(back_populates="retail_contracts")

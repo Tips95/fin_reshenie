@@ -43,6 +43,18 @@ def get_document_collection(db: Session, client_id: UUID) -> DocumentCollection 
     return db.scalar(select(DocumentCollection).where(DocumentCollection.client_id == client_id))
 
 
+def document_collections_by_client(
+    db: Session,
+    client_ids: list[UUID],
+) -> dict[UUID, DocumentCollection]:
+    if not client_ids:
+        return {}
+    rows = db.scalars(
+        select(DocumentCollection).where(DocumentCollection.client_id.in_(client_ids))
+    )
+    return {item.client_id: item for item in rows}
+
+
 def ensure_document_collection(db: Session, client: Client) -> DocumentCollection:
     item = get_document_collection(db, client.id)
     if item is None:

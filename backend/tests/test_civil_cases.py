@@ -314,7 +314,7 @@ class TestCivilCases:
         assert stats.income_this_month == Decimal("10000.00")
 
     def test_manager_uploads_client_docs_executor_uploads_prepared(self, db, monkeypatch):
-        monkeypatch.setattr("app.services.civil_cases.save_bytes", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr("app.services.civil_cases.save_bytes_best_effort", lambda *_args, **_kwargs: None)
         monkeypatch.setattr("app.services.civil_cases.delete_storage_key", lambda *_args, **_kwargs: None)
         manager = _user(db)
         executor = _user(
@@ -394,8 +394,8 @@ class TestCivilCases:
 
     def test_document_bytes_persist_without_disk(self, db, monkeypatch):
         monkeypatch.setattr(
-            "app.services.civil_cases.save_bytes",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("no disk")),
+            "app.services.civil_cases.save_bytes_best_effort",
+            lambda *_args, **_kwargs: None,
         )
         manager = _user(db)
         case = create_civil_case(
@@ -452,7 +452,7 @@ class TestCivilCases:
         assert response.concluding_manager_name == "Менеджер Заключил"
 
     def test_manager_can_assign_self_as_executor(self, db, monkeypatch):
-        monkeypatch.setattr("app.services.civil_cases.save_bytes", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr("app.services.civil_cases.save_bytes_best_effort", lambda *_args, **_kwargs: None)
         manager = _user(db)
         case = create_civil_case(
             db,

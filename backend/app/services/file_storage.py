@@ -205,6 +205,14 @@ def save_bytes(storage_key: str, content: bytes) -> None:
     path.write_bytes(content)
 
 
+def save_bytes_best_effort(storage_key: str, content: bytes) -> None:
+    """Disk is optional cache on Timeweb (no volumes). Never fail the request."""
+    try:
+        save_bytes(storage_key, content)
+    except OSError:
+        pass
+
+
 def resolve_storage_path(storage_key: str) -> Path:
     root = uploads_root().resolve()
     path = (root / storage_key).resolve()
@@ -219,3 +227,23 @@ def delete_storage_key(storage_key: str | None) -> None:
     path = resolve_storage_path(storage_key)
     if path.exists():
         path.unlink()
+
+
+def stored_pdf_response(
+    *,
+    file_data: bytes | None,
+    storage_key: str | None,
+    filename: str,
+    missing_detail: str = "Файл не найден",
+):
+    """Prefer durable DB bytes; fall back to local disk for legacy uploads."""
+    from fastapi.responses import FileResponse, Response
+
+    headers = {"Content-Disposition": attachment_content_disposition(filename)}
+    if file_data:
+        return Response(content=file_data, media_type="application/pdf", headers=headers)
+    if storage_key:
+        path = resolve_storage_path(storage_key)
+        if path.exists():
+            return FileResponse(path, media_type="application/pdf", headers=headers)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=missing_detail)

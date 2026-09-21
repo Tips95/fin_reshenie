@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -56,14 +56,13 @@ from app.services.retail_dashboard import (
 from app.services.retail_deals import create_retail_client, create_retail_deal, resolve_investor_id
 from app.services.retail_deletion import hard_delete_retail_client, hard_delete_retail_contract
 from app.services.file_storage import (
-    attachment_content_disposition,
     delete_storage_key,
     read_and_validate_pdf,
-    resolve_storage_path,
     retail_client_guarantor_passport_key,
     retail_client_passport_key,
     retail_contract_signed_key,
-    save_bytes,
+    save_bytes_best_effort,
+    stored_pdf_response,
 )
 from app.services.retail_payments import cancel_retail_payment, record_retail_payment
 from app.services.validation import format_passport_display
@@ -266,9 +265,10 @@ async def upload_client_passport_pdf(
     content, filename = await read_and_validate_pdf(file)
     storage_key = retail_client_passport_key(current_user.organization_id, client.id)
     delete_storage_key(client.passport_pdf_path)
-    save_bytes(storage_key, content)
+    save_bytes_best_effort(storage_key, content)
     client.passport_pdf_path = storage_key
     client.passport_pdf_filename = filename
+    client.passport_pdf_data = content
     log_audit(
         db,
         user=current_user,
@@ -288,23 +288,17 @@ def download_client_passport_pdf(
     client_id: UUID,
     current_user: User = Depends(require_retail_user),
     db: Session = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
     _ensure_investor_client_access(db, current_user, client.id)
-    if not client.passport_pdf_path:
+    if not client.passport_pdf_path and not client.passport_pdf_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта не загружен")
-    path = resolve_storage_path(client.passport_pdf_path)
-    if not path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
-    return FileResponse(
-        path,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": attachment_content_disposition(
-                client.passport_pdf_filename or "passport.pdf"
-            )
-        },
+    return stored_pdf_response(
+        file_data=client.passport_pdf_data,
+        storage_key=client.passport_pdf_path,
+        filename=client.passport_pdf_filename or "passport.pdf",
+        missing_detail="Файл не найден — загрузите документ заново",
     )
 
 
@@ -316,12 +310,13 @@ def delete_client_passport_pdf(
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
-    if not client.passport_pdf_path:
+    if not client.passport_pdf_path and not client.passport_pdf_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта не загружен")
     delete_storage_key(client.passport_pdf_path)
     old_name = client.passport_pdf_filename
     client.passport_pdf_path = None
     client.passport_pdf_filename = None
+    client.passport_pdf_data = None
     log_audit(
         db,
         user=current_user,
@@ -349,9 +344,10 @@ async def upload_guarantor_passport_pdf(
     content, filename = await read_and_validate_pdf(file)
     storage_key = retail_client_guarantor_passport_key(current_user.organization_id, client.id)
     delete_storage_key(client.guarantor_passport_pdf_path)
-    save_bytes(storage_key, content)
+    save_bytes_best_effort(storage_key, content)
     client.guarantor_passport_pdf_path = storage_key
     client.guarantor_passport_pdf_filename = filename
+    client.guarantor_passport_pdf_data = content
     log_audit(
         db,
         user=current_user,
@@ -371,23 +367,20 @@ def download_guarantor_passport_pdf(
     client_id: UUID,
     current_user: User = Depends(require_retail_user),
     db: Session = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
     _ensure_investor_client_access(db, current_user, client.id)
-    if not client.guarantor_passport_pdf_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта поручителя не загружен")
-    path = resolve_storage_path(client.guarantor_passport_pdf_path)
-    if not path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
-    return FileResponse(
-        path,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": attachment_content_disposition(
-                client.guarantor_passport_pdf_filename or "guarantor-passport.pdf"
-            )
-        },
+    if not client.guarantor_passport_pdf_path and not client.guarantor_passport_pdf_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF паспорта поручителя не загружен",
+        )
+    return stored_pdf_response(
+        file_data=client.guarantor_passport_pdf_data,
+        storage_key=client.guarantor_passport_pdf_path,
+        filename=client.guarantor_passport_pdf_filename or "guarantor-passport.pdf",
+        missing_detail="Файл не найден — загрузите документ заново",
     )
 
 
@@ -399,12 +392,16 @@ def delete_guarantor_passport_pdf(
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
-    if not client.guarantor_passport_pdf_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта поручителя не загружен")
+    if not client.guarantor_passport_pdf_path and not client.guarantor_passport_pdf_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF паспорта поручителя не загружен",
+        )
     delete_storage_key(client.guarantor_passport_pdf_path)
     old_name = client.guarantor_passport_pdf_filename
     client.guarantor_passport_pdf_path = None
     client.guarantor_passport_pdf_filename = None
+    client.guarantor_passport_pdf_data = None
     log_audit(
         db,
         user=current_user,
@@ -586,9 +583,10 @@ async def upload_signed_contract_pdf(
     content, filename = await read_and_validate_pdf(file)
     storage_key = retail_contract_signed_key(current_user.organization_id, contract.id)
     delete_storage_key(contract.signed_contract_pdf_path)
-    save_bytes(storage_key, content)
+    save_bytes_best_effort(storage_key, content)
     contract.signed_contract_pdf_path = storage_key
     contract.signed_contract_pdf_filename = filename
+    contract.signed_contract_pdf_data = content
     log_audit(
         db,
         user=current_user,
@@ -615,23 +613,17 @@ def download_signed_contract_pdf(
     contract_id: UUID,
     current_user: User = Depends(require_retail_user),
     db: Session = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     ensure_retail_organization(db, current_user)
     contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
     ensure_contract_access(db, current_user, contract)
-    if not contract.signed_contract_pdf_path:
+    if not contract.signed_contract_pdf_path and not contract.signed_contract_pdf_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписанный договор не загружен")
-    path = resolve_storage_path(contract.signed_contract_pdf_path)
-    if not path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
-    return FileResponse(
-        path,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": attachment_content_disposition(
-                contract.signed_contract_pdf_filename or "contract.pdf"
-            )
-        },
+    return stored_pdf_response(
+        file_data=contract.signed_contract_pdf_data,
+        storage_key=contract.signed_contract_pdf_path,
+        filename=contract.signed_contract_pdf_filename or "contract.pdf",
+        missing_detail="Файл не найден — загрузите документ заново",
     )
 
 
@@ -643,12 +635,13 @@ def delete_signed_contract_pdf(
 ) -> RetailContractDetail:
     ensure_retail_organization(db, current_user)
     contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
-    if not contract.signed_contract_pdf_path:
+    if not contract.signed_contract_pdf_path and not contract.signed_contract_pdf_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписанный договор не загружен")
     delete_storage_key(contract.signed_contract_pdf_path)
     old_name = contract.signed_contract_pdf_filename
     contract.signed_contract_pdf_path = None
     contract.signed_contract_pdf_filename = None
+    contract.signed_contract_pdf_data = None
     log_audit(
         db,
         user=current_user,

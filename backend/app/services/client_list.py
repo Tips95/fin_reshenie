@@ -3,7 +3,7 @@ from datetime import date
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
@@ -37,6 +37,15 @@ class CollectionViewFilter(str, Enum):
     ALL = "all"
 
 
+_SQL_SORTABLE = {
+    ClientSortField.FULL_NAME: Client.full_name,
+    ClientSortField.CONTRACT_DATE: Client.contract_date,
+    ClientSortField.DEBT_AMOUNT: Client.debt_amount,
+    ClientSortField.STATUS: Client.status,
+    ClientSortField.CREATED_AT: Client.created_at,
+}
+
+
 def sort_clients(
     db: Session,
     clients: list[Client],
@@ -66,7 +75,7 @@ def sort_clients(
     return clients
 
 
-def query_clients(
+def _build_clients_stmt(
     db: Session,
     user: User,
     *,
@@ -74,16 +83,13 @@ def query_clients(
     procedure_stage: ProcedureStage | None = None,
     engagement_stage: EngagementStage | None = None,
     manager_id: UUID | None = None,
-    overdue: bool | None = None,
     phone: str | None = None,
     name: str | None = None,
     contract_month: str | None = None,
     due_month: str | None = None,
     collection_view: CollectionViewFilter | None = None,
     collection_paid_month: str | None = None,
-    sort_by: ClientSortField = ClientSortField.CREATED_AT,
-    sort_dir: SortDirection = SortDirection.DESC,
-) -> list[Client]:
+) -> Select:
     stmt = select(Client)
     stmt = apply_client_visibility_filter(stmt, user)
 
@@ -168,6 +174,42 @@ def query_clients(
             DocumentCollection.paid_date <= paid_to,
         )
 
+    return stmt
+
+
+def query_clients(
+    db: Session,
+    user: User,
+    *,
+    status_filter: ClientStatus | None = None,
+    procedure_stage: ProcedureStage | None = None,
+    engagement_stage: EngagementStage | None = None,
+    manager_id: UUID | None = None,
+    overdue: bool | None = None,
+    phone: str | None = None,
+    name: str | None = None,
+    contract_month: str | None = None,
+    due_month: str | None = None,
+    collection_view: CollectionViewFilter | None = None,
+    collection_paid_month: str | None = None,
+    sort_by: ClientSortField = ClientSortField.CREATED_AT,
+    sort_dir: SortDirection = SortDirection.DESC,
+) -> list[Client]:
+    """Full filtered+sorted list (exports). Prefer query_clients_page for UI lists."""
+    stmt = _build_clients_stmt(
+        db,
+        user,
+        status_filter=status_filter,
+        procedure_stage=procedure_stage,
+        engagement_stage=engagement_stage,
+        manager_id=manager_id,
+        phone=phone,
+        name=name,
+        contract_month=contract_month,
+        due_month=due_month,
+        collection_view=collection_view,
+        collection_paid_month=collection_paid_month,
+    )
     clients = list(db.scalars(stmt).unique())
 
     if overdue is not None:
@@ -179,6 +221,91 @@ def query_clients(
         ]
 
     return sort_clients(db, clients, sort_by=sort_by, sort_dir=sort_dir)
+
+
+def query_clients_page(
+    db: Session,
+    user: User,
+    *,
+    page: int,
+    page_size: int,
+    status_filter: ClientStatus | None = None,
+    procedure_stage: ProcedureStage | None = None,
+    engagement_stage: EngagementStage | None = None,
+    manager_id: UUID | None = None,
+    overdue: bool | None = None,
+    phone: str | None = None,
+    name: str | None = None,
+    contract_month: str | None = None,
+    due_month: str | None = None,
+    collection_view: CollectionViewFilter | None = None,
+    collection_paid_month: str | None = None,
+    sort_by: ClientSortField = ClientSortField.CREATED_AT,
+    sort_dir: SortDirection = SortDirection.DESC,
+) -> tuple[list[Client], int, list[UUID]]:
+    """Page of clients + total + all matching IDs (for due_month summary).
+
+    Uses SQL LIMIT/OFFSET when overdue filter/sort is not required.
+    Falls back to in-memory path for overdue (same semantics as before).
+    """
+    needs_overdue_memory = overdue is not None or sort_by == ClientSortField.OVERDUE
+    if needs_overdue_memory:
+        clients = query_clients(
+            db,
+            user,
+            status_filter=status_filter,
+            procedure_stage=procedure_stage,
+            engagement_stage=engagement_stage,
+            manager_id=manager_id,
+            overdue=overdue,
+            phone=phone,
+            name=name,
+            contract_month=contract_month,
+            due_month=due_month,
+            collection_view=collection_view,
+            collection_paid_month=collection_paid_month,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+        )
+        all_ids = [client.id for client in clients]
+        page_clients, total = paginate_clients(clients, page=page, page_size=page_size)
+        return page_clients, total, all_ids
+
+    stmt = _build_clients_stmt(
+        db,
+        user,
+        status_filter=status_filter,
+        procedure_stage=procedure_stage,
+        engagement_stage=engagement_stage,
+        manager_id=manager_id,
+        phone=phone,
+        name=name,
+        contract_month=contract_month,
+        due_month=due_month,
+        collection_view=collection_view,
+        collection_paid_month=collection_paid_month,
+    )
+
+    order_col = _SQL_SORTABLE.get(sort_by, Client.created_at)
+    order_expr = order_col.desc() if sort_dir == SortDirection.DESC else order_col.asc()
+
+    total = int(
+        db.scalar(
+            select(func.count()).select_from(
+                stmt.with_only_columns(Client.id).distinct().order_by(None).subquery()
+            )
+        )
+        or 0
+    )
+    if total == 0:
+        return [], 0, []
+
+    all_ids = list(db.scalars(stmt.with_only_columns(Client.id).distinct().order_by(None)))
+
+    offset = (page - 1) * page_size
+    page_stmt = stmt.order_by(order_expr, Client.id.asc()).offset(offset).limit(page_size)
+    page_clients = list(db.scalars(page_stmt).unique())
+    return page_clients, total, all_ids
 
 
 def clients_latest_notes_map(

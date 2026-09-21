@@ -31,7 +31,7 @@ from app.services.file_storage import (
     civil_case_document_key,
     delete_civil_case_files,
     delete_storage_key,
-    save_bytes,
+    save_bytes_best_effort,
 )
 
 
@@ -431,10 +431,7 @@ def add_document(
     document_id = uuid4()
     storage_key = civil_case_document_key(user.organization_id, case.id, document_id, filename)
     # DB is the durable store (deploy has no upload volume). Disk is a local cache only.
-    try:
-        save_bytes(storage_key, content)
-    except OSError:
-        pass
+    save_bytes_best_effort(storage_key, content)
     document = CivilCaseDocument(
         id=document_id,
         civil_case_id=case.id,

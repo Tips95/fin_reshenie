@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -23,8 +23,12 @@ class RetailClient(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     guarantor_passport: Mapped[str | None] = mapped_column(String(64), nullable=True)
     passport_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     passport_pdf_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    passport_pdf_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
     guarantor_passport_pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     guarantor_passport_pdf_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    guarantor_passport_pdf_data: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True, deferred=True
+    )
     is_deleted: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     organization: Mapped["Organization"] = relationship(back_populates="retail_clients")
