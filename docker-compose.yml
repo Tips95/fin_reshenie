@@ -13,7 +13,7 @@ services:
       - "${NGINX_PORT:-9000}:80"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
       frontend:
         condition: service_started
     networks:
@@ -30,7 +30,7 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     networks:
       - rassrochka-net
 

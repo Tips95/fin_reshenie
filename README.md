@@ -105,15 +105,33 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up --build -d
 - **nginx** — первый сервис (на него вешается домен), порт `9000`
 - **PostgreSQL** — Managed DB в Timeweb (не в compose, т.к. volumes запрещены)
 - миграции и seed — при старте backend
-- имена контейнеров не фиксируются (`container_name` не используется), чтобы redeploy на App Platform не падал с `Conflict`
+- имена контейнеров **не фиксируются** (`container_name` нет у nginx/frontend/backend) —
+  Compose сам даёт имена вида `<project>-backend-1`
 
-Если деплой всё же упал с `container name is already in use`, один раз удалите старые контейнеры на ноде (SSH или консоль Timeweb):
+#### Если деплой упал: `container name is already in use`
+
+Сборка образа тут ни при чём: новый деплой не смог создать контейнер, потому что
+старый с тем же именем остался после прошлого запуска.
+
+**Что сделать один раз** (SSH на ноду App Platform или консоль Timeweb):
 
 ```bash
-docker rm -f rassrochka-backend rassrochka-frontend rassrochka-nginx
+# посмотреть «зависшие» контейнеры проекта
+docker ps -a --format '{{.ID}} {{.Names}} {{.Status}}' | grep -E 'backend|frontend|nginx'
+
+# удалить конфликтующий (подставьте имя/ID из ошибки, например ...-backend-1)
+docker rm -f <container_id_or_name>
+
+# или снести все остановленные контейнеры compose-проекта и сирот
+docker compose -f docker-compose.yml down --remove-orphans
+docker container prune -f
 ```
 
-После этого перезапустите деплой.
+После очистки **перезапустите деплой** в панели Timeweb.
+
+Если платформа уже подняла новый набор с другим суффиксом (`-f58aaf25-...`) —
+сайт может работать; старые контейнеры всё равно лучше удалить, чтобы следующий
+деплой снова не упёрся в Conflict.
 
 Остановка локального стека:
 
