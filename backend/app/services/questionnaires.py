@@ -185,7 +185,12 @@ def list_questionnaires(
     if lead_status is not None:
         stmt = stmt.where(ClientQuestionnaire.lead_status == lead_status)
     if manager_id is not None:
-        stmt = stmt.where(ClientQuestionnaire.assigned_manager_id == manager_id)
+        stmt = stmt.where(
+            or_(
+                ClientQuestionnaire.assigned_manager_id == manager_id,
+                ClientQuestionnaire.created_by_id == manager_id,
+            )
+        )
     if created_by_id is not None:
         stmt = stmt.where(ClientQuestionnaire.created_by_id == created_by_id)
     if created_on is not None:

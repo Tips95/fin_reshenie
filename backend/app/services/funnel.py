@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.client import Client
 from app.models.enums import (
+    ClientStatus,
     EngagementStage,
     ProcedureStage,
     TaskSource,
@@ -297,6 +298,8 @@ def sync_overdue_tasks(db: Session, user: User) -> None:
         client_id = plan_client_map.get(schedule.installment_plan_id)
         client = client_map.get(client_id)
         if client is None:
+            continue
+        if client.status in (ClientStatus.CANCELLED, ClientStatus.COMPLETED):
             continue
 
         if not is_schedule_overdue(schedule, today):

@@ -231,8 +231,12 @@ class TestQuestionnaireVisibility:
             full_name="Второй",
             organization=first.organization,
         )
-        mine = create_questionnaire(db, first, _minimal_payload(full_name="Мой клиент"))
-        create_questionnaire(db, second, _minimal_payload(full_name="Чужой клиент"))
+        mine = create_questionnaire(
+            db, first, _minimal_payload(full_name="Мой клиент", phone="+7 928 111-11-11")
+        )
+        create_questionnaire(
+            db, second, _minimal_payload(full_name="Чужой клиент", phone="+7 928 222-22-22")
+        )
 
         ids = {item.id for item in list_questionnaires(db, first)}
         assert ids == {mine.id}
@@ -256,8 +260,12 @@ class TestQuestionnaireVisibility:
             full_name="Второй",
             organization=owner.organization,
         )
-        one = create_questionnaire(db, first, _minimal_payload(full_name="Клиент А"))
-        two = create_questionnaire(db, second, _minimal_payload(full_name="Клиент Б"))
+        one = create_questionnaire(
+            db, first, _minimal_payload(full_name="Клиент А", phone="+7 928 111-11-11")
+        )
+        two = create_questionnaire(
+            db, second, _minimal_payload(full_name="Клиент Б", phone="+7 928 222-22-22")
+        )
 
         ids = {item.id for item in list_questionnaires(db, owner)}
         assert ids == {one.id, two.id}
@@ -281,8 +289,12 @@ class TestQuestionnaireVisibility:
             full_name="Второй",
             organization=staff.organization,
         )
-        one = create_questionnaire(db, first, _minimal_payload(full_name="Клиент А"))
-        two = create_questionnaire(db, second, _minimal_payload(full_name="Клиент Б"))
+        one = create_questionnaire(
+            db, first, _minimal_payload(full_name="Клиент А", phone="+7 928 111-11-11")
+        )
+        two = create_questionnaire(
+            db, second, _minimal_payload(full_name="Клиент Б", phone="+7 928 222-22-22")
+        )
 
         ids = {item.id for item in list_questionnaires(db, staff)}
         assert ids == {one.id, two.id}
@@ -364,18 +376,19 @@ class TestLeadPipeline:
     def test_no_answer_queues_lead_for_a_later_call(self, db):
         user = _org_user(db)
         item = create_questionnaire(db, user, _minimal_payload())
+        future_call = local_today() + timedelta(days=5)
         item = log_questionnaire_call(
             db,
             user,
             item.id,
             QuestionnaireCallCreate(
                 outcome=LeadCallOutcome.NO_ANSWER,
-                next_call_at=date(2026, 9, 20),
+                next_call_at=future_call,
                 comment="Сбросил",
             ),
         )
         assert item.lead_status == LeadStatus.NO_ANSWER
-        assert item.next_call_at == date(2026, 9, 20)
+        assert item.next_call_at == future_call
         assert item.call_attempts == 1
         assert item.last_call_at is not None
 
@@ -543,7 +556,9 @@ class TestLeadPipeline:
             db, email="second@test.local", full_name="Борисов Борис", organization=head.organization
         )
 
-        one = create_questionnaire(db, first, _minimal_payload(full_name="Иванов Иван Иванович"))
+        one = create_questionnaire(
+            db, first, _minimal_payload(full_name="Иванов Иван Иванович", phone="+7 928 111-11-11")
+        )
         log_questionnaire_call(
             db, first, one.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.NO_ANSWER)
         )
@@ -552,7 +567,9 @@ class TestLeadPipeline:
         )
         create_client_from_questionnaire(db, first, one.id, QuestionnaireCreateClientRequest())
 
-        two = create_questionnaire(db, second, _minimal_payload(full_name="Петров Пётр"))
+        two = create_questionnaire(
+            db, second, _minimal_payload(full_name="Петров Пётр", phone="+7 928 222-22-22")
+        )
         log_questionnaire_call(
             db, second, two.id, QuestionnaireCallCreate(outcome=LeadCallOutcome.ANSWERED)
         )
@@ -600,9 +617,9 @@ class TestLeadPipeline:
             full_name="Борисов Борис",
             organization=head.organization,
         )
-        create_questionnaire(db, first, _minimal_payload(full_name="Один"))
-        create_questionnaire(db, first, _minimal_payload(full_name="Два"))
-        create_questionnaire(db, second, _minimal_payload(full_name="Три"))
+        create_questionnaire(db, first, _minimal_payload(full_name="Один", phone="+7 928 111-11-11"))
+        create_questionnaire(db, first, _minimal_payload(full_name="Два", phone="+7 928 222-22-22"))
+        create_questionnaire(db, second, _minimal_payload(full_name="Три", phone="+7 928 333-33-33"))
 
         today = local_today()
         counts = lead_counts_by_day(db, head, date_from=today, date_to=today)

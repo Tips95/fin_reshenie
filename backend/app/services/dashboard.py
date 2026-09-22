@@ -190,7 +190,7 @@ def _dashboard_activity_fields(
     clients: list[Client],
     overdue_map: dict,
 ) -> tuple[int, list[DashboardOverdueClientItem]]:
-    if user.role not in (UserRole.OWNER, UserRole.MANAGER):
+    if user.role not in (UserRole.OWNER, UserRole.MANAGER, UserRole.HEAD_MANAGER):
         return 0, []
 
     client_ids = [client.id for client in clients]
@@ -279,15 +279,18 @@ def get_dashboard_summary(
     total_remainder = Decimal("0.00")
 
     if client_ids:
-        schedules = list(
-            db.scalars(
-                select(PaymentSchedule)
-                .join(InstallmentPlan, InstallmentPlan.id == PaymentSchedule.installment_plan_id)
-                .where(InstallmentPlan.client_id.in_(client_ids))
-            )
+        active_overdue_ids = {
+            client.id
+            for client in clients
+            if client.status == ClientStatus.ACTIVE
+        }
+        schedule_rows = db.execute(
+            select(InstallmentPlan.client_id, PaymentSchedule)
+            .join(PaymentSchedule, PaymentSchedule.installment_plan_id == InstallmentPlan.id)
+            .where(InstallmentPlan.client_id.in_(client_ids))
         )
 
-        for item in schedules:
+        for client_id, item in schedule_rows:
             remainder = _schedule_remainder(item.planned_amount, item.paid_amount)
             if remainder <= Decimal("0.00"):
                 continue
@@ -297,7 +300,10 @@ def get_dashboard_summary(
             if month_start <= item.due_date <= month_end:
                 expected_this_month += remainder
 
-            if payment_window_end(effective_due_date(item)) < today:
+            if (
+                client_id in active_overdue_ids
+                and payment_window_end(effective_due_date(item)) < today
+            ):
                 overdue_amount += remainder
 
     collected_this_month = Decimal("0.00")

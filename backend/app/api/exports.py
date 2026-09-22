@@ -53,8 +53,11 @@ def export_clients(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> Response:
-    if manager_id is not None and current_user.role != UserRole.OWNER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Фильтр по менеджеру только для owner")
+    if manager_id is not None and current_user.role not in (UserRole.OWNER, UserRole.HEAD_MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Фильтр по менеджеру только для руководителя или начальника отдела",
+        )
 
     clients = query_clients(
         db,

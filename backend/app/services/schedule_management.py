@@ -59,6 +59,47 @@ def waive_schedule_overdue(
     return schedule
 
 
+def clear_overdue_for_cancelled_client(db: Session, client_id) -> None:
+    """Отменённый клиент не должен висеть в просрочках и задачах."""
+    from datetime import date
+
+    from app.models.enums import TaskStatus, TaskType
+    from app.models.manager_task import ManagerTask
+
+    plan_ids = list(
+        db.scalars(select(InstallmentPlan.id).where(InstallmentPlan.client_id == client_id))
+    )
+    if plan_ids:
+        schedules = list(
+            db.scalars(
+                select(PaymentSchedule).where(PaymentSchedule.installment_plan_id.in_(plan_ids))
+            )
+        )
+        for schedule in schedules:
+            if schedule.status == PaymentScheduleStatus.PAID:
+                continue
+            schedule.overdue_waived = True
+            if schedule.paid_amount > Decimal("0.00"):
+                schedule.status = PaymentScheduleStatus.PARTIAL
+            else:
+                schedule.status = PaymentScheduleStatus.PENDING
+
+    open_tasks = list(
+        db.scalars(
+            select(ManagerTask).where(
+                ManagerTask.client_id == client_id,
+                ManagerTask.task_type == TaskType.OVERDUE_PAYMENT,
+                ManagerTask.status == TaskStatus.OPEN,
+            )
+        )
+    )
+    today = date.today()
+    for task in open_tasks:
+        task.status = TaskStatus.DISMISSED
+        task.completed_at = today
+        task.completion_note = "Клиент отменён"
+
+
 def update_schedule_item(
     db: Session,
     schedule: PaymentSchedule,

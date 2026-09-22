@@ -193,6 +193,111 @@ def convert_client_to_bankruptcy(
     return client
 
 
+def revert_client_to_document_collection(db: Session, client: Client) -> Client:
+    """Случайный перевод на банкротство → обратно на сбор.
+
+    Оплата сбора сохраняется. График и обязательные платежи удаляются только
+    если по ним ещё не было реальных оплат.
+    """
+    from datetime import date as date_cls
+
+    from app.models.client_mandatory_payment import ClientMandatoryPayment
+    from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRecord
+    from app.models.enums import TaskStatus, TaskType
+    from app.models.manager_task import ManagerTask
+    from app.models.payment import Payment
+    from app.models.payment_schedule import PaymentSchedule
+
+    if client.engagement_stage != EngagementStage.BANKRUPTCY:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Клиент не на этапе банкротства",
+        )
+
+    collection = get_document_collection(db, client.id)
+    if collection is None or collection.status != DocumentCollectionStatus.PAID:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Вернуть на сбор можно только клиента с зафиксированной оплатой сбора",
+        )
+
+    live_payment = db.scalar(
+        select(Payment.id).where(
+            Payment.client_id == client.id,
+            Payment.is_deleted.is_(False),
+        ).limit(1)
+    )
+    if live_payment is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нельзя вернуть на сбор: по клиенту уже есть платежи рассрочки. Сначала оформите возвраты или отмените платежи.",
+        )
+
+    mandatory_funded = db.scalar(
+        select(ClientMandatoryPayment.id).where(
+            ClientMandatoryPayment.client_id == client.id,
+            ClientMandatoryPayment.paid_amount > Decimal("0.00"),
+        ).limit(1)
+    )
+    mandatory_record = db.scalar(
+        select(ClientMandatoryPaymentRecord.id)
+        .join(
+            ClientMandatoryPayment,
+            ClientMandatoryPayment.id == ClientMandatoryPaymentRecord.mandatory_payment_id,
+        )
+        .where(ClientMandatoryPayment.client_id == client.id)
+        .limit(1)
+    )
+    if mandatory_funded is not None or mandatory_record is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нельзя вернуть на сбор: уже есть оплаты обязательных платежей (депозит / ФУ / суд).",
+        )
+
+    mandatory_rows = list(
+        db.scalars(
+            select(ClientMandatoryPayment).where(ClientMandatoryPayment.client_id == client.id)
+        )
+    )
+
+    plans = list(
+        db.scalars(select(InstallmentPlan).where(InstallmentPlan.client_id == client.id))
+    )
+    plan_ids = [plan.id for plan in plans]
+    if plan_ids:
+        schedules = list(
+            db.scalars(
+                select(PaymentSchedule).where(PaymentSchedule.installment_plan_id.in_(plan_ids))
+            )
+        )
+        for schedule in schedules:
+            db.delete(schedule)
+        for plan in plans:
+            db.delete(plan)
+
+    for item in mandatory_rows:
+        db.delete(item)
+
+    open_tasks = list(
+        db.scalars(
+            select(ManagerTask).where(
+                ManagerTask.client_id == client.id,
+                ManagerTask.task_type == TaskType.FIRST_PAYMENT_RECORD,
+                ManagerTask.status == TaskStatus.OPEN,
+            )
+        )
+    )
+    today = date_cls.today()
+    for task in open_tasks:
+        task.status = TaskStatus.DISMISSED
+        task.completed_at = today
+        task.completion_note = "Клиент возвращён на сбор документов"
+
+    client.engagement_stage = EngagementStage.DOCUMENT_COLLECTION
+    client.debt_amount = Decimal("0.00")
+    return client
+
+
 def get_manager_commissions_overview(
     db: Session,
     user: User,

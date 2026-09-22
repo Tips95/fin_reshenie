@@ -240,3 +240,14 @@ class TestDocumentCollection:
             assert False, "expected HTTPException"
         except Exception as exc:
             assert exc.status_code == 422
+
+    def test_revert_rejected_when_not_bankruptcy(self):
+        from app.services.document_collection import revert_client_to_document_collection
+
+        client = make_client(EngagementStage.DOCUMENT_COLLECTION)
+        try:
+            revert_client_to_document_collection(MagicMock(), client)
+            assert False, "expected HTTPException"
+        except Exception as exc:
+            assert exc.status_code == 422
+            assert "не на этапе банкротства" in exc.detail

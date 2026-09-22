@@ -255,6 +255,7 @@ export default function ClientDetailPage() {
   const [docCollectionAmountsSaving, setDocCollectionAmountsSaving] = useState(false);
   const [docCollectionUnrecording, setDocCollectionUnrecording] = useState(false);
   const [convertSaving, setConvertSaving] = useState(false);
+  const [revertToCollectionSaving, setRevertToCollectionSaving] = useState(false);
   const [commissionSaving, setCommissionSaving] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [convertForm, setConvertForm] = useState({
@@ -1536,6 +1537,34 @@ export default function ClientDetailPage() {
     }
   }
 
+  async function handleRevertToCollection() {
+    if (!client) return;
+    if (
+      !window.confirm(
+        "Вернуть клиента на сбор документов?\n\nГрафик рассрочки и обязательные платежи будут удалены, если по ним ещё не было оплат. Оплата сбора сохранится.",
+      )
+    ) {
+      return;
+    }
+    setRevertToCollectionSaving(true);
+    try {
+      const updated = await documentCollectionApi.revertToCollection(client.id);
+      setClient(updated);
+      setScheduleOpen(false);
+      setActiveTab("overview");
+      showToast("Клиент возвращён на сбор документов");
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError
+          ? error.message
+          : "Не удалось вернуть клиента на сбор",
+        "error",
+      );
+    } finally {
+      setRevertToCollectionSaving(false);
+    }
+  }
+
   if (loading && !client && !loadError) {
     return <LoadingState text="Загрузка карточки..." />;
   }
@@ -2255,6 +2284,21 @@ export default function ClientDetailPage() {
               <Badge tone="success">Переведён на банкротство</Badge>
             )}
           </div>
+          {isBankruptcy && canEditClient && docCollection.status === "paid" ? (
+            <div className="mt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={revertToCollectionSaving}
+                onClick={() => void handleRevertToCollection()}
+              >
+                {revertToCollectionSaving ? "Возврат..." : "Вернуть на сбор документов"}
+              </Button>
+              <p className="mt-1.5 text-[11px] text-muted">
+                Если перевели по ошибке. Работает, пока нет оплат по графику и обязательным платежам.
+              </p>
+            </div>
+          ) : null}
           {!isBankruptcy && canRecordDocCollectionPayment && docCollection.status !== "paid" && (
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <FormField label="Дата поступления в кассу">

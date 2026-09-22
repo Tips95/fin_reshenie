@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Badge, Button, Card, EmptyState, FormField, Input, LoadingState, PageHeader, Pagination, PhoneInput, SectionTitle, Select, StatCard, Toast } from "@/components/ui";
-import { ApiRequestError, clientsApi, exportsApi, getDuplicateClientId, usersApi } from "@/lib/api-client";
+import { ApiRequestError, clientsApi, exportsApi, getDuplicateClientId, questionnairesApi, usersApi } from "@/lib/api-client";
 import {
   buildClientListQuery,
   clientDetailHref,
@@ -18,7 +18,7 @@ import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
 import type { Client, ClientBrief, ClientDueMonthSummary, ClientStatus, ProcedureStage, User } from "@/lib/types";
-import { canManageClients } from "@/lib/organization-features";
+import { canManageClients, canSuperviseLeads } from "@/lib/organization-features";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
 type SortField = ClientListSortField;
@@ -264,8 +264,31 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
           setManagers(users.filter((item) => item.role === "manager" && item.is_active)),
         )
         .catch(() => setManagers([]));
+      return;
     }
-  }, [user?.role]);
+    if (canSuperviseLeads(user)) {
+      questionnairesApi
+        .managers()
+        .then((rows) =>
+          setManagers(
+            rows
+              .filter((item) => item.role === "manager")
+              .map(
+                (item) =>
+                  ({
+                    id: item.id,
+                    full_name: item.full_name,
+                    role: "manager",
+                    is_active: true,
+                  }) as User,
+              ),
+          ),
+        )
+        .catch(() => setManagers([]));
+    }
+  }, [user]);
+
+  const canFilterByManager = canSuperviseLeads(user);
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
@@ -622,7 +645,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                 Только с просрочкой
               </label>
             )}
-            {user?.role === "owner" && managers.length > 0 && (
+            {canFilterByManager && managers.length > 0 && (
               <div className="min-w-[140px] flex-1 sm:w-[180px] sm:flex-none">
                 <label className="mb-0.5 block text-xs text-muted">Менеджер</label>
                 <Select

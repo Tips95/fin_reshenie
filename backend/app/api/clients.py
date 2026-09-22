@@ -311,8 +311,11 @@ def list_clients(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> ClientListResponse:
-    if manager_id is not None and current_user.role != UserRole.OWNER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Фильтр по менеджеру только для owner")
+    if manager_id is not None and current_user.role not in (UserRole.OWNER, UserRole.HEAD_MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Фильтр по менеджеру только для руководителя или начальника отдела",
+        )
 
     page_clients, total, all_ids = query_clients_page(
         db,
@@ -619,6 +622,11 @@ def update_client(
 
     if "contract_date" in updates:
         realign_client_legacy_finances(db, client)
+
+    if updates.get("status") == ClientStatus.CANCELLED:
+        from app.services.schedule_management import clear_overdue_for_cancelled_client
+
+        clear_overdue_for_cancelled_client(db, client.id)
 
     db.commit()
     db.refresh(client)

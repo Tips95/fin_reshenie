@@ -8,7 +8,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
-from app.models.enums import EngagementStage, OrganizationType, UserRole
+from app.models.enums import ClientStatus, EngagementStage, OrganizationType, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.organization import Organization
 from app.models.payment_schedule import PaymentSchedule
@@ -17,6 +17,9 @@ from app.models.user import User
 from app.services.default_pricing_tiers import MIN_DEBT_AMOUNT
 from app.services.organization_defaults import sync_pricing_tiers
 from app.services.schedule_dates import is_schedule_overdue
+
+
+_INACTIVE_OVERDUE_STATUSES = {ClientStatus.CANCELLED, ClientStatus.COMPLETED}
 
 
 def get_organization_client(
@@ -250,8 +253,15 @@ def clients_overdue_map(
         return {}
 
     check_date = today or date.today()
-    schedules_by_client: dict[UUID, list[PaymentSchedule]] = defaultdict(list)
+    inactive_ids = {
+        row_id
+        for row_id, row_status in db.execute(
+            select(Client.id, Client.status).where(Client.id.in_(client_ids))
+        )
+        if row_status in _INACTIVE_OVERDUE_STATUSES
+    }
 
+    schedules_by_client: dict[UUID, list[PaymentSchedule]] = defaultdict(list)
     rows = db.execute(
         select(InstallmentPlan.client_id, PaymentSchedule)
         .join(PaymentSchedule, PaymentSchedule.installment_plan_id == InstallmentPlan.id)
@@ -261,7 +271,14 @@ def clients_overdue_map(
         schedules_by_client[client_id].append(schedule)
 
     return {
-        client_id: any(is_schedule_overdue(schedule, check_date) for schedule in schedules_by_client[client_id])
+        client_id: (
+            False
+            if client_id in inactive_ids
+            else any(
+                is_schedule_overdue(schedule, check_date)
+                for schedule in schedules_by_client.get(client_id, [])
+            )
+        )
         for client_id in client_ids
     }
 

@@ -549,6 +549,10 @@ export const documentCollectionApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  revertToCollection: (clientId: string) =>
+    apiFetch<ClientDetail>(`/clients/${clientId}/revert-to-collection`, {
+      method: "POST",
+    }),
 };
 
 export const questionnairesApi = {

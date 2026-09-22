@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.models.enums import PaymentScheduleStatus
+from app.models.enums import ClientStatus, PaymentScheduleStatus
 from app.services.access import client_has_overdue_payments, clients_overdue_map
 
 
@@ -30,12 +30,24 @@ def make_schedule(
     )
 
 
+def make_db(*, status_rows, schedule_rows):
+    calls = {"n": 0}
+
+    def execute(*_args, **_kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return status_rows
+        return schedule_rows
+
+    return SimpleNamespace(execute=execute)
+
+
 class TestClientsOverdueMap:
     def test_marks_client_with_overdue_schedule(self):
         overdue_schedule = make_schedule()
-        rows = [(CLIENT_A, overdue_schedule)]
-        db = SimpleNamespace(
-            execute=lambda *_args, **_kwargs: rows,
+        db = make_db(
+            status_rows=[(CLIENT_A, ClientStatus.ACTIVE), (CLIENT_B, ClientStatus.ACTIVE)],
+            schedule_rows=[(CLIENT_A, overdue_schedule)],
         )
 
         result = clients_overdue_map(db, [CLIENT_A, CLIENT_B], today=date.today())
@@ -43,10 +55,22 @@ class TestClientsOverdueMap:
         assert result[CLIENT_A] is True
         assert result[CLIENT_B] is False
 
+    def test_cancelled_client_is_never_overdue(self):
+        overdue_schedule = make_schedule()
+        db = make_db(
+            status_rows=[(CLIENT_A, ClientStatus.CANCELLED)],
+            schedule_rows=[(CLIENT_A, overdue_schedule)],
+        )
+
+        result = clients_overdue_map(db, [CLIENT_A], today=date.today())
+
+        assert result[CLIENT_A] is False
+
     def test_single_client_wrapper_uses_batch_map(self):
         overdue_schedule = make_schedule()
-        db = SimpleNamespace(
-            execute=lambda *_args, **_kwargs: [(CLIENT_A, overdue_schedule)],
+        db = make_db(
+            status_rows=[(CLIENT_A, ClientStatus.ACTIVE)],
+            schedule_rows=[(CLIENT_A, overdue_schedule)],
         )
 
         assert client_has_overdue_payments(db, CLIENT_A) is True
@@ -56,8 +80,9 @@ class TestClientsOverdueMap:
             status=PaymentScheduleStatus.PAID,
             paid="10000.00",
         )
-        db = SimpleNamespace(
-            execute=lambda *_args, **_kwargs: [(CLIENT_A, paid_schedule)],
+        db = make_db(
+            status_rows=[(CLIENT_A, ClientStatus.ACTIVE)],
+            schedule_rows=[(CLIENT_A, paid_schedule)],
         )
 
         result = clients_overdue_map(db, [CLIENT_A], today=date.today())

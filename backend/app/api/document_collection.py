@@ -21,6 +21,7 @@ from app.services.document_collection import (
     convert_client_to_bankruptcy,
     get_document_collection,
     record_document_collection_payment,
+    revert_client_to_document_collection,
     to_document_collection_response,
     unrecord_document_collection_payment,
     update_document_collection_amounts,
@@ -181,6 +182,35 @@ def convert_to_bankruptcy(
             client=client,
             actor=current_user,
         )
+    except HTTPException:
+        db.rollback()
+        raise
+    return detail
+
+
+@router.post("/{client_id}/revert-to-collection", response_model=ClientDetailResponse)
+def revert_to_collection(
+    client_id: UUID,
+    current_user: User = Depends(require_owner_or_manager),
+    db: Session = Depends(get_db),
+) -> ClientDetailResponse:
+    from app.api.clients import _build_client_detail
+
+    client = ensure_client_write_access(db, current_user, client_id)
+    try:
+        revert_client_to_document_collection(db, client)
+        log_audit(
+            db,
+            user=current_user,
+            entity_type="client",
+            entity_id=client.id,
+            action=AuditAction.UPDATE,
+            field_name="engagement_stage",
+            old_value="bankruptcy",
+            new_value="document_collection",
+        )
+        detail = _build_client_detail(db, client)
+        db.commit()
     except HTTPException:
         db.rollback()
         raise
