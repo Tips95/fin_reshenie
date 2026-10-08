@@ -36,6 +36,14 @@ class CashBalanceUpdate(BaseModel):
     comment: str | None = Field(default=None, max_length=2000)
 
 
+class CashBalanceActualUpdate(BaseModel):
+    """Зафиксировать фактическую сумму «сейчас в кассе» (пересчёт остатка на начало)."""
+
+    month: str = Field(pattern=r"^\d{4}-\d{2}$")
+    actual_amount: Decimal = Field(decimal_places=2)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
 class CashBalanceCarryForward(BaseModel):
     month: str = Field(pattern=r"^\d{4}-\d{2}$")
 
@@ -44,6 +52,7 @@ class CashBalanceResponse(BaseModel):
     month: str
     opening_amount: Decimal
     comment: str | None = None
+    cash_on_hand: Decimal | None = None
 
 
 class DashboardSummary(BaseModel):

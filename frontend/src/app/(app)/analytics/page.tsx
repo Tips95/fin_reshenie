@@ -17,7 +17,7 @@ import {
 } from "@/components/ui";
 import { analyticsApi } from "@/lib/api-client";
 import { formatDate, formatMoney, formatMonthLabel, formatShortName, statusLabel } from "@/lib/format";
-import type { AnalyticsOverview, ClientProfitItem, ManagerCommissionsOverview } from "@/lib/types";
+import type { AnalyticsOverview, ClientProfitItem } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 type ProfitSortField = "profit" | "collected_total" | "schedule_remainder" | "full_name";
@@ -37,7 +37,6 @@ export default function AnalyticsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [data, setData] = useState<AnalyticsOverview | null>(null);
-  const [commissions, setCommissions] = useState<ManagerCommissionsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [months, setMonths] = useState(6);
   const [sortField, setSortField] = useState<ProfitSortField>("profit");
@@ -45,7 +44,6 @@ export default function AnalyticsPage() {
 
   const isOwner = user?.role === "owner";
   const showOrgExpenses = isOwner;
-  const showManagerCommissions = isOwner;
 
   useEffect(() => {
     if (!isOwner) {
@@ -53,23 +51,11 @@ export default function AnalyticsPage() {
       return;
     }
     setLoading(true);
-    const requests: Promise<void>[] = [
-      analyticsApi
-        .overview(months)
-        .then((overview) => setData(overview))
-        .catch(() => setData(null)),
-    ];
-    if (isOwner) {
-      requests.push(
-        analyticsApi
-          .managerCommissions(months)
-          .then((overview) => setCommissions(overview))
-          .catch(() => setCommissions(null)),
-      );
-    } else {
-      setCommissions(null);
-    }
-    Promise.all(requests).finally(() => setLoading(false));
+    analyticsApi
+      .overview(months)
+      .then((overview) => setData(overview))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
   }, [months, router, isOwner]);
 
   const sortedProfits = useMemo(() => {
@@ -289,89 +275,6 @@ export default function AnalyticsPage() {
           </p>
         )}
       </Card>
-
-      {showManagerCommissions && commissions && (
-        <Card>
-          <SectionTitle
-            title="Комиссии менеджеров за сбор документов"
-            description="1 000 ₽ за каждого клиента с оплаченным сбором документов"
-          />
-          <div className="mb-3 grid gap-2 sm:grid-cols-2">
-            <StatCard
-              label="Всего комиссий"
-              value={formatMoney(commissions.total_commission)}
-              tone="success"
-            />
-            <StatCard
-              label="Оплаченных сборов"
-              value={commissions.paid_count}
-              tone="brand"
-            />
-          </div>
-          {commissions.items.length === 0 ? (
-            <EmptyState>Пока нет оплаченных сборов документов</EmptyState>
-          ) : (
-            <>
-              <div className="desktop-only overflow-x-auto">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Менеджер</th>
-                      <th>Клиент</th>
-                      <th>Дата оплаты</th>
-                      <th>Комиссия</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {commissions.items.map((item) => (
-                      <tr key={item.document_collection_id}>
-                        <td className="font-medium text-foreground">{item.manager_name}</td>
-                        <td>
-                          <Link
-                            href={`/clients/${item.client_id}`}
-                            className="link-brand"
-                          >
-                            {formatShortName(item.client_name)}
-                          </Link>
-                        </td>
-                        <td className="text-muted">{formatDate(item.paid_date)}</td>
-                        <td className="font-semibold text-status-success-text">
-                          {formatMoney(item.commission_amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="mobile-only space-y-2">
-                {commissions.items.map((item) => (
-                  <div key={item.document_collection_id} className="row-card">
-                    <div className="row-card-head">
-                      <Link href={`/clients/${item.client_id}`} className="link-brand text-sm">
-                        {formatShortName(item.client_name)}
-                      </Link>
-                      <span className="text-sm font-semibold text-status-success-text">
-                        {formatMoney(item.commission_amount)}
-                      </span>
-                    </div>
-                    <div className="row-card-grid">
-                      <div>
-                        <p className="row-card-label">Менеджер</p>
-                        <p className="row-card-value">{item.manager_name}</p>
-                      </div>
-                      <div>
-                        <p className="row-card-label">Дата оплаты</p>
-                        <p className="row-card-value">{formatDate(item.paid_date)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </Card>
-      )}
 
       <Card>
         <SectionTitle

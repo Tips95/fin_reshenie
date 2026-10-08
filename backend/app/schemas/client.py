@@ -149,6 +149,15 @@ class ManagerFirstCommissionUpdate(BaseModel):
     collected: bool
 
 
+class ManagerFirstCommissionBulkUpdate(BaseModel):
+    client_ids: list[UUID]
+    collected: bool
+
+
+class ManagerFirstCommissionBulkResult(BaseModel):
+    updated_count: int
+
+
 from app.schemas.installment_plan import InstallmentPlanResponse  # noqa: E402
 from app.schemas.mandatory_payment import MandatoryPaymentResponse  # noqa: E402
 from app.schemas.payment import PaymentResponse  # noqa: E402

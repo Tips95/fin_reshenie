@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -16,16 +17,24 @@ import {
   Select,
   StatCard,
 } from "@/components/ui";
-import { ApiRequestError, expensesApi } from "@/lib/api-client";
+import { ApiRequestError, analyticsApi, clientsApi, expensesApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
   formatAmountInput,
   formatDate,
   formatMoney,
   formatMonthLabel,
+  formatShortName,
   statusLabel,
 } from "@/lib/format";
-import type { ExpenseCategory, ExpenseGroup, ExpensePayment, OneTimeExpense, OperatingExpense } from "@/lib/types";
+import type {
+  ExpenseCategory,
+  ExpenseGroup,
+  ExpensePayment,
+  ManagerFirstCommissionsOverview,
+  OneTimeExpense,
+  OperatingExpense,
+} from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const emptyOneTimeForm = {
@@ -380,6 +389,10 @@ export default function ExpensesPage() {
   const [savingPaymentId, setSavingPaymentId] = useState<string | null>(null);
   const [periodMonth, setPeriodMonth] = useState(currentMonthValue());
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string>("");
+  const [managerPayouts, setManagerPayouts] = useState<ManagerFirstCommissionsOverview | null>(null);
+  const [expandedManagers, setExpandedManagers] = useState<Record<string, boolean>>({});
+  const [markingClientId, setMarkingClientId] = useState<string | null>(null);
+  const [markingManagerKey, setMarkingManagerKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && user.role !== "owner") {
@@ -390,14 +403,16 @@ export default function ExpensesPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [expenseData, paymentData, oneTimeData] = await Promise.all([
+      const [expenseData, paymentData, oneTimeData, payoutData] = await Promise.all([
         expensesApi.list(),
         expensesApi.listPayments(),
         expensesApi.listOneTime({ period_month: periodMonth }),
+        analyticsApi.managerFirstCommissions(periodMonth).catch(() => null),
       ]);
       setExpenses(expenseData);
       setPayments(paymentData);
       setOneTimeExpenses(oneTimeData);
+      setManagerPayouts(payoutData);
     } finally {
       setLoading(false);
     }
@@ -409,6 +424,59 @@ export default function ExpensesPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role, periodMonth]);
+
+  async function refreshManagerPayouts() {
+    const payoutData = await analyticsApi.managerFirstCommissions(periodMonth);
+    setManagerPayouts(payoutData);
+  }
+
+  function toggleManagerExpanded(managerKey: string) {
+    setExpandedManagers((prev) => ({ ...prev, [managerKey]: !prev[managerKey] }));
+  }
+
+  async function handleMarkManagerPayout(clientId: string, collected: boolean) {
+    setMarkingClientId(clientId);
+    setError(null);
+    try {
+      await clientsApi.setManagerFirstCommission(clientId, collected);
+      await refreshManagerPayouts();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError || err instanceof Error
+          ? err.message
+          : "Не удалось обновить менеджерские",
+      );
+    } finally {
+      setMarkingClientId(null);
+    }
+  }
+
+  async function handleMarkManagerPayoutAll(
+    managerKey: string,
+    clientIds: string[],
+    collected: boolean,
+  ) {
+    if (clientIds.length === 0) return;
+    setMarkingManagerKey(managerKey);
+    setError(null);
+    try {
+      await clientsApi.setManagerFirstCommissionBulk(clientIds, collected);
+      await refreshManagerPayouts();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError || err instanceof Error
+          ? err.message
+          : "Не удалось обновить менеджерские",
+      );
+    } finally {
+      setMarkingManagerKey(null);
+    }
+  }
+
+  function managerSurname(fullName: string): string {
+    const part = fullName.trim().split(/\s+/)[0];
+    return part || fullName;
+  }
 
   function normalizeAmount(value: string): string {
     const parsed = Number(value);
@@ -674,6 +742,183 @@ export default function ExpensesPage() {
           hint={`${activeExpenses.length} статей + ${oneTimeExpenses.length} разовых`}
         />
       </div>
+
+      <Card variant="accent">
+        <SectionTitle
+          title={`Менеджерские 10 000 ₽ · ${formatMonthLabel(periodMonth)}`}
+          description="С октября 2026: 10 000 ₽ за каждого клиента с договором на банкротство. 1 000 ₽ за доверку не учитываем"
+          action={
+            <Input
+              type="month"
+              value={periodMonth}
+              onChange={(e) => {
+                setPeriodMonth(e.target.value || currentMonthValue());
+                cancelPaymentEdit();
+              }}
+              className="w-[150px]"
+              aria-label="Месяц менеджерских"
+            />
+          }
+        />
+        {managerPayouts ? (
+          <>
+            <div className="mb-3 grid gap-2 sm:grid-cols-3">
+              <StatCard
+                label="К выдаче"
+                value={formatMoney(managerPayouts.to_pay_amount)}
+                tone="warning"
+                hint={`${managerPayouts.clients_count} клиентов`}
+              />
+              <StatCard
+                label="Выплачено"
+                value={formatMoney(managerPayouts.paid_amount)}
+                tone="success"
+              />
+              <StatCard
+                label="Всего за месяц"
+                value={formatMoney(managerPayouts.total_amount)}
+                tone="brand"
+              />
+            </div>
+            {managerPayouts.managers.length === 0 ? (
+              <EmptyState>За этот месяц нет договоров на банкротство</EmptyState>
+            ) : (
+              <div className="space-y-2">
+                {managerPayouts.managers.map((row) => {
+                  const managerKey = row.manager_id ?? "none";
+                  const expanded = Boolean(expandedManagers[managerKey]);
+                  const unpaidIds = row.clients
+                    .filter((item) => !item.collected)
+                    .map((item) => item.client_id);
+                  const paidIds = row.clients
+                    .filter((item) => item.collected)
+                    .map((item) => item.client_id);
+                  const busy =
+                    markingManagerKey === managerKey ||
+                    row.clients.some((item) => markingClientId === item.client_id);
+
+                  return (
+                    <div
+                      key={managerKey}
+                      className="rounded-md border border-border bg-surface-muted/40"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+                        <button
+                          type="button"
+                          className="link-brand text-left text-sm font-semibold"
+                          onClick={() => toggleManagerExpanded(managerKey)}
+                          aria-expanded={expanded}
+                        >
+                          {managerSurname(row.manager_name)}
+                          <span className="ml-1.5 font-normal text-muted">
+                            {expanded ? "▾" : "▸"} {row.clients_count} кл. · к выдаче{" "}
+                            {formatMoney(row.to_pay_amount)}
+                          </span>
+                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {unpaidIds.length > 0 ? (
+                            <Button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                if (!expanded) toggleManagerExpanded(managerKey);
+                                void handleMarkManagerPayoutAll(managerKey, unpaidIds, true);
+                              }}
+                            >
+                              {markingManagerKey === managerKey
+                                ? "…"
+                                : `Выплатить всё · ${formatMoney(row.to_pay_amount)}`}
+                            </Button>
+                          ) : null}
+                          {paidIds.length > 0 && unpaidIds.length === 0 ? (
+                            <Badge tone="success">Всё выплачено</Badge>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {expanded ? (
+                        <div className="border-t border-border px-3 py-2">
+                          <div className="overflow-x-auto">
+                            <table className="data-table table-cards text-xs">
+                              <thead>
+                                <tr>
+                                  <th>Клиент</th>
+                                  <th>Договор</th>
+                                  <th className="text-right">Сумма</th>
+                                  <th>Статус</th>
+                                  <th />
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {row.clients.map((item) => (
+                                  <tr key={item.client_id}>
+                                    <td data-label="Клиент">
+                                      <Link
+                                        href={`/clients/${item.client_id}`}
+                                        className="link-brand"
+                                      >
+                                        {formatShortName(item.client_name)}
+                                      </Link>
+                                    </td>
+                                    <td data-label="Договор" className="text-muted">
+                                      {formatDate(item.contract_date)}
+                                    </td>
+                                    <td data-label="Сумма" className="text-right font-medium">
+                                      {formatMoney(item.amount)}
+                                    </td>
+                                    <td data-label="Статус">
+                                      <Badge tone={item.collected ? "success" : "warning"}>
+                                        {item.collected ? "Выплачено" : "К выдаче"}
+                                      </Badge>
+                                    </td>
+                                    <td>
+                                      <Button
+                                        type="button"
+                                        variant={item.collected ? "ghost" : "secondary"}
+                                        disabled={busy}
+                                        onClick={() =>
+                                          handleMarkManagerPayout(item.client_id, !item.collected)
+                                        }
+                                      >
+                                        {markingClientId === item.client_id
+                                          ? "…"
+                                          : item.collected
+                                            ? "Снять"
+                                            : "Выплатить"}
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          {unpaidIds.length > 1 ? (
+                            <div className="mt-2 flex justify-end">
+                              <Button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  handleMarkManagerPayoutAll(managerKey, unpaidIds, true)
+                                }
+                              >
+                                {markingManagerKey === managerKey
+                                  ? "…"
+                                  : `Выплатить все (${unpaidIds.length})`}
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : (
+          <EmptyState>Не удалось загрузить менеджерские</EmptyState>
+        )}
+      </Card>
 
       <Card variant="accent">
         <SectionTitle

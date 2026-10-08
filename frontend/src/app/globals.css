@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --background: #f1f2f4;
-  --foreground: #16171a;
-  --muted: #6c6e76;
+  --background: #eef0f3;
+  --foreground: #12131a;
+  --muted: #6a6d78;
 
   --surface: #ffffff;
-  --surface-muted: #f6f7f8;
+  --surface-muted: #f4f5f7;
 
-  --border: #e3e4e8;
-  --border-strong: #c9cbd2;
+  --border: #e2e4ea;
+  --border-strong: #c5c8d2;
 
   /* Фирменный красный из логотипа: светлые ступени — для подложек и пилюль,
      тёмные (800–950) — почти чёрные, для навигации и логотипа. */
@@ -70,24 +70,23 @@
   --radius-lg: 1rem;
   --radius-xl: 1.25rem;
 
-  /* Поверхности держатся на границе, а не на тени: тень осталась только там,
-     где элемент действительно висит над страницей. */
-  --shadow-soft: 0 1px 1px rgb(10 10 12 / 0.03);
-  --shadow-card: 0 1px 2px rgb(10 10 12 / 0.04);
-  --shadow-hover: 0 8px 24px rgb(10 10 12 / 0.1);
-  --shadow-brand: 0 2px 10px rgb(209 16 29 / 0.24);
-  --shadow-hero: 0 10px 30px rgb(10 10 12 / 0.28);
+  /* Поверхности: граница + мягкая глубина без тяжёлого glow. */
+  --shadow-soft: 0 1px 2px rgb(18 19 26 / 0.04);
+  --shadow-card: 0 1px 2px rgb(18 19 26 / 0.04), 0 4px 12px rgb(18 19 26 / 0.03);
+  --shadow-hover: 0 4px 8px rgb(18 19 26 / 0.05), 0 12px 28px rgb(18 19 26 / 0.08);
+  --shadow-brand: 0 2px 8px rgb(209 16 29 / 0.22), 0 6px 16px rgb(209 16 29 / 0.12);
+  --shadow-hero: 0 12px 32px rgb(10 10 12 / 0.28);
 
-  --space-page-x: 1rem;
-  --space-page-y: 0.875rem;
-  --space-card: 1rem;
-  --space-stack: 0.75rem;
-  --space-section: 1rem;
-  --space-group: 1.75rem;
+  --space-page-x: 1.125rem;
+  --space-page-y: 1rem;
+  --space-card: 1.125rem;
+  --space-stack: 0.875rem;
+  --space-section: 1.125rem;
+  --space-group: 2rem;
   --mobile-nav-height: 3.75rem;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 
-  --font-sans: system-ui, sans-serif;
+  --focus-ring: 0 0 0 3px rgb(209 16 29 / 0.18);
 }
 
 @media (max-width: 1023px) {
@@ -100,10 +99,12 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -126,43 +127,40 @@ body {
 }
 
 @layer utilities {
-  /* Фон рабочей области: светлый, с едва заметным красным отсветом в углу —
-     тот же приём, что на логотипе. */
+  /* Фон рабочей области: два мягких пятна — brand и нейтраль. */
   .mesh-bg {
     background-color: var(--background);
-    background-image: radial-gradient(
-      900px 380px at 100% -8%,
-      rgb(229 28 42 / 0.05),
-      transparent 70%
-    );
+    background-image:
+      radial-gradient(920px 420px at 100% -10%, rgb(229 28 42 / 0.07), transparent 62%),
+      radial-gradient(780px 360px at -8% 18%, rgb(18 19 26 / 0.035), transparent 58%);
   }
 }
 
 @layer components {
   .interactive {
-    @apply transition-[color,background-color,border-color,box-shadow,opacity] duration-150 ease-out;
+    @apply transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-200 ease-out;
   }
 
   .surface-card {
-    @apply interactive rounded-lg border border-border bg-surface shadow-card;
+    @apply interactive rounded-xl border border-border bg-surface shadow-card;
   }
 
   .surface-card-hover {
-    @apply surface-card hover:shadow-hover;
+    @apply surface-card hover:border-border-strong hover:shadow-hover;
   }
 
   .page-stack {
-    @apply space-y-3;
+    @apply space-y-3.5;
   }
 
   /* Разделение смысловых блоков страницы: заметно больше, чем расстояние
      между карточками внутри блока. */
   .page-groups {
-    @apply space-y-6;
+    @apply space-y-7;
   }
 
   .page-group {
-    @apply space-y-2;
+    @apply space-y-2.5;
   }
 
   .form-grid {
@@ -176,7 +174,7 @@ body {
   /* На телефоне показатели идут по два в ряд: четыре числа помещаются на один
      экран вместо четырёх прокруток. */
   .stat-grid {
-    @apply grid grid-cols-2 gap-2 xl:grid-cols-4;
+    @apply grid grid-cols-2 gap-2.5 xl:grid-cols-4;
   }
 
   .filter-grid {
@@ -184,12 +182,12 @@ body {
   }
 
   .metric-value {
-    @apply text-2xl font-bold leading-none tracking-tight text-foreground;
+    @apply text-[1.65rem] font-bold leading-none tracking-tight text-foreground;
   }
 
   /* Главная сумма экрана — фирменная красная плашка, как баланс счёта. */
   .metric-hero {
-    @apply relative overflow-hidden rounded-xl px-4 py-4 text-white;
+    @apply relative overflow-hidden rounded-2xl px-5 py-5 text-white;
     background-image: var(--hero-gradient);
     box-shadow: var(--shadow-hero);
   }
@@ -212,7 +210,7 @@ body {
   }
 
   .metric-hero-value {
-    @apply text-[34px] font-bold leading-none tracking-tight text-white;
+    @apply text-[2.125rem] font-bold leading-none tracking-tight text-white sm:text-[2.35rem];
   }
 
   .field-value {
@@ -221,11 +219,15 @@ body {
 
   /* Четыре ступени: заголовок, значение, текст, подпись. */
   .type-caption {
-    @apply text-xs font-medium uppercase tracking-wide text-muted;
+    @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-muted;
   }
 
   .type-hint {
     @apply text-xs leading-snug text-muted;
+  }
+
+  .type-page-title {
+    @apply text-xl font-semibold leading-tight tracking-tight text-foreground;
   }
 
   .alert-danger {
@@ -255,6 +257,12 @@ body {
   .btn-primary:hover {
     border-color: var(--brand-800);
     background-image: var(--brand-gradient-hover);
+    box-shadow: 0 4px 14px rgb(209 16 29 / 0.3);
+    transform: translateY(-0.5px);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
   }
 
   /* Тёмный каркас приложения. */
@@ -283,9 +291,10 @@ body {
   }
 
   .app-header {
-    background-color: rgb(10 10 12 / 0.95);
+    background-color: rgb(10 10 12 / 0.92);
     border-bottom: 1px solid var(--chrome-border);
     color: var(--chrome-text);
+    backdrop-filter: blur(10px);
   }
 
   .chrome-panel {
@@ -307,12 +316,13 @@ body {
   }
 
   .nav-item {
-    @apply interactive flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium;
+    @apply interactive flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium;
   }
 
   .nav-item-active {
-    @apply nav-item text-white shadow-soft;
+    @apply nav-item text-white;
     background-image: var(--brand-gradient);
+    box-shadow: var(--shadow-brand);
   }
 
   .nav-item-inactive {
@@ -324,11 +334,11 @@ body {
   }
 
   .data-table thead tr {
-    @apply border-b border-border bg-surface-muted text-left text-xs uppercase tracking-wide text-muted;
+    @apply border-b border-border bg-surface-muted text-left text-[11px] uppercase tracking-[0.05em] text-muted;
   }
 
   .data-table th {
-    @apply px-3 py-2 font-semibold;
+    @apply px-3 py-2.5 font-semibold;
   }
 
   .data-table tbody tr {
@@ -430,10 +440,27 @@ body {
       grid-column: 2;
       justify-self: end;
     }
+
+    /* Кнопки и формы в колонке действий — на всю ширину карточки */
+    .table-cards td[data-label="Действие"] > *,
+    .table-cards td[data-label="Действия"] > * {
+      justify-self: stretch;
+      width: 100%;
+    }
+
+    .table-cards td[data-label="Действие"] button,
+    .table-cards td[data-label="Действия"] button {
+      width: 100%;
+    }
+
+    .table-cards td[data-label="Действие"] .flex,
+    .table-cards td[data-label="Действия"] .flex {
+      justify-content: stretch;
+    }
   }
 
   .section-title {
-    @apply text-base font-semibold tracking-tight text-foreground;
+    @apply text-[15px] font-semibold tracking-tight text-foreground;
   }
 
   .payment-tile {
@@ -441,7 +468,11 @@ body {
   }
 
   .history-item {
-    @apply interactive flex flex-wrap items-center justify-between gap-1.5 rounded-md border border-border bg-surface px-2 py-1.5 shadow-soft hover:shadow-card;
+    @apply interactive flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2.5 shadow-soft hover:shadow-card lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-1.5 lg:px-2 lg:py-1.5;
+  }
+
+  .history-item-actions {
+    @apply flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-end;
   }
 
   .back-link {
@@ -526,6 +557,18 @@ body {
     @apply pb-[calc(var(--mobile-nav-height)+var(--safe-area-bottom))] lg:pb-0;
   }
 
+  /* Липкая кнопка внесения платежа над нижней навигацией */
+  .mobile-pay-cta {
+    @apply fixed inset-x-0 z-20 border-t border-border px-3 py-2.5 backdrop-blur lg:hidden;
+    bottom: calc(var(--mobile-nav-height) + var(--safe-area-bottom));
+    background-color: color-mix(in srgb, var(--surface) 95%, transparent);
+  }
+
+  /* Отступ под sticky CTA (нижняя навигация уже учтена в .mobile-shell-main) */
+  .mobile-pay-cta-pad {
+    @apply pb-[3.75rem] lg:pb-0;
+  }
+
   .mobile-bottom-nav {
     @apply fixed inset-x-0 bottom-0 z-30 grid shadow-hover backdrop-blur;
     background-color: rgb(10 10 12 / 0.97);
@@ -536,23 +579,23 @@ body {
   }
 
   .mobile-bottom-nav-item {
-    @apply interactive relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-xs font-medium text-chrome-muted;
+    @apply interactive relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[11px] font-semibold tracking-tight text-chrome-muted;
   }
 
   .mobile-bottom-nav-item-active {
     @apply text-white;
   }
 
-  /* Активный раздел подчёркнут красным сверху — как закладка. */
+  /* Активный раздел — тонкая brand-планка сверху. */
   .mobile-bottom-nav-item-active::before {
     content: "";
     position: absolute;
     top: 0;
-    left: 25%;
-    right: 25%;
-    height: 2px;
-    border-radius: 0 0 2px 2px;
-    background-color: var(--brand-500);
+    left: 28%;
+    right: 28%;
+    height: 2.5px;
+    border-radius: 0 0 3px 3px;
+    background-image: var(--brand-gradient);
   }
 
   .mobile-menu-sheet {

@@ -66,7 +66,7 @@ export function Button({
   const variants = {
     primary: "btn-primary border",
     secondary:
-      "border border-border bg-surface text-foreground shadow-soft hover:border-border-strong hover:bg-surface-muted hover:shadow-card",
+      "border border-border-strong bg-surface text-foreground shadow-soft hover:border-border-strong hover:bg-surface-muted hover:shadow-card",
     danger:
       "border border-status-danger-solid bg-status-danger-solid text-white shadow-soft hover:opacity-90 hover:shadow-card",
     ghost:
@@ -76,14 +76,14 @@ export function Button({
   // На телефоне минимальная высота поднимается до комфортной для пальца.
   const sizes = {
     sm: "px-2.5 py-1 text-xs min-h-[30px] lg:min-h-0",
-    md: "px-3.5 py-1.5 text-[13px] min-h-[38px] lg:min-h-[34px]",
+    md: "px-3.5 py-1.5 text-[13px] min-h-[40px] lg:min-h-[36px]",
     lg: "px-4 py-2.5 text-sm min-h-[44px]",
   };
 
   return (
     <button
       className={cn(
-        "interactive inline-flex items-center justify-center gap-1.5 rounded-md font-semibold disabled:cursor-not-allowed disabled:opacity-50",
+        "interactive inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold tracking-tight disabled:cursor-not-allowed disabled:opacity-50",
         sizes[size],
         variants[variant],
         className,
@@ -240,7 +240,7 @@ export function Modal({
 }
 
 const INPUT_CLASS =
-  "interactive min-h-[38px] w-full rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 lg:min-h-[34px]";
+  "interactive min-h-[40px] w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-brand-600 focus:shadow-[var(--focus-ring)] focus:ring-0 lg:min-h-[36px]";
 
 export function Input({
   className,
@@ -464,7 +464,7 @@ export function Select({
   return (
     <select
       className={cn(
-        "interactive min-h-[38px] w-full rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 lg:min-h-[34px]",
+        "interactive min-h-[40px] w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] outline-none focus:border-brand-600 focus:shadow-[var(--focus-ring)] focus:ring-0 lg:min-h-[36px]",
         className,
       )}
       {...props}
@@ -488,7 +488,7 @@ export function Card({
     // Выделенная зона действия: нейтральная подложка, чтобы красный остался
     // только у кнопок, активного меню и просрочки.
     accent:
-      "interactive rounded-lg border border-border-strong bg-surface-muted p-card shadow-soft hover:shadow-card",
+      "interactive rounded-xl border border-border-strong bg-surface-muted p-card shadow-soft hover:shadow-card",
   };
 
   return (
@@ -515,7 +515,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide",
         tones[tone],
       )}
     >
@@ -536,12 +536,12 @@ export function PageHeader({
   back?: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {back}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
-        <div>
-          <h1 className="text-lg font-semibold leading-tight text-foreground">{title}</h1>
-          {subtitle && <p className="mt-0.5 type-hint">{subtitle}</p>}
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
+        <div className="min-w-0">
+          <h1 className="type-page-title">{title}</h1>
+          {subtitle && <p className="mt-1 type-hint">{subtitle}</p>}
         </div>
         {action}
       </div>
@@ -574,10 +574,10 @@ export function SectionTitle({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2 border-b border-border pb-1.5">
-      <div>
+    <div className="mb-2.5 flex flex-wrap items-start justify-between gap-2 border-b border-border pb-2">
+      <div className="min-w-0">
         <h2 className="section-title">{title}</h2>
-        {description && <p className="mt-0.5 type-hint">{description}</p>}
+        {description && <p className="mt-1 type-hint">{description}</p>}
       </div>
       {action}
     </div>
@@ -668,7 +668,7 @@ export function StatCard({
   };
 
   return (
-    <Card className="flex flex-col gap-1 p-3.5">
+    <Card className="flex flex-col gap-1.5 p-4">
       {/* Подпись занимает две строки всегда, иначе крупные суммы в соседних
           карточках встают на разной высоте. */}
       <p className="type-caption line-clamp-2 min-h-[2.7em]">{label}</p>

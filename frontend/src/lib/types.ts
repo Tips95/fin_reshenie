@@ -290,6 +290,7 @@ export interface CashBalance {
   month: string;
   opening_amount: string;
   comment: string | null;
+  cash_on_hand?: string | null;
 }
 
 export interface DashboardSummary {
@@ -391,6 +392,38 @@ export interface ManagerCommissionsOverview {
   total_commission: string;
   paid_count: number;
   items: ManagerCommissionItem[];
+}
+
+export interface ManagerFirstCommissionClientItem {
+  client_id: string;
+  client_name: string;
+  contract_date: string;
+  manager_id: string | null;
+  manager_name: string;
+  amount: string;
+  collected: boolean;
+  collected_at?: string | null;
+}
+
+export interface ManagerFirstCommissionManagerRow {
+  manager_id: string | null;
+  manager_name: string;
+  clients_count: number;
+  total_amount: string;
+  to_pay_amount: string;
+  paid_amount: string;
+  clients: ManagerFirstCommissionClientItem[];
+}
+
+export interface ManagerFirstCommissionsOverview {
+  month: string;
+  commission_per_client: string;
+  clients_count: number;
+  total_amount: string;
+  to_pay_amount: string;
+  paid_amount: string;
+  outstanding_to_pay_amount: string;
+  managers: ManagerFirstCommissionManagerRow[];
 }
 
 export interface FunnelStageItem {

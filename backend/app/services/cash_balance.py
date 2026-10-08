@@ -34,6 +34,18 @@ def get_cash_balance(
     )
 
 
+def opening_from_actual_cash(
+    actual_amount: Decimal,
+    *,
+    cash_in: Decimal,
+    mandatory_paid: Decimal,
+    expenses_paid: Decimal,
+) -> Decimal:
+    """Остаток на начало, при котором «сейчас в кассе» = actual_amount."""
+    net_movement = cash_in - mandatory_paid - expenses_paid
+    return actual_amount - net_movement
+
+
 def set_cash_balance(
     db: Session,
     organization_id: UUID,

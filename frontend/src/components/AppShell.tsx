@@ -154,16 +154,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen mesh-bg">
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px]">
-        <aside className="app-sidebar sticky top-0 hidden h-screen w-52 shrink-0 flex-col px-2 py-2 shadow-card lg:flex">
-          <div className="flex items-center gap-2 border-b border-chrome-border pb-2">
+        <aside className="app-sidebar sticky top-0 hidden h-screen w-56 shrink-0 flex-col px-2.5 py-3 shadow-card lg:flex">
+          <div className="flex items-center gap-2.5 border-b border-chrome-border px-1 pb-3">
             <LogoMark />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-tight">{companyName}</p>
-              <p className="text-[11px] leading-tight text-chrome-muted">{WORKSPACE_LABELS.legal}</p>
+              <p className="truncate text-sm font-semibold leading-tight tracking-tight">{companyName}</p>
+              <p className="mt-0.5 text-[11px] leading-tight text-chrome-muted">{WORKSPACE_LABELS.legal}</p>
             </div>
           </div>
 
-          <nav className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+          <nav className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
             {visibleNav.map((item) => {
               const active = isNavActive(pathname, item.href);
               const badge = item.href === "/tasks" ? openTasksCount : 0;
@@ -174,9 +174,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className={cn(active ? "nav-item-active" : "nav-item-inactive", "relative")}
                 >
                   <span className="w-4 text-center text-[11px] opacity-70">{item.icon}</span>
-                  {item.label}
+                  <span className="min-w-0 truncate">{item.label}</span>
                   {badge > 0 ? (
-                    <span className="absolute right-1 top-1/2 flex h-4 min-w-4 -translate-y-1/2 items-center justify-center rounded-full bg-status-danger-solid px-1 text-[11px] font-semibold text-white">
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[10px] font-bold text-white">
                       {badge > 99 ? "99+" : badge}
                     </span>
                   ) : null}
@@ -188,23 +188,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mt-auto space-y-2 border-t border-chrome-border pt-3">
             <Link
               href="/login"
-              className="interactive block rounded-md border border-chrome-border px-2 py-1.5 text-xs text-chrome-muted hover:border-brand-600 hover:bg-chrome-hover hover:text-chrome-text"
+              className="interactive block rounded-lg border border-chrome-border px-2.5 py-2 text-xs text-chrome-muted hover:border-brand-600 hover:bg-chrome-hover hover:text-chrome-text"
             >
               {WORKSPACE_LABELS.retail}
             </Link>
             {user && (
-              <div className="rounded-md border border-chrome-border bg-chrome-elevated px-2 py-2">
-                <p className="text-xs font-medium">{user.full_name}</p>
-                <p className="text-[11px] text-chrome-muted">{statusLabel(user.role)}</p>
+              <div className="rounded-lg border border-chrome-border bg-chrome-elevated px-2.5 py-2.5">
+                <p className="text-xs font-semibold tracking-tight">{user.full_name}</p>
+                <p className="mt-0.5 text-[11px] text-chrome-muted">{statusLabel(user.role)}</p>
                 <button
                   onClick={logout}
-                  className="interactive mt-1.5 text-[11px] text-chrome-muted hover:text-chrome-text"
+                  className="interactive mt-2 text-[11px] font-medium text-chrome-muted hover:text-chrome-text"
                 >
                   Выйти
                 </button>
               </div>
             )}
-            <div className="text-[11px] leading-relaxed text-chrome-muted opacity-70">
+            <div className="px-0.5 text-[11px] leading-relaxed text-chrome-muted opacity-70">
               <p>{APP_CREATOR.role}</p>
               <p>{APP_CREATOR.name}</p>
             </div>
@@ -212,12 +212,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="app-header sticky top-0 z-20 px-page-x py-2 shadow-card backdrop-blur lg:px-3">
+          <header className="app-header sticky top-0 z-20 px-page-x py-2.5 shadow-soft lg:px-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <LogoMark className="lg:hidden" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-chrome-text lg:text-xs lg:font-medium lg:text-chrome-muted">
+                  <p className="truncate text-sm font-semibold tracking-tight text-chrome-text lg:text-[13px] lg:font-medium lg:text-chrome-muted">
                     {pageTitle(pathname)}
                   </p>
                   <p className="truncate text-[11px] text-chrome-muted lg:hidden">{companyName}</p>
@@ -225,12 +225,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               {user && (
                 <div className="shrink-0 text-right">
-                  <p className="max-w-[120px] truncate text-xs font-medium text-chrome-text sm:max-w-none">
+                  <p className="max-w-[140px] truncate text-xs font-semibold tracking-tight text-chrome-text sm:max-w-none">
                     {user.full_name}
                   </p>
                   <button
                     onClick={logout}
-                    className="interactive text-[11px] text-chrome-muted hover:text-chrome-text lg:hidden"
+                    className="interactive text-[11px] font-medium text-chrome-muted hover:text-chrome-text lg:hidden"
                   >
                     Выйти
                   </button>
@@ -239,7 +239,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <main className="mobile-shell-main min-w-0 flex-1 px-page-x py-page-y lg:px-3 lg:py-2">
+          <main className="mobile-shell-main min-w-0 flex-1 px-page-x py-page-y lg:px-4 lg:py-3">
             {children}
           </main>
 

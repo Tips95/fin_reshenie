@@ -11,6 +11,7 @@ import type {
   AnalyticsOverview,
   FunnelOverview,
   ManagerCommissionsOverview,
+  ManagerFirstCommissionsOverview,
   ManagerTask,
   InstallmentPlan,
   MandatoryPayment,
@@ -418,6 +419,15 @@ export const dashboardApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  setCashBalanceActual: (data: {
+    month: string;
+    actual_amount: string;
+    comment?: string | null;
+  }) =>
+    apiFetch<CashBalance>("/dashboard/cash-balance/actual", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   carryForwardCashBalance: (month: string) =>
     apiFetch<CashBalance>("/dashboard/cash-balance/carry-forward", {
       method: "POST",
@@ -429,6 +439,10 @@ export const analyticsApi = {
   overview: (months = 6) => apiFetch<AnalyticsOverview>(`/analytics/overview?months=${months}`),
   managerCommissions: (months = 6) =>
     apiFetch<ManagerCommissionsOverview>(`/analytics/manager-commissions?months=${months}`),
+  managerFirstCommissions: (month: string) =>
+    apiFetch<ManagerFirstCommissionsOverview>(
+      `/analytics/manager-first-commissions?month=${encodeURIComponent(month)}`,
+    ),
 };
 
 export const funnelApi = {
@@ -509,6 +523,11 @@ export const clientsApi = {
     apiFetch<Client>(`/clients/${id}/manager-first-commission`, {
       method: "PATCH",
       body: JSON.stringify({ collected }),
+    }),
+  setManagerFirstCommissionBulk: (clientIds: string[], collected: boolean) =>
+    apiFetch<{ updated_count: number }>("/clients/manager-first-commission/bulk", {
+      method: "POST",
+      body: JSON.stringify({ client_ids: clientIds, collected }),
     }),
 };
 

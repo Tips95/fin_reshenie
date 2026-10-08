@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Manrope } from "next/font/google";
 
 import { AuthProvider } from "@/modules/auth/AuthProvider";
 import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
 
 import "./globals.css";
 
-const inter = Inter({
+const manrope = Manrope({
   subsets: ["latin", "cyrillic"],
   variable: "--font-sans",
   display: "swap",
@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className={`${inter.variable} font-sans antialiased overflow-x-hidden`}>
+      <body className={`${manrope.variable} font-sans antialiased overflow-x-hidden`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

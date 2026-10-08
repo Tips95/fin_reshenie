@@ -54,22 +54,25 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-page relative flex min-h-screen items-center justify-center px-4 py-6">
-      <Card className="w-full max-w-sm">
-        <div className="mb-4 space-y-2">
+    <div className="auth-page relative flex min-h-screen items-center justify-center px-4 py-8">
+      <Card className="w-full max-w-[380px] rounded-2xl p-5 shadow-hover sm:p-6">
+        <div className="mb-5 space-y-2.5">
           <LogoLockup />
-          <p className="text-center text-xs text-muted">
-            Вход в контур «{WORKSPACE_LABELS[workspace]}»
-          </p>
+          <div className="text-center">
+            <p className="text-sm font-semibold tracking-tight text-foreground">Вход в систему</p>
+            <p className="mt-1 text-xs text-muted">
+              Контур «{WORKSPACE_LABELS[workspace]}»
+            </p>
+          </div>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-5">
           <WorkspaceSwitch value={workspace} onChange={changeWorkspace} />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
-            <label className="mb-0.5 block text-xs font-medium text-muted">
+            <label className="mb-1 block text-xs font-semibold tracking-wide text-muted">
               Email или телефон
             </label>
             <Input
@@ -80,7 +83,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-0.5 block text-xs font-medium text-muted">Пароль</label>
+            <label className="mb-1 block text-xs font-semibold tracking-wide text-muted">Пароль</label>
             <Input
               type="password"
               value={password}
@@ -89,18 +92,18 @@ export default function LoginPage() {
             />
           </div>
           {error && (
-            <p className="alert-danger px-2 py-1.5 text-xs">
+            <p className="alert-danger text-xs">
               {error} · контур «{WORKSPACE_LABELS[workspace]}»
             </p>
           )}
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button type="submit" className="w-full" size="lg" disabled={submitting}>
             {submitting ? "Вход..." : "Войти"}
           </Button>
         </form>
 
-        <p className="mt-3 text-center text-xs text-muted">
+        <p className="mt-4 text-center text-xs text-muted">
           Нет аккаунта?{" "}
-          <Link href={`/register?workspace=${workspace}`} className="link-brand font-medium">
+          <Link href={`/register?workspace=${workspace}`} className="link-brand font-semibold">
             Зарегистрировать компанию
           </Link>
         </p>

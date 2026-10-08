@@ -6,13 +6,19 @@ from app.core.database import get_db
 from app.models.enums import AuditAction
 from app.models.user import User
 from app.schemas.dashboard import (
+    CashBalanceActualUpdate,
     CashBalanceCarryForward,
     CashBalanceResponse,
     CashBalanceUpdate,
     DashboardSummary,
 )
 from app.services.audit import log_audit
-from app.services.cash_balance import get_cash_balance, next_month_key, set_cash_balance
+from app.services.cash_balance import (
+    get_cash_balance,
+    next_month_key,
+    opening_from_actual_cash,
+    set_cash_balance,
+)
 from app.services.dashboard import get_dashboard_summary
 
 router = APIRouter()
@@ -80,6 +86,42 @@ def update_cash_balance(
         opening_amount=payload.opening_amount,
         comment=payload.comment,
     )
+
+
+@router.put("/cash-balance/actual", response_model=CashBalanceResponse)
+def update_cash_balance_actual(
+    payload: CashBalanceActualUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> CashBalanceResponse:
+    """Актуализировать «сейчас в кассе»: пересчитывает остаток на начало месяца.
+
+    Нужно, когда были неучтённые траты/приходы и расчётная касса разъехалась
+    с реальной. opening = actual − (поступления − выплаты за месяц).
+    """
+    summary = get_dashboard_summary(db, current_user, month=payload.month)
+    opening_amount = opening_from_actual_cash(
+        payload.actual_amount,
+        cash_in=summary.cash_in_this_month,
+        mandatory_paid=summary.mandatory_paid_this_month.total,
+        expenses_paid=summary.expenses_paid_this_month,
+    )
+    comment = payload.comment
+    if not comment:
+        comment = (
+            f"Актуализация кассы: факт {payload.actual_amount} ₽ "
+            f"(было расчётно {summary.cash_on_hand} ₽)"
+        )
+
+    response = _save_balance(
+        db,
+        current_user,
+        month=payload.month,
+        opening_amount=opening_amount,
+        comment=comment,
+    )
+    response.cash_on_hand = payload.actual_amount
+    return response
 
 
 @router.post("/cash-balance/carry-forward", response_model=CashBalanceResponse)

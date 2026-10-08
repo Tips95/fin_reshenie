@@ -9,6 +9,8 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import ClientStatus, EngagementStage, ProcedureStage
 
 MANAGER_FIRST_PAYMENT_COMMISSION = Decimal("10000.00")
+# Учёт менеджерских 10 000 ₽ только с октября 2026 и для новых договоров дальше
+MANAGER_FIRST_COMMISSION_SINCE = date(2026, 10, 1)
 
 
 class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):

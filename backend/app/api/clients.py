@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
 from app.core.database import get_db
-from app.models.client import Client
+from app.models.client import MANAGER_FIRST_COMMISSION_SINCE, Client
 from app.models.client_mandatory_payment import ClientMandatoryPayment
 from app.models.enums import AuditAction, ClientStatus, EngagementStage, ProcedureStage, UserRole
 from app.models.installment_plan import InstallmentPlan
@@ -22,6 +22,8 @@ from app.schemas.client import (
     ClientListResponse,
     ClientResponse,
     ClientUpdate,
+    ManagerFirstCommissionBulkResult,
+    ManagerFirstCommissionBulkUpdate,
     ManagerFirstCommissionUpdate,
 )
 from app.services.access import (
@@ -633,55 +635,29 @@ def update_client(
     return _to_client_response(client, db)
 
 
-@router.patch("/{client_id}/manager-first-commission", response_model=ClientResponse)
-def update_manager_first_commission(
-    client_id: UUID,
-    payload: ManagerFirstCommissionUpdate,
-    current_user: User = Depends(require_owner),
-    db: Session = Depends(get_db),
-) -> ClientResponse:
-    client = get_organization_client(
-        db,
-        client_id=client_id,
-        organization_id=current_user.organization_id,
-    )
+def _apply_manager_first_commission(
+    db: Session,
+    *,
+    client: Client,
+    collected: bool,
+    current_user: User,
+) -> bool:
     if client.engagement_stage != EngagementStage.BANKRUPTCY:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Менеджерские 10 000 ₽ относятся только к клиентам на этапе банкротства",
         )
-
-    plan = db.scalar(
-        select(InstallmentPlan)
-        .where(InstallmentPlan.client_id == client.id)
-        .order_by(InstallmentPlan.created_at.desc())
-    )
-    if plan is None:
+    if client.contract_date < MANAGER_FIRST_COMMISSION_SINCE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="У клиента нет графика рассрочки",
+            detail="Менеджерские 10 000 ₽ учитываются только с октября 2026",
         )
-
-    first_month = db.scalar(
-        select(PaymentSchedule)
-        .where(
-            PaymentSchedule.installment_plan_id == plan.id,
-            PaymentSchedule.month_number == 1,
-        )
-        .limit(1)
-    )
-    if first_month is None or first_month.paid_amount <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Сначала зафиксируйте первый платёж клиента",
-        )
-
-    if payload.collected == client.manager_first_commission_collected:
-        return _to_client_response(client, db)
+    if collected == client.manager_first_commission_collected:
+        return False
 
     old_value = client.manager_first_commission_collected
-    client.manager_first_commission_collected = payload.collected
-    if payload.collected:
+    client.manager_first_commission_collected = collected
+    if collected:
         client.manager_first_commission_collected_at = datetime.now(timezone.utc)
         client.manager_first_commission_collected_by = current_user.id
     else:
@@ -696,11 +672,72 @@ def update_manager_first_commission(
         action=AuditAction.UPDATE,
         field_name="manager_first_commission_collected",
         old_value=old_value,
-        new_value=payload.collected,
+        new_value=collected,
+    )
+    return True
+
+
+@router.patch("/{client_id}/manager-first-commission", response_model=ClientResponse)
+def update_manager_first_commission(
+    client_id: UUID,
+    payload: ManagerFirstCommissionUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> ClientResponse:
+    client = get_organization_client(
+        db,
+        client_id=client_id,
+        organization_id=current_user.organization_id,
+    )
+    _apply_manager_first_commission(
+        db,
+        client=client,
+        collected=payload.collected,
+        current_user=current_user,
     )
     db.commit()
     db.refresh(client)
     return _to_client_response(client, db)
+
+
+@router.post("/manager-first-commission/bulk", response_model=ManagerFirstCommissionBulkResult)
+def bulk_update_manager_first_commission(
+    payload: ManagerFirstCommissionBulkUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> ManagerFirstCommissionBulkResult:
+    if not payload.client_ids:
+        return ManagerFirstCommissionBulkResult(updated_count=0)
+
+    clients = list(
+        db.scalars(
+            select(Client).where(
+                Client.organization_id == current_user.organization_id,
+                Client.is_deleted.is_(False),
+                Client.id.in_(payload.client_ids),
+            )
+        )
+    )
+    found_ids = {client.id for client in clients}
+    missing = [str(client_id) for client_id in payload.client_ids if client_id not in found_ids]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Клиенты не найдены: {', '.join(missing[:5])}",
+        )
+
+    updated_count = 0
+    for client in clients:
+        if _apply_manager_first_commission(
+            db,
+            client=client,
+            collected=payload.collected,
+            current_user=current_user,
+        ):
+            updated_count += 1
+
+    db.commit()
+    return ManagerFirstCommissionBulkResult(updated_count=updated_count)
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1644,14 +1644,16 @@ export default function ClientDetailPage() {
   const managerCommissionCollected = Boolean(
     isDetail(client) && client.manager_first_commission_collected,
   );
-  const showManagerCommission = isBankruptcy && firstMonthPaid && canRecordSchedulePayment;
+  const managerCommissionEligible =
+    isBankruptcy && Boolean(client?.contract_date && client.contract_date >= "2026-10-01");
+  const showManagerCommission = managerCommissionEligible && canRecordSchedulePayment;
   const scheduleHasActions = canRecordSchedulePayment || canEditSchedule;
   const scheduleTableColSpan = 6 + (scheduleHasActions ? 1 : 0);
 
   function scheduleRowHasMenu(item: PaymentScheduleItem, rest: number, markedForDelete: boolean) {
     const canDefer = canRecordSchedulePayment && rest > 0 && !markedForDelete;
     const canToggleCommission =
-      item.month_number === 1 && firstMonthPaid && canRecordSchedulePayment;
+      item.month_number === 1 && managerCommissionEligible && canRecordSchedulePayment;
     const canWaive =
       canEditSchedule &&
       isOwner &&
@@ -1733,8 +1735,11 @@ export default function ClientDetailPage() {
     );
   }
 
+  const showMobilePayCta =
+    effectiveTab === "payments" && canRecordSchedulePayment && isBankruptcy && Boolean(detail);
+
   return (
-    <div className="page-stack">
+    <div className={cn("page-stack", showMobilePayCta && "mobile-pay-cta-pad")}>
       {toast && (
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       )}
@@ -1760,7 +1765,7 @@ export default function ClientDetailPage() {
               </Button>
             ) : null}
             {canRecordSchedulePayment && isBankruptcy ? (
-              <Button type="button" onClick={openPaymentModal}>
+              <Button type="button" className="hidden lg:inline-flex" onClick={openPaymentModal}>
                 Зафиксировать платёж
               </Button>
             ) : null}
@@ -2871,8 +2876,8 @@ export default function ClientDetailPage() {
               </EmptyState>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                <table className="data-table table-cards text-xs">
+                <div className="desktop-only overflow-x-auto">
+                <table className="data-table text-xs">
                   <thead>
                     <tr>
                       <th className="w-8">#</th>
@@ -3245,8 +3250,274 @@ export default function ClientDetailPage() {
                 </table>
               </div>
 
+              <div className="mobile-only space-y-2">
+                {schedule.map((item) => {
+                  const rest = remainingAmount(item);
+                  const markedForDelete = scheduleDraft.pendingDeletes.includes(item.id);
+                  const markedForWaive = scheduleDraft.pendingWaives.includes(item.id);
+                  const noteText = item.manager_note?.trim() ?? "";
+                  const isOverdue = item.status === "overdue" && !item.overdue_waived;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "row-card",
+                        isOverdue && "row-card-overdue",
+                        markedForDelete && "opacity-60",
+                      )}
+                    >
+                      <div className="row-card-head">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground">
+                            Мес. {item.month_number}
+                            <span className="ml-1.5 font-normal text-muted">
+                              · {formatDate(effectiveDueDate(item))}
+                            </span>
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <Badge tone={scheduleTone(item.status)}>
+                              {statusLabel(item.status)}
+                            </Badge>
+                            {(item.overdue_waived || markedForWaive) && (
+                              <span className="text-[11px] text-muted">
+                                {markedForWaive ? "Снятие проср." : "Проср. снята"}
+                              </span>
+                            )}
+                            {item.deferred_until ? (
+                              <span className="text-[11px] text-status-warning-text">
+                                отсрочка до {formatDate(item.deferred_until)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        {scheduleRowHasMenu(item, rest, markedForDelete) || canEditClient ? (
+                          <ActionMenu label={`Действия по ${item.month_number} месяцу`}>
+                            {canRecordSchedulePayment && rest > 0 && !markedForDelete ? (
+                              <ActionMenuItem onClick={() => startDefer(item)}>
+                                Отсрочить платёж
+                              </ActionMenuItem>
+                            ) : null}
+                            {item.month_number === 1 &&
+                            firstMonthPaid &&
+                            canRecordSchedulePayment ? (
+                              <ActionMenuItem
+                                disabled={commissionSaving}
+                                onClick={() =>
+                                  handleToggleManagerCommission(!managerCommissionCollected)
+                                }
+                              >
+                                {managerCommissionCollected
+                                  ? "Отменить 10 000 ₽ менеджеру"
+                                  : "Отметить 10 000 ₽ менеджеру"}
+                              </ActionMenuItem>
+                            ) : null}
+                            {canEditSchedule &&
+                            isOwner &&
+                            item.status === "overdue" &&
+                            !item.overdue_waived &&
+                            !markedForDelete ? (
+                              <ActionMenuItem
+                                onClick={() => handleToggleScheduleWaive(item.id)}
+                              >
+                                {markedForWaive ? "Не снимать просрочку" : "Снять просрочку"}
+                              </ActionMenuItem>
+                            ) : null}
+                            {canEditClient ? (
+                              <ActionMenuItem onClick={() => toggleNotePanel(item)}>
+                                {noteText ? "Примечание" : "Добавить примечание"}
+                              </ActionMenuItem>
+                            ) : null}
+                            {canEditSchedule && Number(item.paid_amount) <= 0 ? (
+                              <ActionMenuItem
+                                tone={markedForDelete ? "default" : "danger"}
+                                onClick={() => handleToggleScheduleDelete(item.id)}
+                              >
+                                {markedForDelete ? "Вернуть месяц" : "Удалить месяц"}
+                              </ActionMenuItem>
+                            ) : null}
+                          </ActionMenu>
+                        ) : null}
+                      </div>
+
+                      <div className="row-card-grid">
+                        <div>
+                          <p className="row-card-label">План</p>
+                          <p className="row-card-value">{formatMoney(item.planned_amount)}</p>
+                        </div>
+                        <div>
+                          <p className="row-card-label">Оплачено</p>
+                          <p className="row-card-value">{formatMoney(item.paid_amount)}</p>
+                        </div>
+                        <div>
+                          <p className="row-card-label">Остаток</p>
+                          <p
+                            className={cn(
+                              "row-card-value",
+                              rest > 0 ? "text-status-warning-text" : "text-status-success-text",
+                            )}
+                          >
+                            {formatMoney(rest)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {noteText && notePanelId !== item.id ? (
+                        <p className="mt-2 line-clamp-2 text-xs text-muted">{noteText}</p>
+                      ) : null}
+
+                      {notePanelId === item.id ? (
+                        <div className="mt-2 space-y-1.5 rounded-md border border-border bg-surface-muted p-2">
+                          {canEditClient ? (
+                            <>
+                              <textarea
+                                className="interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
+                                rows={2}
+                                value={noteDraft}
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                                placeholder="Обещал перезвонить, просит отсрочку…"
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                <Button
+                                  type="button"
+                                  className="px-2 py-0.5"
+                                  onClick={() => handleSaveNote(item)}
+                                  disabled={noteSavingId === item.id}
+                                >
+                                  {noteSavingId === item.id ? "…" : "Сохранить"}
+                                </Button>
+                                {noteText ? (
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="px-2 py-0.5"
+                                    onClick={() => handleClearNote(item)}
+                                    disabled={noteSavingId === item.id}
+                                  >
+                                    Удалить
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="px-2 py-0.5"
+                                  onClick={() => {
+                                    setNotePanelId(null);
+                                    setNoteDraft("");
+                                  }}
+                                >
+                                  Свернуть
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="whitespace-pre-wrap text-xs">{noteText || "—"}</p>
+                          )}
+                        </div>
+                      ) : null}
+
+                      {deferringId === item.id ? (
+                        <div className="mt-2 space-y-1.5 rounded-md border border-border bg-surface-muted p-2">
+                          <Input
+                            type="date"
+                            className="py-1"
+                            value={deferForm.deferred_until}
+                            onChange={(e) =>
+                              setDeferForm({ ...deferForm, deferred_until: e.target.value })
+                            }
+                          />
+                          <Input
+                            placeholder="Причина отсрочки"
+                            className="py-1"
+                            value={deferForm.comment}
+                            onChange={(e) =>
+                              setDeferForm({ ...deferForm, comment: e.target.value })
+                            }
+                          />
+                          <div className="flex gap-2">
+                            <Button type="button" className="flex-1" onClick={() => handleDefer(item)}>
+                              OK
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="flex-1"
+                              onClick={() => setDeferringId(null)}
+                            >
+                              Отмена
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {canRecordSchedulePayment && rest > 0 && !markedForDelete ? (
+                        <Button
+                          type="button"
+                          className="mt-3 w-full"
+                          disabled={payingId === item.id}
+                          onClick={() => handleQuickPay(item)}
+                        >
+                          {payingId === item.id
+                            ? "Сохранение..."
+                            : `Оплатить · ${formatMoney(rest)}`}
+                        </Button>
+                      ) : canRecordSchedulePayment && !markedForDelete ? (
+                        <p className="mt-2 text-center text-xs font-medium text-status-success-text">
+                          Оплачено
+                        </p>
+                      ) : markedForDelete ? (
+                        <p className="mt-2 text-center text-xs text-muted">К удалению</p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                {scheduleDraft.pendingAdds.map((item, index) => (
+                  <div key={item.tempId} className="row-card border-brand-200 bg-brand-50/40">
+                    <div className="row-card-head">
+                      <p className="text-sm font-semibold text-foreground">
+                        Новый мес.{" "}
+                        {schedule.filter((row) => !scheduleDraft.pendingDeletes.includes(row.id))
+                          .length +
+                          index +
+                          1}
+                      </p>
+                      <Badge tone="warning">+</Badge>
+                    </div>
+                    <div className="mt-2 grid gap-2">
+                      <FormField label="Дата">
+                        <Input
+                          type="date"
+                          value={item.due_date}
+                          onChange={(e) =>
+                            updatePendingAdd(item.tempId, "due_date", e.target.value)
+                          }
+                        />
+                      </FormField>
+                      <FormField label="План, ₽">
+                        <AmountInput
+                          value={formatAmountInput(item.planned_amount)}
+                          onValueChange={(amount) =>
+                            updatePendingAdd(item.tempId, "planned_amount", amount)
+                          }
+                        />
+                      </FormField>
+                      {canEditSchedule ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => handleRemovePendingAdd(item.tempId)}
+                        >
+                          Убрать
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {canEditSchedule && contractScheduleDirty && (
-                <div className="sticky bottom-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-border-strong bg-surface p-2">
+                <div className="sticky bottom-[calc(var(--mobile-nav-height)+var(--safe-area-bottom)+4.5rem)] z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-border-strong bg-surface p-2 lg:bottom-2">
                   <p className="text-xs font-medium text-foreground">
                     {scheduleDraftDirty && contractDraftDirty
                       ? "Есть несохранённые изменения в договоре и графике"
@@ -3395,10 +3666,10 @@ export default function ClientDetailPage() {
                       </p>
                     </div>
                     {isOwner && (
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="history-item-actions">
                         <FormField label="Сумма, ₽">
                           <AmountInput
-                            className="w-[130px]"
+                            className="w-full max-w-none lg:w-[130px]"
                             value={
                               paymentAmountEdits[payment.id] ?? formatAmountInput(payment.amount)
                             }
@@ -3413,7 +3684,7 @@ export default function ClientDetailPage() {
                         <FormField label="Дата кассы">
                           <Input
                             type="date"
-                            className="w-[150px]"
+                            className="w-full max-w-none lg:w-[150px]"
                             value={paymentDateEdits[payment.id] ?? payment.payment_date}
                             onChange={(e) =>
                               setPaymentDateEdits((current) => ({
@@ -3423,29 +3694,33 @@ export default function ClientDetailPage() {
                             }
                           />
                         </FormField>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={
-                            savingPaymentDateId === payment.id ||
-                            ((paymentDateEdits[payment.id] ?? payment.payment_date) ===
-                              payment.payment_date &&
-                              (paymentAmountEdits[payment.id] ??
-                                formatAmountInput(payment.amount)) ===
-                                formatAmountInput(payment.amount))
-                          }
-                          onClick={() => handleUpdatePayment(payment.id)}
-                        >
-                          {savingPaymentDateId === payment.id ? "..." : "Сохранить"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="danger"
-                          disabled={deletingId === payment.id}
-                          onClick={() => handleDeletePayment(payment.id)}
-                        >
-                          {deletingId === payment.id ? "Удаление..." : "Удалить"}
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="flex-1 lg:flex-none"
+                            disabled={
+                              savingPaymentDateId === payment.id ||
+                              ((paymentDateEdits[payment.id] ?? payment.payment_date) ===
+                                payment.payment_date &&
+                                (paymentAmountEdits[payment.id] ??
+                                  formatAmountInput(payment.amount)) ===
+                                  formatAmountInput(payment.amount))
+                            }
+                            onClick={() => handleUpdatePayment(payment.id)}
+                          >
+                            {savingPaymentDateId === payment.id ? "..." : "Сохранить"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            className="flex-1 lg:flex-none"
+                            disabled={deletingId === payment.id}
+                            onClick={() => handleDeletePayment(payment.id)}
+                          >
+                            {deletingId === payment.id ? "Удаление..." : "Удалить"}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -3514,6 +3789,14 @@ export default function ClientDetailPage() {
                 </div>
               )}
             </CollapsibleCard>
+      ) : null}
+
+      {showMobilePayCta ? (
+        <div className="mobile-pay-cta">
+          <Button type="button" className="w-full" onClick={openPaymentModal}>
+            Внести платёж
+          </Button>
+        </div>
       ) : null}
 
       <Modal

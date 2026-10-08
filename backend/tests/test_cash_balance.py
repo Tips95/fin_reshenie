@@ -14,6 +14,7 @@ from app.models.enums import OrganizationType, UserRole
 from app.services.cash_balance import (
     get_cash_balance,
     next_month_key,
+    opening_from_actual_cash,
     set_cash_balance,
 )
 
@@ -133,3 +134,14 @@ class TestSetCashBalance:
         organization, _ = _seed(db)
 
         assert get_cash_balance(db, organization.id, "2026-09") is None
+
+    def test_opening_from_actual_cash_backs_out_month_movement(self):
+        # Факт 80 000, за месяц +50 000 приход и −20 000 выплат → начало 50 000
+        opening = opening_from_actual_cash(
+            Decimal("80000.00"),
+            cash_in=Decimal("50000.00"),
+            mandatory_paid=Decimal("10000.00"),
+            expenses_paid=Decimal("10000.00"),
+        )
+        assert opening == Decimal("50000.00")
+        assert opening + Decimal("50000.00") - Decimal("20000.00") == Decimal("80000.00")

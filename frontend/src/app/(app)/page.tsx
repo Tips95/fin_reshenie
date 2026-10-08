@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 import {
+  AmountInput,
   Badge,
   Button,
   Card,
@@ -234,6 +235,7 @@ export default function DashboardPage() {
   const [exportingOverdue, setExportingOverdue] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [cashDraft, setCashDraft] = useState("");
+  const [cashActualDraft, setCashActualDraft] = useState("");
   const [cashSaving, setCashSaving] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
   const isOwner = user?.role === "owner";
@@ -249,6 +251,7 @@ export default function DashboardPage() {
       const data = normalizeSummary(await dashboardApi.summary(month));
       setSummary(data);
       setCashDraft(data.cash_opening_is_set ? formatAmountInput(data.cash_opening_balance) : "");
+      setCashActualDraft(formatAmountInput(data.cash_on_hand));
     } finally {
       setLoading(false);
     }
@@ -266,6 +269,27 @@ export default function DashboardPage() {
     } catch (error) {
       setCashError(
         error instanceof ApiRequestError ? error.message : "Не удалось сохранить остаток",
+      );
+    } finally {
+      setCashSaving(false);
+    }
+  }
+
+  async function handleActualizeCashOnHand() {
+    setCashSaving(true);
+    setCashError(null);
+    try {
+      const amount = cashActualDraft.trim() === "" ? "0" : cashActualDraft.trim();
+      await dashboardApi.setCashBalanceActual({
+        month,
+        actual_amount: amount,
+      });
+      await load();
+    } catch (error) {
+      setCashError(
+        error instanceof ApiRequestError
+          ? error.message
+          : "Не удалось актуализировать кассу",
       );
     } finally {
       setCashSaving(false);
@@ -365,16 +389,16 @@ export default function DashboardPage() {
           <div className="metric-hero">
             <div className="relative z-10">
               <p className="metric-hero-label">Сейчас в кассе</p>
-              <p className="metric-hero-value mt-1.5">{formatMoney(summary.cash_on_hand)}</p>
-              <p className="metric-hero-hint mt-2">
+              <p className="metric-hero-value mt-2">{formatMoney(summary.cash_on_hand)}</p>
+              <p className="metric-hero-hint mt-2.5 max-w-xl">
                 {summary.cash_opening_is_set
                   ? `Остаток на начало ${formatMoney(summary.cash_opening_balance)} + движение месяца`
                   : "Остаток на начало не указан — укажите в разделе «Касса»"}
               </p>
-              <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-white/20 pt-3">
+              <div className="mt-4 flex items-baseline justify-between gap-3 border-t border-white/15 pt-3.5">
                 <span className="metric-hero-hint">Прогноз на конец месяца</span>
                 <span
-                  className={`tabular text-base font-bold ${
+                  className={`tabular text-lg font-bold tracking-tight ${
                     Number(summary.cash_forecast_end) >= 0 ? "text-white" : "text-brand-100"
                   }`}
                 >
@@ -385,7 +409,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className={showOrgFinance ? "grid grid-cols-2 gap-2" : "stat-grid"}>
+        <div className={showOrgFinance ? "grid grid-cols-2 gap-2.5" : "stat-grid"}>
           {showOrgFinance ? (
             <>
               <StatCard
@@ -458,7 +482,7 @@ export default function DashboardPage() {
             id="dash-cash"
             tone="income"
             title="Касса"
-            description="Остаток на начало задаётся вручную. Дальше касса живёт по факту: прибавляются поступления, вычитаются реально сделанные выплаты"
+            description="Остаток на начало задаётся вручную. Дальше касса живёт по факту: прибавляются поступления, вычитаются реально сделанные выплаты. Если были неучтённые траты — актуализируйте сумму «сейчас в кассе»"
           >
             <div className="stat-grid">
               <StatCard
@@ -484,31 +508,63 @@ export default function DashboardPage() {
                 tone={Number(summary.cash_on_hand) >= 0 ? "success" : "danger"}
               />
             </div>
-            <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-status-success-border bg-surface px-3 py-2">
-              <div className="w-[180px]">
-                <label className="mb-0.5 block text-xs text-muted">
-                  Остаток на начало {monthLabel}, ₽
-                </label>
-                <Input
-                  type="number"
-                  value={cashDraft}
-                  placeholder="0"
-                  onChange={(e) => setCashDraft(e.target.value)}
-                />
+            <div className="mt-2 space-y-2 rounded-xl border border-status-success-border bg-surface px-3 py-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[180px] flex-1 sm:max-w-[220px]">
+                  <label className="mb-1 block text-xs font-semibold text-muted">
+                    Фактически сейчас в кассе, ₽
+                  </label>
+                  <AmountInput
+                    value={cashActualDraft}
+                    onValueChange={setCashActualDraft}
+                    placeholder="0"
+                  />
+                </div>
+                <Button type="button" disabled={cashSaving} onClick={handleActualizeCashOnHand}>
+                  {cashSaving ? "Сохранение..." : "Актуализировать"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={cashSaving}
+                  onClick={handleCarryForwardCash}
+                >
+                  Перенести {formatMoney(summary.cash_on_hand)} в{" "}
+                  {formatMonthLabel(nextMonth(month))}
+                </Button>
               </div>
-              <Button type="button" disabled={cashSaving} onClick={handleSaveCashBalance}>
-                {cashSaving ? "Сохранение..." : "Сохранить"}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={cashSaving}
-                onClick={handleCarryForwardCash}
-              >
-                Перенести {formatMoney(summary.cash_on_hand)} в {formatMonthLabel(nextMonth(month))}
-              </Button>
+              <p className="type-hint">
+                Введите реальную сумму после пересчёта купюр. Остаток на начало месяца
+                подстроится автоматически, чтобы «сейчас в кассе» совпало с фактом.
+              </p>
+              <details className="rounded-lg border border-border bg-surface-muted px-3 py-2">
+                <summary className="interactive cursor-pointer text-xs font-semibold text-muted">
+                  Задать остаток на начало {monthLabel} вручную
+                </summary>
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <div className="min-w-[180px] flex-1 sm:max-w-[220px]">
+                    <label className="mb-1 block text-xs text-muted">Остаток на начало, ₽</label>
+                    <AmountInput
+                      value={cashDraft}
+                      onValueChange={setCashDraft}
+                      placeholder="0"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={cashSaving}
+                    onClick={handleSaveCashBalance}
+                  >
+                    {cashSaving ? "Сохранение..." : "Сохранить остаток"}
+                  </Button>
+                </div>
+              </details>
             </div>
             {cashError ? <p className="mt-2 text-xs text-status-danger-text">{cashError}</p> : null}
+            {summary.cash_opening_comment ? (
+              <p className="mt-2 type-hint">Последняя правка: {summary.cash_opening_comment}</p>
+            ) : null}
           </DashboardSection>
 
           <DashboardSection
