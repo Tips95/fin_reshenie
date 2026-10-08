@@ -11,17 +11,24 @@ from app.models.base import Base
 
 
 def sanitize_database_url(database_url: str) -> str:
-    """Убирает SSL-параметры из URL — ими управляем только через connect_args."""
+    """Нормализует URL Postgres под установленный драйвер psycopg2.
+
+    Убирает SSL-параметры из query — ими управляем только через connect_args.
+    Форсирует dialect ``postgresql+psycopg2``, чтобы SQLAlchemy не пытался
+    импортировать ``psycopg`` (v3), которого нет в образе.
+    """
     if not database_url.startswith("postgresql"):
         return database_url
 
     parsed = urlparse(database_url)
+    # postgresql:// и postgresql+psycopg:// → postgresql+psycopg2://
+    scheme = "postgresql+psycopg2"
     query = [
         (key, value)
         for key, value in parse_qsl(parsed.query, keep_blank_values=True)
         if key.lower() not in {"sslmode", "sslrootcert"}
     ]
-    return urlunparse(parsed._replace(query=urlencode(query)))
+    return urlunparse(parsed._replace(scheme=scheme, query=urlencode(query)))
 
 
 def build_connect_args(database_url: str) -> dict[str, object]:
