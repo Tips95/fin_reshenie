@@ -11,6 +11,7 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  Pagination,
   Select,
 } from "@/components/ui";
 import { ApiRequestError, questionnairesApi } from "@/lib/api-client";
@@ -87,6 +88,8 @@ function QuestionnairesPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [listPage, setListPage] = useState(1);
+  const LIST_PAGE_SIZE = 50;
   const canEdit = canUseQuestionnaires(user);
   const hideAmounts = isCollectionStaff(user);
   const supervises = canSuperviseLeads(user);
@@ -168,7 +171,7 @@ function QuestionnairesPageContent() {
     return next;
   }, [items]);
 
-  const visibleItems = useMemo(
+  const filteredItems = useMemo(
     () =>
       items
         .filter((item) => matchesStatus(item, statusFilter))
@@ -182,6 +185,17 @@ function QuestionnairesPageContent() {
         }),
     [items, statusFilter],
   );
+
+  const listTotalPages = Math.max(1, Math.ceil(filteredItems.length / LIST_PAGE_SIZE));
+  const safeListPage = Math.min(listPage, listTotalPages);
+  const visibleItems = useMemo(() => {
+    const start = (safeListPage - 1) * LIST_PAGE_SIZE;
+    return filteredItems.slice(start, start + LIST_PAGE_SIZE);
+  }, [filteredItems, safeListPage, LIST_PAGE_SIZE]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [statusFilter, search, createdOn, createdBy, assignedManager]);
 
   const creatorName = managers.find((manager) => manager.id === createdBy)?.full_name;
 
@@ -238,7 +252,10 @@ function QuestionnairesPageContent() {
             <button
               key={filter.value}
               type="button"
-              onClick={() => setStatusFilter(filter.value)}
+              onClick={() => {
+                setStatusFilter(filter.value);
+                setListPage(1);
+              }}
               className={
                 active
                   ? "interactive rounded-full bg-brand-600 px-3 py-1 text-[11px] font-semibold text-white shadow-soft"
@@ -326,7 +343,7 @@ function QuestionnairesPageContent() {
             ? "За эту дату анкет нет."
             : "Здесь пусто. Заводите лид сразу, как набрали номер — даже если разговор не состоялся."}
         </EmptyState>
-      ) : visibleItems.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <EmptyState>В этом статусе сейчас никого нет.</EmptyState>
       ) : (
         <div className="overflow-x-auto lg:rounded-lg lg:border lg:border-border lg:bg-surface lg:shadow-soft">
@@ -420,6 +437,15 @@ function QuestionnairesPageContent() {
               })}
             </tbody>
           </table>
+          <div className="px-3 pb-3">
+            <Pagination
+              page={safeListPage}
+              pageSize={LIST_PAGE_SIZE}
+              total={filteredItems.length}
+              totalPages={listTotalPages}
+              onPageChange={setListPage}
+            />
+          </div>
         </div>
       )}
     </div>

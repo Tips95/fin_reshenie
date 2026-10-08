@@ -58,9 +58,10 @@ engine_kwargs: dict[str, object] = {
     "pool_pre_ping": not database_url.startswith("sqlite"),
 }
 if database_url.startswith("postgresql"):
+    # 2 uvicorn workers × (3 + 5) = max 16 connections — safer for managed Postgres
     engine_kwargs.update(
-        pool_size=5,
-        max_overflow=10,
+        pool_size=3,
+        max_overflow=5,
         pool_recycle=300,
         pool_timeout=30,
     )

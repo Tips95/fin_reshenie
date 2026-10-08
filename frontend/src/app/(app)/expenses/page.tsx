@@ -403,14 +403,25 @@ export default function ExpensesPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [expenseData, paymentData, oneTimeData, payoutData] = await Promise.all([
-        expensesApi.list(),
-        expensesApi.listPayments(),
-        expensesApi.listOneTime({ period_month: periodMonth }),
-        analyticsApi.managerFirstCommissions(periodMonth).catch(() => null),
-      ]);
+      // Always load the working period; also load history month when it differs.
+      // Never request the full unbounded payment list.
+      const historyMonth = historyMonthFilter || periodMonth;
+      const [expenseData, periodPayments, historyPayments, oneTimeData, payoutData] =
+        await Promise.all([
+          expensesApi.list(),
+          expensesApi.listPayments({ period_month: periodMonth }),
+          historyMonth === periodMonth
+            ? Promise.resolve([] as ExpensePayment[])
+            : expensesApi.listPayments({ period_month: historyMonth }),
+          expensesApi.listOneTime({ period_month: periodMonth }),
+          analyticsApi.managerFirstCommissions(periodMonth).catch(() => null),
+        ]);
+      const merged = new Map<string, ExpensePayment>();
+      for (const payment of [...periodPayments, ...historyPayments]) {
+        merged.set(payment.id, payment);
+      }
       setExpenses(expenseData);
-      setPayments(paymentData);
+      setPayments(Array.from(merged.values()));
       setOneTimeExpenses(oneTimeData);
       setManagerPayouts(payoutData);
     } finally {
@@ -423,7 +434,7 @@ export default function ExpensesPage() {
       void loadData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, periodMonth]);
+  }, [user?.role, periodMonth, historyMonthFilter]);
 
   async function refreshManagerPayouts() {
     const payoutData = await analyticsApi.managerFirstCommissions(periodMonth);
@@ -706,16 +717,25 @@ export default function ExpensesPage() {
   const monthPaidCount = paymentByExpenseId.size;
   const monthPendingCount = Math.max(salaryExpenses.length - monthPaidCount, 0);
 
+  const historyMonthOptions = useMemo(() => {
+    const months: string[] = [];
+    const anchor = new Date();
+    for (let offset = 0; offset < 24; offset += 1) {
+      const d = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return months;
+  }, []);
+
   const filteredHistory = useMemo(() => {
-    const items = historyMonthFilter
-      ? payments.filter((payment) => payment.period_month.slice(0, 7) === historyMonthFilter)
-      : payments;
+    const target = historyMonthFilter || periodMonth;
+    const items = payments.filter((payment) => payment.period_month.slice(0, 7) === target);
     return [...items].sort((a, b) => {
       const monthCmp = b.period_month.localeCompare(a.period_month);
       if (monthCmp !== 0) return monthCmp;
       return b.payment_date.localeCompare(a.payment_date);
     });
-  }, [payments, historyMonthFilter]);
+  }, [payments, historyMonthFilter, periodMonth]);
 
   if (user?.role !== "owner") {
     return <LoadingState text="Доступ только для руководителя" />;
@@ -1191,17 +1211,14 @@ export default function ExpensesPage() {
         <div className="mb-3 max-w-xs">
           <FormField label="Фильтр по месяцу">
             <Select
-              value={historyMonthFilter}
+              value={historyMonthFilter || periodMonth}
               onChange={(e) => setHistoryMonthFilter(e.target.value)}
             >
-              <option value="">Все месяцы</option>
-              {Array.from(new Set(payments.map((p) => p.period_month.slice(0, 7))))
-                .sort((a, b) => b.localeCompare(a))
-                .map((month) => (
-                  <option key={month} value={month}>
-                    {formatMonthLabel(month)}
-                  </option>
-                ))}
+              {historyMonthOptions.map((month) => (
+                <option key={month} value={month}>
+                  {formatMonthLabel(month)}
+                </option>
+              ))}
             </Select>
           </FormField>
         </div>

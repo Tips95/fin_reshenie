@@ -172,6 +172,8 @@ def list_questionnaires(
     created_on: date | None = None,
     due_only: bool = False,
     appointment_due: bool = False,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[ClientQuestionnaire]:
     stmt = (
         select(ClientQuestionnaire)
@@ -220,6 +222,9 @@ def list_questionnaires(
                 ClientQuestionnaire.phone.ilike(term),
             )
         )
+    if page is not None and page_size is not None:
+        offset = max(page - 1, 0) * page_size
+        stmt = stmt.offset(offset).limit(page_size)
     return list(db.scalars(stmt).unique())
 
 

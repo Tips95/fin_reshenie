@@ -229,6 +229,17 @@ def delete_storage_key(storage_key: str | None) -> None:
         path.unlink()
 
 
+def has_deferred_pdf(*, storage_key: str | None, db, model, pk, data_column) -> bool:
+    """True if PDF exists on disk key or as non-null DB bytes — without loading the blob."""
+    if storage_key:
+        return True
+    from sqlalchemy import select
+
+    return (
+        db.scalar(select(data_column.isnot(None)).where(model.id == pk)) is True
+    )
+
+
 def stored_pdf_response(
     *,
     file_data: bytes | None,

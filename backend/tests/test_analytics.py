@@ -69,8 +69,8 @@ class TestAnalyticsOverview:
             [],
         ]
         monkeypatch.setattr(
-            "app.services.analytics.client_has_overdue_payments",
-            lambda *_args, **_kwargs: False,
+            "app.services.analytics.clients_overdue_map",
+            lambda *_args, **_kwargs: {client.id: False},
         )
         monkeypatch.setattr(
             "app.services.analytics.monthly_expenses_total",

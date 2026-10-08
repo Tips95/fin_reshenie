@@ -4,7 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.models.enums import PaymentScheduleStatus, ProcedureStage, TaskStatus, UserRole
+from app.models.enums import ClientStatus, PaymentScheduleStatus, ProcedureStage, TaskStatus, UserRole
 from app.services.funnel import get_funnel_overview, sync_overdue_tasks
 
 
@@ -27,19 +27,18 @@ def make_client(stage: ProcedureStage = ProcedureStage.DEPOSIT) -> SimpleNamespa
         full_name="Иванов Иван",
         phone="+7 928 000-00-00",
         procedure_stage=stage,
+        status=ClientStatus.ACTIVE,
         is_deleted=False,
     )
 
 
 class TestFunnelOverview:
     def test_counts_clients_by_stage(self):
-        clients = [
-            make_client(ProcedureStage.CONTRACT_SIGNED),
-            make_client(ProcedureStage.DEPOSIT),
-            make_client(ProcedureStage.DEPOSIT),
-        ]
         db = MagicMock()
-        db.scalars.return_value = clients
+        db.execute.return_value = [
+            (ProcedureStage.CONTRACT_SIGNED, 1),
+            (ProcedureStage.DEPOSIT, 2),
+        ]
 
         overview = get_funnel_overview(db, make_user())
 

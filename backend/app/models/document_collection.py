@@ -52,7 +52,8 @@ class DocumentCollection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ),
         nullable=False,
         default=DocumentCollectionStatus.PENDING,
+        index=True,
     )
-    paid_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    paid_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
 
     client: Mapped["Client"] = relationship(back_populates="document_collection")

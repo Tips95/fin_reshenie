@@ -69,6 +69,8 @@ def get_questionnaires(
     created_on: date | None = Query(default=None),
     due_only: bool = Query(default=False),
     appointment_due: bool = Query(default=False),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200),
     current_user: User = Depends(_require_legal_staff),
     db: Session = Depends(get_db),
 ) -> list[QuestionnaireBrief]:
@@ -83,6 +85,8 @@ def get_questionnaires(
         created_on=created_on,
         due_only=due_only,
         appointment_due=appointment_due,
+        page=page,
+        page_size=page_size,
     )
     return [_to_brief(item) for item in items]
 

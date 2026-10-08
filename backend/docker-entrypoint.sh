@@ -31,6 +31,7 @@ PY
 echo "Running database migrations..."
 alembic upgrade head
 
+# Idempotent seed. Set RUN_SEED=false to skip on redeploy (data already present).
 if [ "${RUN_SEED:-true}" = "true" ]; then
   echo "Running seed (idempotent)..."
   if ! python -m app.services.seed; then

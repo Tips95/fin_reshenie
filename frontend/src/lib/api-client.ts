@@ -584,6 +584,8 @@ export const questionnairesApi = {
     created_on?: string;
     due_only?: boolean;
     appointment_due?: boolean;
+    page?: number;
+    page_size?: number;
   }) => {
     const search = new URLSearchParams();
     if (params?.client_id) search.set("client_id", params.client_id);
@@ -594,6 +596,8 @@ export const questionnairesApi = {
     if (params?.created_on) search.set("created_on", params.created_on);
     if (params?.due_only) search.set("due_only", "true");
     if (params?.appointment_due) search.set("appointment_due", "true");
+    if (params?.page) search.set("page", String(params.page));
+    if (params?.page_size) search.set("page_size", String(params.page_size));
     const query = search.toString();
     return apiFetch<QuestionnaireBrief[]>(`/questionnaires${query ? `?${query}` : ""}`);
   },

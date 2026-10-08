@@ -9,21 +9,21 @@ from app.core.config import settings
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    from app.core.database import SessionLocal
-    from app.services.organization_defaults import seed_all_bankruptcy_organization_defaults
+    # Docker entrypoint already runs idempotent seed. Lifespan only re-syncs when
+    # FORCE_ORGANIZATION_DEFAULTS_SYNC is explicitly enabled (avoids double boot load).
+    if settings.FORCE_ORGANIZATION_DEFAULTS_SYNC:
+        from app.core.database import SessionLocal
+        from app.services.organization_defaults import seed_all_bankruptcy_organization_defaults
 
-    db = SessionLocal()
-    try:
-        seed_all_bankruptcy_organization_defaults(
-            db,
-            force=settings.FORCE_ORGANIZATION_DEFAULTS_SYNC,
-        )
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        print(f"WARN: organization defaults sync on startup failed: {exc}")
-    finally:
-        db.close()
+        db = SessionLocal()
+        try:
+            seed_all_bankruptcy_organization_defaults(db, force=True)
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            print(f"WARN: organization defaults sync on startup failed: {exc}")
+        finally:
+            db.close()
     yield
 
 

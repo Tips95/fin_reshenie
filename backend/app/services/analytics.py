@@ -22,7 +22,7 @@ from app.schemas.analytics import (
     MonthlyTrendPoint,
 )
 from app.schemas.dashboard import DocumentCollectionBreakdown
-from app.services.access import apply_client_visibility_filter, client_has_overdue_payments
+from app.services.access import apply_client_visibility_filter, clients_overdue_map
 from app.services.dashboard import _schedule_remainder
 from app.services.expense_totals import monthly_expenses_total
 from app.services.document_collection_stats import (
@@ -67,6 +67,7 @@ def _build_client_metrics(
     plan_total_by_client: dict[UUID, Decimal],
 ) -> list[ClientProfitItem]:
     items: list[ClientProfitItem] = []
+    overdue_map = clients_overdue_map(db, [client.id for client in clients])
 
     for client in clients:
         payments = payments_by_client.get(client.id, [])
@@ -108,7 +109,7 @@ def _build_client_metrics(
                 profit=profit,
                 schedule_remainder=schedule_remainder,
                 mandatory_remainder=mandatory_remainder,
-                has_overdue=client_has_overdue_payments(db, client.id),
+                has_overdue=overdue_map.get(client.id, False),
             )
         )
 

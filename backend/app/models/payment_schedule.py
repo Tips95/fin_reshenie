@@ -18,7 +18,7 @@ class PaymentSchedule(Base, UUIDPrimaryKeyMixin):
         index=True,
     )
     month_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     planned_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     paid_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
@@ -31,7 +31,7 @@ class PaymentSchedule(Base, UUIDPrimaryKeyMixin):
         nullable=False,
         default=PaymentScheduleStatus.PENDING,
     )
-    deferred_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    deferred_until: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     deferral_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     manager_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     overdue_waived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

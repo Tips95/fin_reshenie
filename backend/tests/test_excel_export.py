@@ -57,12 +57,12 @@ class TestExcelExport:
         db = MagicMock()
         db.scalars.return_value = [manager]
         monkeypatch.setattr(
-            "app.services.excel_export.client_has_overdue_payments",
-            lambda *_args, **_kwargs: True,
+            "app.services.excel_export.clients_overdue_map",
+            lambda *_args, **_kwargs: {client.id: True},
         )
         monkeypatch.setattr(
-            "app.services.excel_export.client_overdue_amount",
-            lambda *_args, **_kwargs: Decimal("5000.00"),
+            "app.services.excel_export.clients_overdue_amounts",
+            lambda *_args, **_kwargs: {client.id: Decimal("5000.00")},
         )
 
         workbook = build_clients_workbook(db, make_user(), [client])
@@ -92,8 +92,8 @@ class TestExcelExport:
         db = MagicMock()
         db.scalars.return_value = [manager]
         monkeypatch.setattr(
-            "app.services.excel_export.client_overdue_amount",
-            lambda *_args, **_kwargs: Decimal("12000.00"),
+            "app.services.excel_export.clients_overdue_amounts",
+            lambda *_args, **_kwargs: {client.id: Decimal("12000.00")},
         )
 
         workbook = build_overdue_clients_workbook(db, [client])
@@ -174,7 +174,7 @@ class TestExcelExport:
             overdue_waived=False,
         )
         db = MagicMock()
-        db.scalars.return_value = [schedule]
+        db.execute.return_value = [(CLIENT_ID, schedule)]
         monkeypatch.setattr(
             "app.services.excel_export.effective_due_date",
             lambda item: item.due_date,

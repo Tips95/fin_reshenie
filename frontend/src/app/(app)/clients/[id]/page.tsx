@@ -358,7 +358,7 @@ export default function ClientDetailPage() {
   }, [fetchClient, showToast]);
 
   useEffect(() => {
-    if (!client || user?.role === "call_center") {
+    if (!client?.id || user?.role === "call_center") {
       setAuditEntries([]);
       return;
     }
@@ -366,7 +366,7 @@ export default function ClientDetailPage() {
       .list({ entity_type: "client", entity_id: client.id, limit: 30 })
       .then(setAuditEntries)
       .catch(() => setAuditEntries([]));
-  }, [client, user?.role]);
+  }, [client?.id, user?.role]);
 
   useEffect(() => {
     if (user?.role === "owner") {

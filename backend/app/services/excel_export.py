@@ -21,7 +21,7 @@ from app.models.installment_plan import InstallmentPlan
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
 from app.schemas.client import ClientDetailResponse
-from app.services.access import client_has_overdue_payments
+from app.services.access import clients_overdue_map
 from app.services.schedule_dates import effective_due_date, is_schedule_overdue, schedule_remainder
 
 HEADER_FONT = Font(bold=True)
@@ -81,22 +81,39 @@ def _manager_names(db: Session, clients: list[Client]) -> dict:
 
 
 def client_overdue_amount(db: Session, client_id) -> Decimal:
-    today = date.today()
-    schedules = list(
-        db.scalars(
-            select(PaymentSchedule)
-            .join(InstallmentPlan, InstallmentPlan.id == PaymentSchedule.installment_plan_id)
-            .where(InstallmentPlan.client_id == client_id)
-        )
+    return clients_overdue_amounts(db, [client_id]).get(client_id, Decimal("0.00"))
+
+
+def clients_overdue_amounts(
+    db: Session,
+    client_ids: list,
+    *,
+    today: date | None = None,
+) -> dict:
+    if not client_ids:
+        return {}
+
+    check_date = today or date.today()
+    schedules_by_client: dict = {client_id: [] for client_id in client_ids}
+    rows = db.execute(
+        select(InstallmentPlan.client_id, PaymentSchedule)
+        .join(PaymentSchedule, PaymentSchedule.installment_plan_id == InstallmentPlan.id)
+        .where(InstallmentPlan.client_id.in_(client_ids))
     )
-    total = Decimal("0.00")
-    for item in schedules:
-        remainder = schedule_remainder(item)
-        if remainder <= Decimal("0.00"):
-            continue
-        if is_schedule_overdue(item, today):
-            total += remainder
-    return total
+    for client_id, schedule in rows:
+        schedules_by_client.setdefault(client_id, []).append(schedule)
+
+    amounts: dict = {}
+    for client_id, schedules in schedules_by_client.items():
+        total = Decimal("0.00")
+        for item in schedules:
+            remainder = schedule_remainder(item)
+            if remainder <= Decimal("0.00"):
+                continue
+            if is_schedule_overdue(item, check_date):
+                total += remainder
+        amounts[client_id] = total
+    return amounts
 
 
 def build_clients_workbook(
@@ -133,9 +150,12 @@ def build_clients_workbook(
             "Просрочка",
             "Сумма просрочки",
         ]
+        client_ids = [client.id for client in clients]
+        overdue_map = clients_overdue_map(db, client_ids)
+        overdue_amounts = clients_overdue_amounts(db, client_ids)
         rows = []
         for client in clients:
-            has_overdue = client_has_overdue_payments(db, client.id)
+            has_overdue = overdue_map.get(client.id, False)
             rows.append(
                 [
                     client.full_name,
@@ -145,7 +165,9 @@ def build_clients_workbook(
                     CLIENT_STATUS_LABELS.get(client.status, client.status.value),
                     managers.get(client.assigned_manager_id, ""),
                     "Да" if has_overdue else "Нет",
-                    _format_money(client_overdue_amount(db, client.id)) if has_overdue else 0,
+                    _format_money(overdue_amounts.get(client.id, Decimal("0.00")))
+                    if has_overdue
+                    else 0,
                 ]
             )
 
@@ -159,6 +181,7 @@ def build_overdue_clients_workbook(db: Session, clients: list[Client]) -> Workbo
     ws.title = "Просрочки"
 
     managers = _manager_names(db, clients)
+    overdue_amounts = clients_overdue_amounts(db, [client.id for client in clients])
     headers = [
         "ФИО",
         "Телефон",
@@ -178,7 +201,7 @@ def build_overdue_clients_workbook(db: Session, clients: list[Client]) -> Workbo
                 _format_money(client.debt_amount),
                 CLIENT_STATUS_LABELS.get(client.status, client.status.value),
                 managers.get(client.assigned_manager_id, ""),
-                _format_money(client_overdue_amount(db, client.id)),
+                _format_money(overdue_amounts.get(client.id, Decimal("0.00"))),
             ]
         )
 

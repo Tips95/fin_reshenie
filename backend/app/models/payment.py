@@ -22,7 +22,7 @@ class Payment(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
         index=True,
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    payment_date: Mapped[date] = mapped_column(Date, nullable=False)
+    payment_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"),

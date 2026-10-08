@@ -57,6 +57,7 @@ from app.services.retail_deals import create_retail_client, create_retail_deal, 
 from app.services.retail_deletion import hard_delete_retail_client, hard_delete_retail_contract
 from app.services.file_storage import (
     delete_storage_key,
+    has_deferred_pdf,
     read_and_validate_pdf,
     retail_client_guarantor_passport_key,
     retail_client_passport_key,
@@ -292,7 +293,13 @@ def download_client_passport_pdf(
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
     _ensure_investor_client_access(db, current_user, client.id)
-    if not client.passport_pdf_path and not client.passport_pdf_data:
+    if not has_deferred_pdf(
+        storage_key=client.passport_pdf_path,
+        db=db,
+        model=RetailClient,
+        pk=client.id,
+        data_column=RetailClient.passport_pdf_data,
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта не загружен")
     return stored_pdf_response(
         file_data=client.passport_pdf_data,
@@ -310,7 +317,13 @@ def delete_client_passport_pdf(
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
-    if not client.passport_pdf_path and not client.passport_pdf_data:
+    if not has_deferred_pdf(
+        storage_key=client.passport_pdf_path,
+        db=db,
+        model=RetailClient,
+        pk=client.id,
+        data_column=RetailClient.passport_pdf_data,
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF паспорта не загружен")
     delete_storage_key(client.passport_pdf_path)
     old_name = client.passport_pdf_filename
@@ -371,7 +384,13 @@ def download_guarantor_passport_pdf(
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
     _ensure_investor_client_access(db, current_user, client.id)
-    if not client.guarantor_passport_pdf_path and not client.guarantor_passport_pdf_data:
+    if not has_deferred_pdf(
+        storage_key=client.guarantor_passport_pdf_path,
+        db=db,
+        model=RetailClient,
+        pk=client.id,
+        data_column=RetailClient.guarantor_passport_pdf_data,
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="PDF паспорта поручителя не загружен",
@@ -392,7 +411,13 @@ def delete_guarantor_passport_pdf(
 ) -> RetailClientResponse:
     ensure_retail_organization(db, current_user)
     client = get_retail_client(db, client_id=client_id, organization_id=current_user.organization_id)
-    if not client.guarantor_passport_pdf_path and not client.guarantor_passport_pdf_data:
+    if not has_deferred_pdf(
+        storage_key=client.guarantor_passport_pdf_path,
+        db=db,
+        model=RetailClient,
+        pk=client.id,
+        data_column=RetailClient.guarantor_passport_pdf_data,
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="PDF паспорта поручителя не загружен",
@@ -617,7 +642,13 @@ def download_signed_contract_pdf(
     ensure_retail_organization(db, current_user)
     contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
     ensure_contract_access(db, current_user, contract)
-    if not contract.signed_contract_pdf_path and not contract.signed_contract_pdf_data:
+    if not has_deferred_pdf(
+        storage_key=contract.signed_contract_pdf_path,
+        db=db,
+        model=RetailContract,
+        pk=contract.id,
+        data_column=RetailContract.signed_contract_pdf_data,
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписанный договор не загружен")
     return stored_pdf_response(
         file_data=contract.signed_contract_pdf_data,
@@ -635,7 +666,13 @@ def delete_signed_contract_pdf(
 ) -> RetailContractDetail:
     ensure_retail_organization(db, current_user)
     contract = get_retail_contract(db, contract_id=contract_id, organization_id=current_user.organization_id)
-    if not contract.signed_contract_pdf_path and not contract.signed_contract_pdf_data:
+    if not has_deferred_pdf(
+        storage_key=contract.signed_contract_pdf_path,
+        db=db,
+        model=RetailContract,
+        pk=contract.id,
+        data_column=RetailContract.signed_contract_pdf_data,
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписанный договор не загружен")
     delete_storage_key(contract.signed_contract_pdf_path)
     old_name = contract.signed_contract_pdf_filename

@@ -28,7 +28,7 @@ class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
-    contract_date: Mapped[date] = mapped_column(Date, nullable=False)
+    contract_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     debt_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     engagement_stage: Mapped[EngagementStage] = mapped_column(
         Enum(
@@ -39,11 +39,13 @@ class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ),
         nullable=False,
         default=EngagementStage.DOCUMENT_COLLECTION,
+        index=True,
     )
     status: Mapped[ClientStatus] = mapped_column(
         Enum(ClientStatus, name="client_status", native_enum=False),
         nullable=False,
         default=ClientStatus.ACTIVE,
+        index=True,
     )
     procedure_stage: Mapped[ProcedureStage] = mapped_column(
         Enum(
@@ -54,6 +56,7 @@ class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ),
         nullable=False,
         default=ProcedureStage.CONTRACT_SIGNED,
+        index=True,
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     manager_first_commission_collected: Mapped[bool] = mapped_column(
