@@ -17,13 +17,12 @@ def test_leaves_sqlite_alone():
     assert sanitize_database_url("sqlite:///./dev.db") == "sqlite:///./dev.db"
 
 
-def test_postgres_connect_args_timeout_and_keepalives(monkeypatch):
+def test_postgres_connect_args_timeout_without_keepalives(monkeypatch):
     monkeypatch.setenv("DATABASE_SSL_MODE", "require")
     args = build_connect_args("postgresql://user:pass@host:5432/db")
     assert args["sslmode"] == "require"
-    assert args["connect_timeout"] == 10
-    assert args["keepalives"] == 1
-    assert args["keepalives_idle"] == 30
+    assert args["connect_timeout"] == 20
+    assert "keepalives" not in args
 
 
 def test_sqlite_connect_args_skip_postgres_timeouts():

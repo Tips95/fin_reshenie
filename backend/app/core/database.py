@@ -40,13 +40,11 @@ def build_connect_args(database_url: str) -> dict[str, object]:
 
     # Timeweb Managed PostgreSQL: verify-full падает в Docker из-за hostname в сертификате.
     ssl_mode = os.environ.get("DATABASE_SSL_MODE", "require").strip() or "require"
+    # Только sslmode и таймаут. TCP keepalives в контейнере Timeweb дают
+    # setsockopt-ошибку, процесс падает до healthcheck.
     args: dict[str, object] = {
         "sslmode": ssl_mode,
         "connect_timeout": settings.DB_CONNECT_TIMEOUT,
-        "keepalives": 1,
-        "keepalives_idle": 30,
-        "keepalives_interval": 10,
-        "keepalives_count": 3,
     }
 
     if ssl_mode in {"verify-full", "verify-ca"}:

@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 2
     DB_POOL_TIMEOUT: int = 20
     DB_POOL_RECYCLE: int = 300
-    DB_CONNECT_TIMEOUT: int = 10
+    DB_CONNECT_TIMEOUT: int = 20
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
