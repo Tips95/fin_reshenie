@@ -26,7 +26,7 @@ import {
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, questionnairesApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { sanitizeClientListReturnHref } from "@/lib/client-list-filters";
-import { effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel, todayIsoDate } from "@/lib/format";
+import { contractStaffLabel, effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel, todayIsoDate } from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
 import {
   filterDecimalInput,
@@ -37,7 +37,7 @@ import {
   validateRequiredDate,
 } from "@/lib/validation";
 import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
-import { canManageClients } from "@/lib/organization-features";
+import { canManageClients, isContractStaffRole } from "@/lib/organization-features";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 import { cn } from "@/lib/cn";
 
@@ -373,7 +373,9 @@ export default function ClientDetailPage() {
       usersApi
         .list()
         .then((users) =>
-          setManagers(users.filter((item) => item.role === "manager" && item.is_active)),
+          setManagers(
+            users.filter((item) => item.is_active && isContractStaffRole(item.role)),
+          ),
         )
         .catch(() => setManagers([]));
     }
@@ -2086,7 +2088,7 @@ export default function ClientDetailPage() {
                         <option value="">Не назначен</option>
                         {managers.map((manager) => (
                           <option key={manager.id} value={manager.id}>
-                            {manager.full_name}
+                            {contractStaffLabel(manager.full_name, manager.role)}
                           </option>
                         ))}
                       </Select>

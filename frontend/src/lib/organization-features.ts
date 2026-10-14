@@ -22,6 +22,11 @@ export function isLeadSupervisor(user: User | null | undefined): boolean {
   return user?.role === "head_manager";
 }
 
+/** Менеджер или начальник отдела: оба заключают договоры и ведут сбор. */
+export function isContractStaffRole(role: string | null | undefined): boolean {
+  return role === "manager" || role === "head_manager";
+}
+
 export function canSuperviseLeads(user: User | null | undefined): boolean {
   return user?.role === "owner" || isLeadSupervisor(user);
 }

@@ -13,12 +13,12 @@ import {
   type ClientListSortField,
   type CollectionViewFilter,
 } from "@/lib/client-list-filters";
-import { formatDate, formatMoney, formatMonthLabel, formatShortName, isFullClient, statusLabel } from "@/lib/format";
+import { contractStaffLabel, formatDate, formatMoney, formatMonthLabel, formatShortName, isFullClient, statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
 import type { Client, ClientBrief, ClientDueMonthSummary, ClientStatus, ProcedureStage, User } from "@/lib/types";
-import { canManageClients, canSuperviseLeads } from "@/lib/organization-features";
+import { canManageClients, canSuperviseLeads, isContractStaffRole } from "@/lib/organization-features";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
 type SortField = ClientListSortField;
@@ -38,6 +38,12 @@ const STATUS_OPTIONS: Array<{ value: ClientStatus; label: string }> = [
   { value: "defaulted", label: "Просрочен" },
   { value: "cancelled", label: "Отменён" },
 ];
+
+function assignedManagerLabel(managers: User[], managerId: string | null): string {
+  const manager = managers.find((item) => item.id === managerId);
+  if (!manager) return "Не назначен";
+  return contractStaffLabel(manager.full_name, manager.role);
+}
 
 function SortableTh({
   label,
@@ -261,7 +267,9 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
       usersApi
         .list()
         .then((users) =>
-          setManagers(users.filter((item) => item.role === "manager" && item.is_active)),
+          setManagers(
+            users.filter((item) => item.is_active && isContractStaffRole(item.role)),
+          ),
         )
         .catch(() => setManagers([]));
       return;
@@ -272,13 +280,13 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
         .then((rows) =>
           setManagers(
             rows
-              .filter((item) => item.role === "manager")
+              .filter((item) => isContractStaffRole(item.role))
               .map(
                 (item) =>
                   ({
                     id: item.id,
                     full_name: item.full_name,
-                    role: "manager",
+                    role: item.role === "head_manager" ? "head_manager" : "manager",
                     is_active: true,
                   }) as User,
               ),
@@ -655,7 +663,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                   <option value="">Все</option>
                   {managers.map((manager) => (
                     <option key={manager.id} value={manager.id}>
-                      {manager.full_name}
+                      {contractStaffLabel(manager.full_name, manager.role)}
                     </option>
                   ))}
                 </Select>
@@ -748,7 +756,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                 <option value="">Менеджер не выбран</option>
                 {managers.map((manager) => (
                   <option key={manager.id} value={manager.id}>
-                    {manager.full_name}
+                    {contractStaffLabel(manager.full_name, manager.role)}
                   </option>
                 ))}
               </Select>
@@ -1048,14 +1056,13 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                             <option value="">Не назначен</option>
                             {managers.map((manager) => (
                               <option key={manager.id} value={manager.id}>
-                                {manager.full_name}
+                                {contractStaffLabel(manager.full_name, manager.role)}
                               </option>
                             ))}
                           </Select>
                         ) : (
                           <span className="text-muted">
-                            {managers.find((manager) => manager.id === client.assigned_manager_id)
-                              ?.full_name ?? "Не назначен"}
+                            {assignedManagerLabel(managers, client.assigned_manager_id)}
                           </span>
                         )}
                       </td>

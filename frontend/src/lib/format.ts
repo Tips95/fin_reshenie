@@ -160,6 +160,11 @@ export function statusLabel(status: string): string {
   return labels[status] ?? status;
 }
 
+export function contractStaffLabel(fullName: string, role?: string | null): string {
+  if (role === "head_manager") return `${fullName} · Начальник отдела`;
+  return fullName;
+}
+
 export function leadStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     new: "Новый",
