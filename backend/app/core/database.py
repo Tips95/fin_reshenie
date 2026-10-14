@@ -40,7 +40,14 @@ def build_connect_args(database_url: str) -> dict[str, object]:
 
     # Timeweb Managed PostgreSQL: verify-full падает в Docker из-за hostname в сертификате.
     ssl_mode = os.environ.get("DATABASE_SSL_MODE", "require").strip() or "require"
-    args: dict[str, object] = {"sslmode": ssl_mode}
+    args: dict[str, object] = {
+        "sslmode": ssl_mode,
+        "connect_timeout": settings.DB_CONNECT_TIMEOUT,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+    }
 
     if ssl_mode in {"verify-full", "verify-ca"}:
         ssl_root_cert = os.environ.get("PGSSLROOTCERT", "/app/certs/root.crt")
@@ -58,12 +65,13 @@ engine_kwargs: dict[str, object] = {
     "pool_pre_ping": not database_url.startswith("sqlite"),
 }
 if database_url.startswith("postgresql"):
-    # 2 uvicorn workers × (3 + 5) = max 16 connections — safer for managed Postgres
+    # Один воркер держит пул тёплым. Раньше 2 воркера × (3 + 5) при одновременной
+    # работе менеджеров открывали новые SSL-сессии, и Timeweb их отклонял.
     engine_kwargs.update(
-        pool_size=3,
-        max_overflow=5,
-        pool_recycle=300,
-        pool_timeout=30,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_recycle=settings.DB_POOL_RECYCLE,
+        pool_timeout=settings.DB_POOL_TIMEOUT,
     )
 
 engine = create_engine(database_url, **engine_kwargs)

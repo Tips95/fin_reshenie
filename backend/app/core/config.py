@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     # Флаг включает принудительное применение эталонной сетки ко всем.
     FORCE_ORGANIZATION_DEFAULTS_SYNC: bool = False
 
+    # Один процесс uvicorn делит эти соединения между всеми менеджерами.
+    # Запас сверху маленький: лишние SSL-подключения к Timeweb часто обрываются.
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 2
+    DB_POOL_TIMEOUT: int = 20
+    DB_POOL_RECYCLE: int = 300
+    DB_CONNECT_TIMEOUT: int = 10
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> list[str]:
