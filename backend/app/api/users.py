@@ -13,6 +13,7 @@ from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.access import get_organization_user
 from app.services.accounts import assert_contacts_available
 from app.services.audit import log_audit
+from app.services.client_duplicates import phones_equivalent
 
 router = APIRouter()
 
@@ -126,13 +127,22 @@ def update_user(
     updates = payload.model_dump(exclude_unset=True)
 
     if "email" in updates or "phone" in updates:
-        assert_contacts_available(
-            db,
-            organization_type=current_user.organization.organization_type,
-            email=updates.get("email", user.email),
-            phone=updates.get("phone", user.phone),
-            exclude_user_id=user.id,
-        )
+        new_email = updates.get("email", user.email)
+        new_phone = updates.get("phone", user.phone)
+        # Смена только фамилии не должна упираться в проверку логина:
+        # email и телефон в форме те же, что уже сохранены.
+        email_changed = (user.email or "").strip().lower() != (new_email or "").strip().lower()
+        old_phone = (user.phone or "").strip()
+        next_phone = (new_phone or "").strip()
+        phone_changed = bool(old_phone or next_phone) and not phones_equivalent(old_phone, next_phone)
+        if email_changed or phone_changed:
+            assert_contacts_available(
+                db,
+                organization_type=current_user.organization.organization_type,
+                email=new_email,
+                phone=new_phone,
+                exclude_user_id=user.id,
+            )
 
     if "role" in updates:
         _assert_team_role(

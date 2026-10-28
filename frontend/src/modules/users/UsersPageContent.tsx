@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -89,6 +89,7 @@ export function UsersPageContent({
   const [error, setError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const loadSeq = useRef(0);
 
   useEffect(() => {
     if (currentUser && currentUser.role !== "owner") {
@@ -97,12 +98,14 @@ export function UsersPageContent({
   }, [currentUser, router, homeHref]);
 
   async function loadUsers() {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const items = await usersApi.list();
+      if (seq !== loadSeq.current) return;
       setUsers(excludeInvestors ? items.filter((item) => item.role !== "investor") : items);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }
 
@@ -193,6 +196,7 @@ export function UsersPageContent({
         payload.password = editForm.password;
       }
       const updated = await usersApi.update(userId, payload);
+      loadSeq.current += 1;
       setUsers((items) => items.map((item) => (item.id === updated.id ? updated : item)));
       if (currentUser?.id === userId) {
         await refreshUser();

@@ -459,7 +459,7 @@ export const tasksApi = {
 };
 
 export const usersApi = {
-  list: () => apiFetch<User[]>("/users"),
+  list: () => apiFetch<User[]>(`/users?_=${Date.now()}`),
   create: (data: Record<string, unknown>) =>
     apiFetch<User>("/users", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: Record<string, unknown>) =>
@@ -630,7 +630,7 @@ export const questionnairesApi = {
       method: "POST",
       body: JSON.stringify({ manager_id: managerId }),
     }),
-  managers: () => apiFetch<LeadManagerOption[]>("/questionnaires/managers"),
+  managers: () => apiFetch<LeadManagerOption[]>(`/questionnaires/managers?_=${Date.now()}`),
   dailyStats: (day?: string) =>
     apiFetch<LeadStats>(`/questionnaires/stats/daily${day ? `?day=${day}` : ""}`),
   countsByDay: (params?: { date_from?: string; date_to?: string; manager_id?: string }) => {

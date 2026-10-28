@@ -263,37 +263,48 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   }, []);
 
   useEffect(() => {
-    if (user?.role === "owner") {
-      usersApi
-        .list()
-        .then((users) =>
-          setManagers(
-            users.filter((item) => item.is_active && isContractStaffRole(item.role)),
-          ),
-        )
-        .catch(() => setManagers([]));
-      return;
+    if (!user || !canSuperviseLeads(user)) return;
+    let cancelled = false;
+    let seq = 0;
+
+    async function loadManagers() {
+      const current = ++seq;
+      try {
+        const next =
+          user?.role === "owner"
+            ? (await usersApi.list()).filter(
+                (item) => item.is_active && isContractStaffRole(item.role),
+              )
+            : (await questionnairesApi.managers())
+                .filter((item) => isContractStaffRole(item.role))
+                .map(
+                  (item) =>
+                    ({
+                      id: item.id,
+                      full_name: item.full_name,
+                      role: item.role,
+                      is_active: true,
+                    }) as User,
+                );
+        if (!cancelled && current === seq) setManagers(next);
+      } catch {
+        if (!cancelled && current === seq) setManagers([]);
+      }
     }
-    if (canSuperviseLeads(user)) {
-      questionnairesApi
-        .managers()
-        .then((rows) =>
-          setManagers(
-            rows
-              .filter((item) => isContractStaffRole(item.role))
-              .map(
-                (item) =>
-                  ({
-                    id: item.id,
-                    full_name: item.full_name,
-                    role: item.role === "head_manager" ? "head_manager" : "manager",
-                    is_active: true,
-                  }) as User,
-              ),
-          ),
-        )
-        .catch(() => setManagers([]));
-    }
+
+    void loadManagers();
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadManagers();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [user]);
 
   const canFilterByManager = canSuperviseLeads(user);

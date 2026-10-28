@@ -36,6 +36,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.middleware("http")
+async def do_not_cache_api(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(settings.API_PREFIX):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
