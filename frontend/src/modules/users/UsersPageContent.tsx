@@ -77,7 +77,7 @@ export function UsersPageContent({
   /** В рассрочке инвесторы живут отдельно — в «Команде» их не показываем. */
   excludeInvestors?: boolean;
 }) {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshUser } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,7 +192,11 @@ export function UsersPageContent({
       if (editForm.password.trim()) {
         payload.password = editForm.password;
       }
-      await usersApi.update(userId, payload);
+      const updated = await usersApi.update(userId, payload);
+      setUsers((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      if (currentUser?.id === userId) {
+        await refreshUser();
+      }
       cancelEdit();
       await loadUsers();
     } catch (err) {

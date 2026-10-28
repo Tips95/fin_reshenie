@@ -161,6 +161,7 @@ export function statusLabel(status: string): string {
 }
 
 export function contractStaffLabel(fullName: string, role?: string | null): string {
+  if (role === "owner") return `${fullName} · Руководитель`;
   if (role === "head_manager") return `${fullName} · Начальник отдела`;
   return fullName;
 }

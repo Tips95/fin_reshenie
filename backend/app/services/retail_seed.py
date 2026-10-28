@@ -39,7 +39,8 @@ def _upsert_owner(
         )
         db.add(user)
     else:
-        user.full_name = full_name
+        # Имя правят в «Команде». Повторный сид при деплое не должен
+        # возвращать старую фамилию из INITIAL_ADMIN_NAME.
         user.password_hash = password_hash
         user.role = UserRole.OWNER
         user.is_active = True

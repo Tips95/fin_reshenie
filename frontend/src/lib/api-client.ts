@@ -175,13 +175,13 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  let response = await fetch(getApiUrl(path), { ...init, headers });
+  let response = await fetch(getApiUrl(path), { ...init, headers, cache: "no-store" });
 
   if (response.status === 401 && getRefreshToken()) {
     const refreshed = await refreshTokens();
     if (refreshed) {
       headers.set("Authorization", `Bearer ${getAccessToken()}`);
-      response = await fetch(getApiUrl(path), { ...init, headers });
+      response = await fetch(getApiUrl(path), { ...init, headers, cache: "no-store" });
     }
   }
 

@@ -410,3 +410,32 @@ class TestUserRolesAfterRegistration:
             db.scalars(select(User).where(User.organization_id == owner.organization_id))
         )
         assert [user.id for user in users] == [owner.id]
+
+
+def test_redeploy_seed_keeps_renamed_owner(db):
+    from app.services.retail_seed import _upsert_owner
+
+    organization = Organization(name="Решение", organization_type=OrganizationType.BANKRUPTCY)
+    db.add(organization)
+    db.flush()
+    owner = _upsert_owner(
+        db,
+        organization=organization,
+        email="owner@company.ru",
+        password="secret123",
+        full_name="Неверная Фамилия",
+    )
+    db.flush()
+    owner.full_name = "Верная Фамилия"
+    db.flush()
+
+    again = _upsert_owner(
+        db,
+        organization=organization,
+        email="owner@company.ru",
+        password="secret123",
+        full_name="Неверная Фамилия",
+    )
+
+    assert again.id == owner.id
+    assert again.full_name == "Верная Фамилия"
