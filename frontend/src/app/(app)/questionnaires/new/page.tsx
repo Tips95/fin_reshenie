@@ -41,6 +41,11 @@ export default function NewQuestionnairePage() {
     try {
       const created = await questionnairesApi.create(formToPayload(form));
       baselineRef.current = questionnaireFormSnapshot(formToPayload(form));
+      try {
+        sessionStorage.setItem("lead-saved-flash", "1");
+      } catch {
+        /* приватный режим — карточка всё равно откроется */
+      }
       router.replace(`/questionnaires/${created.id}`);
     } catch (error) {
       const existingId = getDuplicateQuestionnaireId(error);

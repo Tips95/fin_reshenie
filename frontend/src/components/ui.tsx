@@ -423,36 +423,45 @@ export function Toast({
   tone?: "success" | "error" | "info";
   onClose?: () => void;
 }) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
-    const timer = window.setTimeout(() => onClose?.(), 6000);
+    const timer = window.setTimeout(() => onCloseRef.current?.(), tone === "error" ? 5200 : 2400);
     return () => window.clearTimeout(timer);
-  }, [message, onClose]);
+  }, [message, tone]);
 
   const tones = {
     success: "border-status-success-border bg-status-success-bg text-status-success-text",
     error: "border-status-danger-border bg-status-danger-bg text-status-danger-text",
-    info: "border-status-neutral-border bg-surface text-status-neutral-text shadow-card",
+    info: "border-border bg-surface text-foreground",
   };
+  const marks = { success: "✓", error: "!", info: "i" };
 
   return (
-    <div
-      className={cn(
-        "interactive fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-2 rounded-lg border px-3 py-2 text-xs shadow-hover",
-        tones[tone],
-      )}
-      role="status"
-    >
-      <span className="flex-1">{message}</span>
-      {onClose && (
-        <button
-          type="button"
-          className="interactive text-current/60 hover:text-current"
-          onClick={onClose}
-          aria-label="Закрыть"
-        >
-          ×
-        </button>
-      )}
+    <div className="pointer-events-none fixed inset-x-0 top-3 z-[80] flex justify-center px-3">
+      <div
+        className={cn(
+          "pointer-events-auto flex w-full max-w-md items-center gap-2.5 rounded-xl border px-3.5 py-3 text-sm font-semibold shadow-hover",
+          tones[tone],
+        )}
+        role="status"
+      >
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-current/10 text-base leading-none">
+          {marks[tone]}
+        </span>
+        <span className="min-w-0 flex-1 leading-snug">{message}</span>
+        {onClose && (
+          <button
+            type="button"
+            className="interactive px-1 text-lg leading-none text-current/50 hover:text-current"
+            onClick={onClose}
+            aria-label="Закрыть"
+          >
+            ×
+          </button>
+        )}
+      </div>
     </div>
   );
 }

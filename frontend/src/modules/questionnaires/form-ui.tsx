@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -183,11 +183,33 @@ export function SaveBar({
   onDiscard?: () => void;
   extraActions?: ReactNode;
 }) {
+  const [justSaved, setJustSaved] = useState(false);
+  const wasSaving = useRef(false);
+
+  useEffect(() => {
+    if (saving) {
+      wasSaving.current = true;
+      setJustSaved(false);
+      return;
+    }
+    if (dirty || !wasSaving.current) {
+      wasSaving.current = false;
+      setJustSaved(false);
+      return;
+    }
+    wasSaving.current = false;
+    setJustSaved(true);
+    const timer = window.setTimeout(() => setJustSaved(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [saving, dirty]);
+
   return (
     <div className="sticky bottom-[calc(var(--mobile-nav-height)+var(--safe-area-bottom)+0.5rem)] z-20 mt-4 rounded-xl border border-border bg-surface/95 px-3 py-2.5 shadow-hover backdrop-blur sm:px-4 lg:bottom-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto min-w-0">
-          {dirty ? (
+          {justSaved ? (
+            <p className="text-sm font-semibold text-status-success-text">Сохранено</p>
+          ) : dirty ? (
             <p className="text-sm font-medium text-foreground">Есть несохранённые изменения</p>
           ) : ready ? (
             <p className="text-sm text-status-success-text">Анкета заполнена полностью</p>
@@ -195,13 +217,13 @@ export function SaveBar({
             <p className="text-sm text-muted">{progressLabel}</p>
           )}
         </div>
-        {dirty && onDiscard ? (
+        {dirty && onDiscard && !justSaved ? (
           <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={onDiscard}>
             Отменить
           </Button>
         ) : null}
-        <Button type="submit" disabled={saving || (!dirty && Boolean(onDiscard))}>
-          {saving ? "Сохранение..." : submitLabel}
+        <Button type="submit" disabled={saving || justSaved || (!dirty && Boolean(onDiscard))}>
+          {saving ? "Сохранение..." : justSaved ? "Сохранено" : submitLabel}
         </Button>
         {extraActions}
       </div>

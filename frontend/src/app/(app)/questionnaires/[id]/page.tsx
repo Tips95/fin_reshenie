@@ -55,6 +55,18 @@ export default function QuestionnaireDetailPage() {
   }, [form, baseline]);
 
   useEffect(() => {
+    let flash = false;
+    try {
+      flash = sessionStorage.getItem("lead-saved-flash") === "1";
+      if (flash) sessionStorage.removeItem("lead-saved-flash");
+    } catch {
+      flash = false;
+    }
+    if (!flash) return;
+    setToast({ message: "Лид сохранён", tone: "success" });
+  }, []);
+
+  useEffect(() => {
     void (async () => {
       setLoading(true);
       try {
