@@ -17,7 +17,7 @@ import {
   Select,
   StatCard,
 } from "@/components/ui";
-import { ApiRequestError, analyticsApi, clientsApi, expensesApi } from "@/lib/api-client";
+import { ApiRequestError, analyticsApi, civilCasesApi, clientsApi, expensesApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
   formatAmountInput,
@@ -28,13 +28,17 @@ import {
   statusLabel,
 } from "@/lib/format";
 import type {
+  CivilShareLine,
+  CivilSharesOverview,
   ExpenseCategory,
   ExpenseGroup,
   ExpensePayment,
   ManagerFirstCommissionsOverview,
+  MandatoryOutflowsOverview,
   OneTimeExpense,
   OperatingExpense,
 } from "@/lib/types";
+import { PayoutTracking } from "@/modules/expenses/PayoutTracking";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const emptyOneTimeForm = {
@@ -390,9 +394,13 @@ export default function ExpensesPage() {
   const [periodMonth, setPeriodMonth] = useState(currentMonthValue());
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string>("");
   const [managerPayouts, setManagerPayouts] = useState<ManagerFirstCommissionsOverview | null>(null);
+  const [civilShares, setCivilShares] = useState<CivilSharesOverview | null>(null);
+  const [mandatoryOutflows, setMandatoryOutflows] = useState<MandatoryOutflowsOverview | null>(null);
   const [expandedManagers, setExpandedManagers] = useState<Record<string, boolean>>({});
   const [markingClientId, setMarkingClientId] = useState<string | null>(null);
   const [markingManagerKey, setMarkingManagerKey] = useState<string | null>(null);
+  const [markingShareKey, setMarkingShareKey] = useState<string | null>(null);
+  const [markingSharePayeeId, setMarkingSharePayeeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && user.role !== "owner") {
@@ -406,7 +414,7 @@ export default function ExpensesPage() {
       // Always load the working period; also load history month when it differs.
       // Never request the full unbounded payment list.
       const historyMonth = historyMonthFilter || periodMonth;
-      const [expenseData, periodPayments, historyPayments, oneTimeData, payoutData] =
+      const [expenseData, periodPayments, historyPayments, oneTimeData, payoutData, shareData, outflowData] =
         await Promise.all([
           expensesApi.list(),
           expensesApi.listPayments({ period_month: periodMonth }),
@@ -415,6 +423,8 @@ export default function ExpensesPage() {
             : expensesApi.listPayments({ period_month: historyMonth }),
           expensesApi.listOneTime({ period_month: periodMonth }),
           analyticsApi.managerFirstCommissions(periodMonth).catch(() => null),
+          analyticsApi.civilShares(periodMonth).catch(() => null),
+          analyticsApi.mandatoryOutflows(periodMonth).catch(() => null),
         ]);
       const merged = new Map<string, ExpensePayment>();
       for (const payment of [...periodPayments, ...historyPayments]) {
@@ -424,6 +434,8 @@ export default function ExpensesPage() {
       setPayments(Array.from(merged.values()));
       setOneTimeExpenses(oneTimeData);
       setManagerPayouts(payoutData);
+      setCivilShares(shareData);
+      setMandatoryOutflows(outflowData);
     } finally {
       setLoading(false);
     }
@@ -439,6 +451,53 @@ export default function ExpensesPage() {
   async function refreshManagerPayouts() {
     const payoutData = await analyticsApi.managerFirstCommissions(periodMonth);
     setManagerPayouts(payoutData);
+  }
+
+  async function refreshCivilShares() {
+    setCivilShares(await analyticsApi.civilShares(periodMonth));
+  }
+
+  async function handleMarkCivilShare(line: CivilShareLine, collected: boolean) {
+    const lineKey = `${line.case_id}:${line.role}`;
+    setMarkingShareKey(lineKey);
+    setError(null);
+    try {
+      await civilCasesApi.markShares([{ case_id: line.case_id, role: line.role }], collected);
+      await refreshCivilShares();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError || err instanceof Error
+          ? err.message
+          : "Не удалось обновить долю по гражданке",
+      );
+    } finally {
+      setMarkingShareKey(null);
+    }
+  }
+
+  async function handleMarkCivilShareAll(
+    payeeId: string,
+    lines: CivilShareLine[],
+    collected: boolean,
+  ) {
+    if (lines.length === 0) return;
+    setMarkingSharePayeeId(payeeId);
+    setError(null);
+    try {
+      await civilCasesApi.markShares(
+        lines.map((line) => ({ case_id: line.case_id, role: line.role })),
+        collected,
+      );
+      await refreshCivilShares();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError || err instanceof Error
+          ? err.message
+          : "Не удалось обновить доли по гражданке",
+      );
+    } finally {
+      setMarkingSharePayeeId(null);
+    }
   }
 
   function toggleManagerExpanded(managerKey: string) {
@@ -939,6 +998,19 @@ export default function ExpensesPage() {
           <EmptyState>Не удалось загрузить менеджерские</EmptyState>
         )}
       </Card>
+
+      <PayoutTracking
+        month={periodMonth}
+        loading={loading}
+        civil={civilShares}
+        outflows={mandatoryOutflows}
+        markingLineKey={markingShareKey}
+        markingPayeeId={markingSharePayeeId}
+        onMarkLine={(line, collected) => void handleMarkCivilShare(line, collected)}
+        onMarkPayee={(payeeId, lines, collected) =>
+          void handleMarkCivilShareAll(payeeId, lines, collected)
+        }
+      />
 
       <Card variant="accent">
         <SectionTitle

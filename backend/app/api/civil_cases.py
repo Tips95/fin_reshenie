@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_civil_staff
+from app.api.deps import require_civil_staff, require_owner
 from app.core.database import get_db
 from app.models.enums import CivilCaseDocumentKind, CivilCaseStage
 from app.models.user import User
@@ -16,6 +16,8 @@ from app.schemas.civil_case import (
     CivilCaseResponse,
     CivilCaseUpdate,
 )
+from app.schemas.civil_shares import CivilShareBulkResult, CivilShareBulkUpdate
+from app.services.civil_case_shares import mark_civil_shares
 from app.services.civil_cases import (
     add_document,
     add_movement,
@@ -62,6 +64,15 @@ def get_managers(
     db: Session = Depends(get_db),
 ) -> list[CivilCaseExecutorOption]:
     return list_managers(db, current_user)
+
+
+@router.post("/shares", response_model=CivilShareBulkResult)
+def mark_shares(
+    payload: CivilShareBulkUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> CivilShareBulkResult:
+    return CivilShareBulkResult(updated_count=mark_civil_shares(db, current_user, payload))
 
 
 @router.get("", response_model=list[CivilCaseBrief])

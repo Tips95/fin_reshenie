@@ -43,6 +43,9 @@ import type {
   CivilCaseBrief,
   CivilCaseDocumentKind,
   CivilCaseExecutorOption,
+  CivilShareMark,
+  CivilSharesOverview,
+  MandatoryOutflowsOverview,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -443,6 +446,14 @@ export const analyticsApi = {
     apiFetch<ManagerFirstCommissionsOverview>(
       `/analytics/manager-first-commissions?month=${encodeURIComponent(month)}`,
     ),
+  civilShares: (month: string) =>
+    apiFetch<CivilSharesOverview>(
+      `/analytics/civil-shares?month=${encodeURIComponent(month)}`,
+    ),
+  mandatoryOutflows: (month: string) =>
+    apiFetch<MandatoryOutflowsOverview>(
+      `/analytics/mandatory-outflows?month=${encodeURIComponent(month)}`,
+    ),
 };
 
 export const funnelApi = {
@@ -677,6 +688,11 @@ export const civilCasesApi = {
       body: JSON.stringify(data),
     }),
   remove: (id: string) => apiFetch<void>(`/civil-cases/${id}`, { method: "DELETE" }),
+  markShares: (marks: CivilShareMark[], collected: boolean) =>
+    apiFetch<{ updated_count: number }>("/civil-cases/shares", {
+      method: "POST",
+      body: JSON.stringify({ marks, collected }),
+    }),
   addMovement: (id: string, body: string) =>
     apiFetch<CivilCase>(`/civil-cases/${id}/movements`, {
       method: "POST",

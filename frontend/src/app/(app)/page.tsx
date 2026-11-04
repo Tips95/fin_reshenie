@@ -813,6 +813,14 @@ export default function DashboardPage() {
                 tone="mandatory"
                 title="Обязательные платежи"
                 description="Депозит, финансовое управление и госпошлина — отдельно по каждой статье"
+                action={
+                  <Link
+                    href="/expenses#deposit-fin"
+                    className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
+                  >
+                    По месяцам →
+                  </Link>
+                }
               >
                 <MandatoryPaymentsTable
                   month={summary.mandatory_paid_this_month}

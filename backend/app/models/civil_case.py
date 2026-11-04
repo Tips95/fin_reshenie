@@ -1,8 +1,8 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, LargeBinary, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, LargeBinary, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -52,6 +52,19 @@ class CivilCase(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     authority_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     executed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     execution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 40%, если заключивший и исполнитель — один человек; иначе 20% каждому.
+    manager_share_paid: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    manager_share_paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    executor_share_paid: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    executor_share_paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     organization: Mapped["Organization"] = relationship()
     created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_id])

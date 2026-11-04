@@ -35,6 +35,19 @@ import {
 import type { CivilCase, CivilCaseDocument, CivilCaseDocumentKind, CivilCaseExecutorOption, CivilCaseStage } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
+function civilShareHint(price: string, managerId: string, executorId: string): string {
+  const amount = Number(price);
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  const part = (rate: number) => formatMoney(Math.round(amount * rate));
+  if (executorId && managerId && executorId === managerId) {
+    return `Сам заключил и исполнил: ${part(0.4)} (40% цены).`;
+  }
+  if (executorId) {
+    return `Перевёл исполнителю: ${part(0.2)} менеджеру и ${part(0.2)} исполнителю.`;
+  }
+  return `Менеджеру ${part(0.2)} (20%). Доля исполнителя появится после назначения.`;
+}
+
 function stageTone(stage: CivilCaseStage): "default" | "success" | "warning" | "danger" {
   if (stage === "completed") return "success";
   if (stage === "submitted" || stage === "documents") return "warning";
@@ -504,6 +517,15 @@ export default function CivilCaseDetailPage() {
               <p className="mt-1 text-[11px] text-muted">
                 Если вели дело сами — выберите себя в группе «Сделал сам».
               </p>
+              {civilShareHint(intake.price, intake.concluding_manager_id, intake.assigned_executor_id) ? (
+                <p className="mt-1 text-[11px] font-medium text-foreground">
+                  {civilShareHint(
+                    intake.price,
+                    intake.concluding_manager_id,
+                    intake.assigned_executor_id,
+                  )}
+                </p>
+              ) : null}
             </FormField>
             <div className="flex flex-wrap gap-2 md:col-span-2">
               <Button type="button" disabled={saving} onClick={() => void saveIntake()}>
@@ -542,6 +564,16 @@ export default function CivilCaseDetailPage() {
             <div>
               <dt className="text-muted">Исполнитель</dt>
               <dd>{item.assigned_executor_name || "не назначен"}</dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-muted">Доля</dt>
+              <dd>
+                {civilShareHint(
+                  item.price,
+                  item.concluding_manager_id ?? "",
+                  item.assigned_executor_id ?? "",
+                ) || "—"}
+              </dd>
             </div>
             <div className="md:col-span-2">
               <dt className="text-muted">Предмет обращения</dt>

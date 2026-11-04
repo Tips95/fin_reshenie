@@ -426,6 +426,68 @@ export interface ManagerFirstCommissionsOverview {
   managers: ManagerFirstCommissionManagerRow[];
 }
 
+export type CivilShareRole = "manager" | "executor" | "both";
+
+export interface CivilShareLine {
+  case_id: string;
+  client_name: string;
+  appeal_date: string;
+  price: string;
+  role: CivilShareRole;
+  share_label: string;
+  amount: string;
+  collected: boolean;
+}
+
+export interface CivilSharePayeeRow {
+  payee_id: string;
+  payee_name: string;
+  lines_count: number;
+  total_amount: string;
+  to_pay_amount: string;
+  paid_amount: string;
+  lines: CivilShareLine[];
+}
+
+export interface CivilSharesOverview {
+  month: string;
+  cases_count: number;
+  total_amount: string;
+  to_pay_amount: string;
+  paid_amount: string;
+  outstanding_to_pay_amount: string;
+  payees: CivilSharePayeeRow[];
+}
+
+export interface CivilShareMark {
+  case_id: string;
+  role: CivilShareRole;
+}
+
+export interface MandatoryOutflowItem {
+  client_id: string;
+  client_name: string;
+  payment_type: "deposit" | "financial_management";
+  amount: string;
+  payment_date: string;
+}
+
+export interface MandatoryOutflowMonth {
+  month: string;
+  deposit: string;
+  financial_management: string;
+  total: string;
+}
+
+export interface MandatoryOutflowsOverview {
+  month: string;
+  deposit: string;
+  financial_management: string;
+  total: string;
+  items: MandatoryOutflowItem[];
+  history: MandatoryOutflowMonth[];
+}
+
 export interface FunnelStageItem {
   stage: ProcedureStage;
   count: number;
