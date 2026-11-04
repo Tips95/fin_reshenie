@@ -34,6 +34,7 @@ from app.services.access import (
     find_pricing_tier,
     get_organization_client,
     get_organization_user,
+    user_owns_created_clients,
     pricing_tier_not_found_message,
 )
 from app.services.audit import log_audit
@@ -411,7 +412,7 @@ def create_client(
     db: Session = Depends(get_db),
 ) -> ClientResponse:
     assigned_manager_id = payload.assigned_manager_id
-    if current_user.role == UserRole.MANAGER:
+    if user_owns_created_clients(current_user):
         assigned_manager_id = current_user.id
     elif assigned_manager_id is not None:
         get_organization_user(
@@ -585,7 +586,7 @@ def update_client(
             )
 
     if "assigned_manager_id" in updates:
-        if current_user.role == UserRole.MANAGER:
+        if user_owns_created_clients(current_user):
             new_manager_id = updates["assigned_manager_id"]
             if new_manager_id != current_user.id:
                 raise HTTPException(

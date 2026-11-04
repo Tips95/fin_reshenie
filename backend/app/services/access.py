@@ -20,6 +20,12 @@ from app.services.schedule_dates import is_schedule_overdue
 
 
 _INACTIVE_OVERDUE_STATUSES = {ClientStatus.CANCELLED, ClientStatus.COMPLETED}
+CLIENT_OWNER_ROLES = {UserRole.MANAGER, UserRole.HEAD_MANAGER}
+
+
+def user_owns_created_clients(user: User) -> bool:
+    """Менеджер и начальник отдела сами заключают клиентов и получают за них выплату."""
+    return user.role in CLIENT_OWNER_ROLES
 
 
 def get_organization_client(

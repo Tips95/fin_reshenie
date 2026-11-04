@@ -517,6 +517,85 @@ class TestLeadPipeline:
         assert foreign.id in {row.id for row in list_questionnaires(db, head)}
         assert get_organization_questionnaire(db, questionnaire_id=foreign.id, user=head).id == foreign.id
 
+    def test_head_manager_conversion_assigns_the_client_to_him(self, db):
+        head = _org_user(
+            db,
+            role=UserRole.HEAD_MANAGER,
+            email="head-close@test.local",
+            full_name="Шамиль Начальник",
+        )
+        item = create_questionnaire(
+            db,
+            head,
+            _minimal_payload(full_name="Иванов Иван Иванович", phone="+7 928 333-33-33"),
+        )
+        _, client = create_client_from_questionnaire(
+            db, head, item.id, QuestionnaireCreateClientRequest()
+        )
+        assert client.assigned_manager_id == head.id
+
+    def test_backfill_links_unassigned_client_to_department_head(self, db):
+        from app.models.audit_log import AuditLog
+        from app.models.enums import AuditAction
+        from app.services.client_assignment import backfill_unassigned_client_managers
+
+        head = _org_user(
+            db,
+            role=UserRole.HEAD_MANAGER,
+            email="head-backfill@test.local",
+            full_name="Шамиль Начальник",
+        )
+        item = create_questionnaire(
+            db,
+            head,
+            _minimal_payload(full_name="Петров Пётр Петрович", phone="+7 928 444-44-44"),
+        )
+        _, client = create_client_from_questionnaire(
+            db, head, item.id, QuestionnaireCreateClientRequest()
+        )
+        client.assigned_manager_id = None
+        direct = Client(
+            organization_id=head.organization_id,
+            assigned_manager_id=None,
+            full_name="Сидоров Сидор Сидорович",
+            phone="+79285555555",
+            contract_date=date(2026, 11, 1),
+            debt_amount=Decimal("0.00"),
+            engagement_stage=EngagementStage.BANKRUPTCY,
+        )
+        db.add(direct)
+        db.flush()
+        db.add(
+            AuditLog(
+                organization_id=head.organization_id,
+                entity_type="client",
+                entity_id=direct.id,
+                action=AuditAction.CREATE,
+                changed_by=head.id,
+            )
+        )
+        kept = Client(
+            organization_id=head.organization_id,
+            assigned_manager_id=head.id,
+            full_name="Орлов Орёл Орлович",
+            phone="+79286666666",
+            contract_date=date(2026, 11, 2),
+            debt_amount=Decimal("0.00"),
+            engagement_stage=EngagementStage.BANKRUPTCY,
+        )
+        db.add(kept)
+        db.commit()
+        db.refresh(client)
+        assert client.assigned_manager_id is None
+
+        updated = backfill_unassigned_client_managers(db.connection())
+        db.expire_all()
+
+        assert updated == 2
+        assert db.get(Client, client.id).assigned_manager_id == head.id
+        assert db.get(Client, direct.id).assigned_manager_id == head.id
+        assert db.get(Client, kept.id).assigned_manager_id == head.id
+
     def test_only_supervisors_reassign_leads(self, db):
         head = _org_user(
             db,

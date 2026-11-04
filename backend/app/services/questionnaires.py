@@ -464,7 +464,12 @@ def create_client_from_questionnaire(
             detail=duplicate_client_payload(existing),
         )
 
-    assigned_manager_id = user.id if user.role == UserRole.MANAGER else None
+    if user.role == UserRole.MANAGER or (
+        user.role == UserRole.HEAD_MANAGER and item.assigned_manager_id in (None, user.id)
+    ):
+        assigned_manager_id = user.id
+    else:
+        assigned_manager_id = item.assigned_manager_id
     client = Client(
         organization_id=user.organization_id,
         assigned_manager_id=assigned_manager_id,

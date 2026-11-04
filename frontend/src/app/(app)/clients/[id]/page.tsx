@@ -1296,7 +1296,7 @@ export default function ClientDetailPage() {
   }
 
   const isOwner = user?.role === "owner";
-  const isManager = user?.role === "manager";
+  const isManager = user?.role === "manager" || user?.role === "head_manager";
   const isCollectionStaff = user?.role === "call_center";
   const canEditClient = canManageClients(user);
   const canViewClientFinances = canEditClient || isCollectionStaff;

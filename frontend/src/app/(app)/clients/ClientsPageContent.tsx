@@ -365,7 +365,7 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
 
   const canCreate = canManageClients(user);
   const canEdit = canCreate;
-  const isManager = user?.role === "manager";
+  const isManager = user?.role === "manager" || user?.role === "head_manager";
   const canAssignManager = user?.role === "owner";
   const canSeeClientAmounts = canManageClients(user);
   const isCollectionStaff = user?.role === "call_center";
