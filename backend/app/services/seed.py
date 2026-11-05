@@ -9,7 +9,42 @@ from app.models.enums import OrganizationType, UserRole
 from app.models.organization import Organization
 from app.models.user import User
 from app.services.organization_defaults import seed_all_bankruptcy_organization_defaults
-from app.services.retail_seed import _upsert_owner, seed_retail_organization
+
+
+def _upsert_owner(
+    db: Session,
+    *,
+    organization: Organization,
+    email: str,
+    password: str,
+    full_name: str,
+) -> User:
+    user = db.scalar(
+        select(User).where(
+            User.organization_id == organization.id,
+            User.email == email,
+        )
+    )
+    password_hash = get_password_hash(password)
+    if user is None:
+        user = User(
+            id=uuid.uuid4(),
+            organization_id=organization.id,
+            full_name=full_name,
+            email=email,
+            phone=None,
+            password_hash=password_hash,
+            role=UserRole.OWNER,
+            is_active=True,
+        )
+        db.add(user)
+    else:
+        # Имя правят в «Команде». Повторный сид при деплое не должен
+        # возвращать старую фамилию из INITIAL_ADMIN_NAME.
+        user.password_hash = password_hash
+        user.role = UserRole.OWNER
+        user.is_active = True
+    return user
 
 
 def _initial_admin_organization(db: Session, email: str) -> Organization | None:
@@ -67,19 +102,18 @@ def upsert_initial_admin(db: Session) -> bool:
     )
 
     db.commit()
-    print(f"Owner ready for legal workspace: {email} (organization: {organization.name})")
+    print(f"Owner ready: {email} (organization: {organization.name})")
     return True
 
 
 def seed_demo_user(db: Session) -> None:
-    """Создаёт организации и пользователей при первом запуске."""
+    """Создаёт организацию и руководителя при первом запуске."""
     if upsert_initial_admin(db):
-        seed_retail_organization(db)
+        pass
     elif db.scalar(select(User).limit(1)) is not None:
         org = db.scalar(select(Organization).limit(1))
         if org is not None and getattr(org, "organization_type", None) is None:
             org.organization_type = OrganizationType.BANKRUPTCY
-        seed_retail_organization(db)
     else:
         organization = Organization(
             id=uuid.uuid4(),
@@ -101,7 +135,6 @@ def seed_demo_user(db: Session) -> None:
         )
         db.add(user)
         db.commit()
-        seed_retail_organization(db)
 
     seed_all_bankruptcy_organization_defaults(db)
     db.commit()

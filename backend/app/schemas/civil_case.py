@@ -96,6 +96,32 @@ class CivilCaseMovementCreate(BaseModel):
         return normalized
 
 
+class CivilCasePaymentCreate(BaseModel):
+    amount: Decimal = Field(gt=0, decimal_places=2)
+    payment_date: date
+    comment: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("comment")
+    @classmethod
+    def empty_to_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
+
+class CivilCasePaymentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    amount: Decimal
+    payment_date: date
+    comment: str | None = None
+    created_by_id: UUID | None
+    created_by_name: str | None = None
+    created_at: datetime
+
+
 class CivilCaseMovementResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -132,6 +158,8 @@ class CivilCaseBrief(BaseModel):
     full_name: str
     phone: str
     price: Decimal
+    paid_total: Decimal = Decimal("0.00")
+    remaining: Decimal = Decimal("0.00")
     appeal_date: date
     subject: str
     stage: CivilCaseStage
@@ -157,3 +185,4 @@ class CivilCaseResponse(CivilCaseBrief):
     execution_note: str | None = None
     movements: list[CivilCaseMovementResponse] = []
     documents: list[CivilCaseDocumentResponse] = []
+    payments: list[CivilCasePaymentResponse] = []

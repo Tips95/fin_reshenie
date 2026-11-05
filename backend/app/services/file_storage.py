@@ -187,18 +187,6 @@ async def read_and_validate_pdf(upload: UploadFile) -> tuple[bytes, str]:
     return content, sanitize_filename(raw_name)
 
 
-def retail_client_passport_key(organization_id: UUID, client_id: UUID) -> str:
-    return f"{organization_id}/retail/clients/{client_id}/passport.pdf"
-
-
-def retail_client_guarantor_passport_key(organization_id: UUID, client_id: UUID) -> str:
-    return f"{organization_id}/retail/clients/{client_id}/guarantor-passport.pdf"
-
-
-def retail_contract_signed_key(organization_id: UUID, contract_id: UUID) -> str:
-    return f"{organization_id}/retail/contracts/{contract_id}/signed.pdf"
-
-
 def save_bytes(storage_key: str, content: bytes) -> None:
     path = uploads_root() / storage_key
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -4,6 +4,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.models.enums import ClientStatus, EngagementStage, UserRole
 from app.services.dashboard import CivilIncomeStats, get_dashboard_summary
 
@@ -64,6 +66,28 @@ def patch_cash_balance(monkeypatch, opening: Decimal | None = None) -> None:
     )
 
 
+def _totals(deposit="0.00", financial_management="0.00", court_fee="0.00"):
+    from app.services.mandatory_payment_stats import MandatoryPaymentTotals
+
+    return MandatoryPaymentTotals(
+        deposit=Decimal(deposit),
+        financial_management=Decimal(financial_management),
+        court_fee=Decimal(court_fee),
+    )
+
+
+@pytest.fixture(autouse=True)
+def patch_mandatory_pending(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.dashboard.get_mandatory_pending_totals",
+        lambda *_args, **_kwargs: _totals(),
+    )
+    monkeypatch.setattr(
+        "app.services.dashboard.get_clients_missing_deposit",
+        lambda *_args, **_kwargs: [],
+    )
+
+
 class TestDashboardSummary:
     def test_owner_gets_financial_metrics(self, monkeypatch):
         client = make_client()
@@ -81,11 +105,8 @@ class TestDashboardSummary:
         )
 
         db = MagicMock()
-        db.scalars.side_effect = [
-            [client],
-            [schedule],
-            [payment],
-        ]
+        db.scalars.side_effect = [[client], [payment]]
+        db.execute.return_value = [(CLIENT_ID, schedule)]
         monkeypatch.setattr(
             "app.services.dashboard.clients_overdue_map",
             lambda *_args, **_kwargs: {},
@@ -357,7 +378,8 @@ class TestDashboardSummary:
             payment_date=date.today(),
         )
         db = MagicMock()
-        db.scalars.side_effect = [[client], [], [payment]]
+        db.scalars.side_effect = [[client], [payment]]
+        db.execute.return_value = []
         monkeypatch.setattr(
             "app.services.dashboard.clients_overdue_map",
             lambda *_args, **_kwargs: {},
@@ -431,6 +453,73 @@ class TestDashboardSummary:
         assert summary.cash_forecast_end == (
             summary.cash_on_hand + summary.expected_this_month - Decimal("600.00")
         )
+        # За месяц без остатка на начало: 8000 поступило − 400 оплачено расходов.
+        assert summary.month_net_flow == Decimal("7600.00")
+
+    def test_month_flow_subtracts_unpaid_mandatory(self, monkeypatch):
+        client = make_client()
+        payment = SimpleNamespace(
+            amount=Decimal("60000.00"),
+            is_refund=False,
+            is_deleted=False,
+            payment_date=date.today(),
+        )
+        db = MagicMock()
+        db.scalars.side_effect = [[client], [payment]]
+        db.execute.return_value = []
+        for name, value in (
+            ("clients_overdue_map", {}),
+            ("_count_open_tasks", 0),
+            ("_build_overdue_clients_preview", []),
+            ("sum_active_contract_totals", Decimal("0.00")),
+            ("count_contracts_signed_in_period", 0),
+        ):
+            monkeypatch.setattr(
+                f"app.services.dashboard.{name}", lambda *_a, _v=value, **_k: _v
+            )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_mandatory_paid_totals",
+            lambda *_args, **_kwargs: _totals(deposit="25000.00"),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_mandatory_pending_totals",
+            lambda *_args, **_kwargs: _totals(financial_management="21000.00"),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_clients_missing_deposit",
+            lambda *_args, **_kwargs: [CLIENT_ID],
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_document_collection_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.document_collection_stats",
+                fromlist=["DocumentCollectionTotals"],
+            ).DocumentCollectionTotals(
+                collection_cash=Decimal("0.00"),
+                notary_fee=Decimal("0.00"),
+                manager_commission=Decimal("0.00"),
+                paid_count=0,
+            ),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.monthly_expenses_total",
+            lambda *_args, **_kwargs: (Decimal("5000.00"), Decimal("5000.00"), Decimal("0.00")),
+        )
+        patch_civil_income(monkeypatch)
+        patch_paid_expenses(monkeypatch, Decimal("2000.00"))
+        patch_cash_balance(monkeypatch, Decimal("100000.00"))
+        client.full_name = "Иванов Иван"
+
+        summary = get_dashboard_summary(db, make_user())
+
+        # 60 000 поступило − 25 000 депозит − 2 000 оплаченных расходов.
+        assert summary.month_net_flow == Decimal("33000.00")
+        # Ещё отдать 21 000 фин. управления и 3 000 расходов.
+        assert summary.mandatory_pending.total == Decimal("21000.00")
+        assert summary.month_net_forecast == Decimal("9000.00")
+        assert summary.cash_forecast_end == Decimal("109000.00")
+        assert summary.deposit_missing_count == 1
+        assert summary.deposit_missing_preview[0].full_name == "Иванов Иван"
 
     def test_call_center_gets_limited_summary(self, monkeypatch):
         client = make_client()

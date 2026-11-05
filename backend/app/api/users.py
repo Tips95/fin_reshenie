@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_owner
 from app.core.database import get_db
 from app.core.security import get_password_hash
-from app.models.enums import AuditAction, OrganizationType, UserRole
+from app.models.enums import AuditAction, UserRole
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.access import get_organization_user
@@ -17,37 +17,17 @@ from app.services.client_duplicates import phones_equivalent
 
 router = APIRouter()
 
-LEGAL_TEAM_ROLES = {
+TEAM_ROLES = {
     UserRole.OWNER,
     UserRole.MANAGER,
     UserRole.HEAD_MANAGER,
     UserRole.CALL_CENTER,
     UserRole.EXECUTOR,
 }
-RETAIL_TEAM_ROLES = {UserRole.OWNER, UserRole.MANAGER, UserRole.CALL_CENTER}
-INVESTOR_VIA_USERS_MESSAGE = "Инвесторов добавляйте в разделе «Инвесторы»"
 
 
-def _assert_team_role(role: UserRole, *, organization_type: OrganizationType) -> None:
-    if role == UserRole.INVESTOR:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=INVESTOR_VIA_USERS_MESSAGE
-            if organization_type == OrganizationType.RETAIL
-            else "Роль инвестора доступна только в товарной рассрочке",
-        )
-    allowed = RETAIL_TEAM_ROLES if organization_type == OrganizationType.RETAIL else LEGAL_TEAM_ROLES
-    if role == UserRole.EXECUTOR and organization_type != OrganizationType.BANKRUPTCY:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Роль исполнителя доступна только в юридической компании",
-        )
-    if role == UserRole.HEAD_MANAGER and organization_type != OrganizationType.BANKRUPTCY:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Роль начальника отдела доступна только в юридической компании",
-        )
-    if role not in allowed:
+def _assert_team_role(role: UserRole) -> None:
+    if role not in TEAM_ROLES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Недопустимая роль для команды",
@@ -81,7 +61,7 @@ def create_user(
         email=payload.email,
         phone=payload.phone,
     )
-    _assert_team_role(payload.role, organization_type=current_user.organization.organization_type)
+    _assert_team_role(payload.role)
 
     user = User(
         organization_id=current_user.organization_id,
@@ -145,10 +125,7 @@ def update_user(
             )
 
     if "role" in updates:
-        _assert_team_role(
-            updates["role"],
-            organization_type=current_user.organization.organization_type,
-        )
+        _assert_team_role(updates["role"])
 
     if "password" in updates:
         updates["password_hash"] = get_password_hash(updates.pop("password"))

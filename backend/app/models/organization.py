@@ -28,13 +28,9 @@ class Organization(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     feature_expenses: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     feature_pricing: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     feature_analytics: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    feature_investors: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
     clients: Mapped[list["Client"]] = relationship(back_populates="organization")
     pricing_tiers: Mapped[list["PricingTier"]] = relationship(back_populates="organization")
     operating_expenses: Mapped[list["OperatingExpense"]] = relationship(back_populates="organization")
     audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="organization")
-    retail_clients: Mapped[list["RetailClient"]] = relationship(back_populates="organization")
-    retail_contracts: Mapped[list["RetailContract"]] = relationship(back_populates="organization")
-    retail_term_rates: Mapped[list["RetailTermRate"]] = relationship(back_populates="organization")

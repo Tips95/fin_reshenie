@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.client_mandatory_payment import ClientMandatoryPayment
 from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRecord
 from app.models.enums import MandatoryPaymentType
+from app.models.payment import Payment
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,51 @@ def get_mandatory_paid_totals(
         financial_management=mutable[MandatoryPaymentType.FINANCIAL_MANAGEMENT],
         court_fee=mutable[MandatoryPaymentType.COURT_FEE],
     )
+
+
+def get_mandatory_pending_totals(db: Session, client_ids: list[UUID]) -> MandatoryPaymentTotals:
+    """Сколько ещё предстоит отдать: вписанная плановая сумма минус уже оплаченное."""
+    totals = {payment_type: Decimal("0.00") for payment_type in MandatoryPaymentType}
+    if client_ids:
+        stmt = select(
+            ClientMandatoryPayment.payment_type,
+            ClientMandatoryPayment.planned_amount,
+            ClientMandatoryPayment.paid_amount,
+        ).where(
+            ClientMandatoryPayment.client_id.in_(client_ids),
+            ClientMandatoryPayment.is_applicable.is_(True),
+            ClientMandatoryPayment.planned_amount > ClientMandatoryPayment.paid_amount,
+        )
+        for payment_type, planned, paid in db.execute(stmt):
+            totals[payment_type] += planned - paid
+    return MandatoryPaymentTotals(
+        deposit=totals[MandatoryPaymentType.DEPOSIT],
+        financial_management=totals[MandatoryPaymentType.FINANCIAL_MANAGEMENT],
+        court_fee=totals[MandatoryPaymentType.COURT_FEE],
+    )
+
+
+def get_clients_missing_deposit(db: Session, client_ids: list[UUID]) -> list[UUID]:
+    """Клиенты, которые уже платят, но сумма депозита у них не вписана."""
+    if not client_ids:
+        return []
+    has_payment = (
+        select(Payment.id)
+        .where(
+            Payment.client_id == ClientMandatoryPayment.client_id,
+            Payment.is_deleted.is_(False),
+            Payment.is_refund.is_(False),
+        )
+        .exists()
+    )
+    stmt = select(ClientMandatoryPayment.client_id).where(
+        ClientMandatoryPayment.client_id.in_(client_ids),
+        ClientMandatoryPayment.payment_type == MandatoryPaymentType.DEPOSIT,
+        ClientMandatoryPayment.is_applicable.is_(True),
+        ClientMandatoryPayment.planned_amount <= Decimal("0.00"),
+        has_payment,
+    )
+    return list(db.scalars(stmt))
 
 
 def breakdown_from_totals(totals: MandatoryPaymentTotals) -> "MandatoryPaymentBreakdown":

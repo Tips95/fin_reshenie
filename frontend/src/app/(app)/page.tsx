@@ -7,12 +7,13 @@ import {
   AmountInput,
   Badge,
   Button,
-  Card,
   Input,
   LoadingState,
+  Metric,
+  MetricStrip,
   PageHeader,
-  SectionTitle,
-  StatCard,
+  Panel,
+  SectionNav,
 } from "@/components/ui";
 import { ApiRequestError, dashboardApi, exportsApi } from "@/lib/api-client";
 import {
@@ -34,14 +35,16 @@ import { canManageClients, canUseQuestionnaires } from "@/lib/organization-featu
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const DASHBOARD_SECTIONS = [
+  { id: "dash-flow", label: "Движение за месяц" },
   { id: "dash-cash", label: "Касса" },
   { id: "dash-portfolio", label: "Портфель" },
-  { id: "dash-month", label: "Месяц" },
+  { id: "dash-month", label: "Итоги месяца" },
   { id: "dash-activity", label: "Активность" },
   { id: "dash-civil", label: "Гражданка" },
-  { id: "dash-collection", label: "Сбор" },
+  { id: "dash-collection", label: "Сбор документов" },
   { id: "dash-mandatory", label: "Обязательные" },
   { id: "dash-expenses", label: "Расходы" },
+  { id: "dash-overdue", label: "Просрочка" },
 ] as const;
 
 // Разделы, скрытые за кнопкой «Подробнее»: нужны реже, чем остальные.
@@ -53,46 +56,7 @@ const DETAIL_SECTION_IDS: string[] = [
   "dash-expenses",
 ];
 
-type SectionTone =
-  "clients" | "activity" | "income" | "collection" | "mandatory" | "expenses" | "profit";
-
-const SECTION_STYLES: Record<SectionTone, { shell: string; header: string; badge: string }> = {
-  clients: {
-    shell: "border-border bg-surface",
-    header: "border-b border-border bg-surface-muted",
-    badge: "bg-chrome text-white",
-  },
-  activity: {
-    shell: "border-status-warning-border bg-status-warning-bg",
-    header: "border-b border-status-warning-border bg-status-warning-bg",
-    badge: "bg-status-warning-solid text-white",
-  },
-  income: {
-    shell: "border-status-success-border bg-surface",
-    header: "border-b border-status-success-border bg-status-success-bg",
-    badge: "bg-status-success-solid text-white",
-  },
-  collection: {
-    shell: "border-border bg-surface",
-    header: "border-b border-brand-200 bg-brand-50",
-    badge: "bg-brand-gradient text-white",
-  },
-  mandatory: {
-    shell: "border-status-warning-border bg-surface",
-    header: "border-b border-status-warning-border bg-status-warning-bg",
-    badge: "bg-status-warning-solid text-white",
-  },
-  expenses: {
-    shell: "border-status-danger-border bg-surface",
-    header: "border-b border-status-danger-border bg-status-danger-bg",
-    badge: "bg-status-danger-solid text-white",
-  },
-  profit: {
-    shell: "border-status-success-border bg-status-success-bg",
-    header: "border-b border-status-success-border bg-status-success-bg",
-    badge: "bg-status-success-solid text-white",
-  },
-};
+const PANEL_LINK = "interactive text-[13px] font-semibold text-brand-700 hover:text-brand-600";
 
 function emptyCollection(): DocumentCollectionBreakdown {
   return {
@@ -122,46 +86,62 @@ function normalizeSummary(data: DashboardSummary): DashboardSummary {
     cash_forecast_end: data.cash_forecast_end ?? "0",
     open_tasks_count: data.open_tasks_count ?? 0,
     overdue_clients_preview: data.overdue_clients_preview ?? [],
+    month_net_flow: data.month_net_flow ?? "0",
+    month_net_forecast: data.month_net_forecast ?? "0",
+    mandatory_pending: data.mandatory_pending ?? {
+      deposit: "0",
+      financial_management: "0",
+      court_fee: "0",
+      total: "0",
+    },
+    deposit_missing_count: data.deposit_missing_count ?? 0,
+    deposit_missing_preview: data.deposit_missing_preview ?? [],
   };
 }
 
-function DashboardSection({
-  id,
-  title,
-  description,
-  tone,
-  action,
-  children,
+function HeroStat({
+  label,
+  value,
+  tone = "default",
 }: {
-  id: string;
-  title: string;
-  description?: string;
-  tone: SectionTone;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: "default" | "in" | "out";
 }) {
-  const styles = SECTION_STYLES[tone];
-
+  const colors = { default: "text-white", in: "text-white", out: "text-brand-100" };
   return (
-    <section
-      id={id}
-      className={`scroll-mt-4 overflow-hidden rounded-lg border shadow-card transition-shadow duration-150 hover:shadow-hover ${styles.shell}`}
-    >
-      <div className={`dashboard-section-header ${styles.header}`}>
-        <div className="flex items-start gap-2">
-          <span
-            className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${styles.badge}`}
-          >
-            {title}
-          </span>
-          {description && (
-            <p className="max-w-2xl text-[11px] leading-snug text-muted">{description}</p>
-          )}
-        </div>
-        {action}
+    <div className="cash-hero-stat">
+      <p className="text-[11px] font-medium text-white/65">{label}</p>
+      <p className={`tabular mt-1 truncate text-[15px] font-semibold ${colors[tone]}`}>{value}</p>
+    </div>
+  );
+}
+
+function LedgerRow({
+  label,
+  value,
+  sign,
+  hint,
+}: {
+  label: string;
+  value: string;
+  sign: "+" | "−";
+  hint?: string;
+}) {
+  return (
+    <div className="ledger-row">
+      <div className="min-w-0">
+        <p className="text-foreground">{label}</p>
+        {hint ? <p className="type-hint">{hint}</p> : null}
       </div>
-      <div className="dashboard-section-body">{children}</div>
-    </section>
+      <p
+        className={`tabular shrink-0 font-semibold ${
+          sign === "+" ? "text-status-success-text" : "text-status-warning-text"
+        }`}
+      >
+        {sign} {value}
+      </p>
+    </div>
   );
 }
 
@@ -174,41 +154,42 @@ function MandatoryPaymentsTable({
   monthLabel: string;
   total: MandatoryPaymentBreakdown;
 }) {
+  const rows = [
+    { label: monthLabel, data: month },
+    { label: "За всё время", data: total },
+  ];
   return (
-    <div className="overflow-x-auto rounded-md border border-border bg-surface">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <table className="data-table table-cards w-full lg:min-w-[520px]">
         <thead>
           <tr>
             <th>Период</th>
-            <th>Депозит</th>
-            <th>Фин. управление</th>
-            <th>Госпошлина</th>
-            <th>Итого</th>
+            <th className="text-right">Депозит</th>
+            <th className="text-right">Фин. управление</th>
+            <th className="text-right">Госпошлина</th>
+            <th className="text-right">Итого</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td data-label="Период" className="font-medium text-foreground">
-              {monthLabel}
-            </td>
-            <td data-label="Депозит">{formatMoney(month.deposit)}</td>
-            <td data-label="Фин. управление">{formatMoney(month.financial_management)}</td>
-            <td data-label="Госпошлина">{formatMoney(month.court_fee)}</td>
-            <td data-label="Итого" className="font-bold text-status-warning-text">
-              {formatMoney(month.total)}
-            </td>
-          </tr>
-          <tr>
-            <td data-label="Период" className="font-medium text-foreground">
-              Всего
-            </td>
-            <td data-label="Депозит">{formatMoney(total.deposit)}</td>
-            <td data-label="Фин. управление">{formatMoney(total.financial_management)}</td>
-            <td data-label="Госпошлина">{formatMoney(total.court_fee)}</td>
-            <td data-label="Итого" className="font-bold text-status-warning-text">
-              {formatMoney(total.total)}
-            </td>
-          </tr>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <td data-label="Период" className="font-medium text-foreground first-letter:uppercase">
+                {row.label}
+              </td>
+              <td data-label="Депозит" className="tabular text-right">
+                {formatMoney(row.data.deposit)}
+              </td>
+              <td data-label="Фин. управление" className="tabular text-right">
+                {formatMoney(row.data.financial_management)}
+              </td>
+              <td data-label="Госпошлина" className="tabular text-right">
+                {formatMoney(row.data.court_fee)}
+              </td>
+              <td data-label="Итого" className="tabular text-right font-semibold text-foreground">
+                {formatMoney(row.data.total)}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -333,9 +314,12 @@ export default function DashboardPage() {
   if (loading) return <LoadingState text="Загрузка дашборда..." />;
   if (!summary) return <LoadingState text="Не удалось загрузить дашборд" />;
 
+  const profitPositive = Number(summary.net_profit_this_month) >= 0;
+  const cashPositive = Number(summary.cash_on_hand) >= 0;
+
   return (
-    <div className="page-groups">
-      <div className="page-group">
+    <div className="space-y-5">
+      <div className="space-y-4">
         <PageHeader
           title="Дашборд"
           subtitle={`Добро пожаловать, ${user?.full_name}`}
@@ -350,19 +334,26 @@ export default function DashboardPage() {
                   aria-label="Отчётный месяц"
                 />
                 {showQuestionnaires ? (
-                  <Link href="/questionnaires">
-                    <Button type="button">Анкеты</Button>
-                  </Link>
+                  <>
+                    <Link href="/questionnaires/new">
+                      <Button type="button">Новая анкета</Button>
+                    </Link>
+                    <Link href="/questionnaires">
+                      <Button type="button" variant="secondary">
+                        Анкеты
+                      </Button>
+                    </Link>
+                  </>
                 ) : null}
                 <Link href="/tasks">
                   <Button type="button" variant="secondary">
-                    Задачи{openTasksCount > 0 ? ` (${openTasksCount})` : ""}
+                    Задачи{openTasksCount > 0 ? ` · ${openTasksCount}` : ""}
                   </Button>
                 </Link>
                 {isOwner && (
                   <Link href="/analytics">
                     <Button type="button" variant="secondary">
-                      Аналитика →
+                      Аналитика
                     </Button>
                   </Link>
                 )}
@@ -385,529 +376,649 @@ export default function DashboardPage() {
           </p>
         )}
 
-        {showOrgFinance && (
-          <div className="metric-hero">
-            <div className="relative z-10">
-              <p className="metric-hero-label">Сейчас в кассе</p>
-              <p className="metric-hero-value mt-2">{formatMoney(summary.cash_on_hand)}</p>
-              <p className="metric-hero-hint mt-2.5 max-w-xl">
-                {summary.cash_opening_is_set
-                  ? `Остаток на начало ${formatMoney(summary.cash_opening_balance)} + движение месяца`
-                  : "Остаток на начало не указан — укажите в разделе «Касса»"}
-              </p>
-              <div className="mt-4 flex items-baseline justify-between gap-3 border-t border-white/15 pt-3.5">
-                <span className="metric-hero-hint">Прогноз на конец месяца</span>
-                <span
-                  className={`tabular text-lg font-bold tracking-tight ${
-                    Number(summary.cash_forecast_end) >= 0 ? "text-white" : "text-brand-100"
-                  }`}
-                >
-                  {formatMoney(summary.cash_forecast_end)}
+        {showOrgFinance ? (
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div className="cash-hero p-5 sm:p-6">
+              <div className="relative flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="cash-hero-label">Сейчас в кассе</p>
+                  <p
+                    className={`cash-hero-value mt-3 ${cashPositive ? "" : "text-brand-100"}`}
+                  >
+                    {formatMoney(summary.cash_on_hand)}
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium capitalize text-white/70">
+                  {monthLabel}
                 </span>
               </div>
+              <p className="relative mt-3 text-[13px] leading-snug text-white/75">
+                {summary.cash_opening_is_set
+                  ? "Остаток на начало месяца плюс фактическое движение денег"
+                  : "Остаток на начало не указан — задайте его в разделе «Касса»"}
+              </p>
+              <div className="relative mt-5 grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
+                <HeroStat label="На начало" value={formatMoney(summary.cash_opening_balance)} />
+                <HeroStat
+                  label="Поступило"
+                  value={`+ ${formatMoney(summary.cash_in_this_month)}`}
+                  tone="in"
+                />
+                <HeroStat
+                  label="Выплачено"
+                  value={`− ${formatMoney(cashOutThisMonth)}`}
+                  tone="out"
+                />
+                <HeroStat label="Прогноз на конец" value={formatMoney(summary.cash_forecast_end)} />
+              </div>
             </div>
-          </div>
-        )}
 
-        <div className={showOrgFinance ? "grid grid-cols-2 gap-2.5" : "stat-grid"}>
-          {showOrgFinance ? (
-            <>
-              <StatCard
+            <div className="metric-strip grid-cols-1 sm:grid-cols-3 lg:grid-cols-1">
+              <Metric
+                label="Чистая прибыль за месяц"
+                value={formatMoney(summary.net_profit_this_month)}
+                tone={profitPositive ? "success" : "danger"}
+                hint="Банкротство: рассрочка и сбор минус обязательные и расходы"
+              />
+              <Metric
                 label="Ещё ожидается"
                 value={formatMoney(summary.expected_this_month)}
                 tone="brand"
-                hint={`Платежи клиентов до конца ${monthLabel}`}
+                hint="Платежи клиентов до конца месяца"
               />
-              <StatCard
-                label="Осталось расходов"
+              <Metric
+                label="Осталось оплатить расходов"
                 value={formatMoney(summary.expenses_remaining_this_month)}
                 tone="warning"
                 hint={`План ${formatMoney(summary.monthly_expenses)} · оплачено ${formatMoney(summary.expenses_paid_this_month)}`}
               />
-            </>
-          ) : (
-            <>
-              <StatCard label="Всего клиентов" value={summary.clients_total} tone="brand" />
-              <StatCard label="Активных" value={summary.clients_active} tone="success" />
-              <StatCard label="С просрочкой" value={summary.clients_overdue} tone="danger" />
-              <StatCard label="Открытых задач" value={openTasksCount} tone="warning" />
-            </>
-          )}
-        </div>
-
-        {showOrgFinance && (
-          <div className="client-section-nav">
-            {DASHBOARD_SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => goToSection(section.id)}
-                className="client-section-nav-btn"
-              >
-                {section.label}
-              </button>
-            ))}
+            </div>
           </div>
+        ) : (
+          <MetricStrip columns={4}>
+            <Metric label="Всего клиентов" value={summary.clients_total} tone="brand" />
+            <Metric label="Активных" value={summary.clients_active} tone="success" />
+            <Metric label="С просрочкой" value={summary.clients_overdue} tone="danger" />
+            <Metric label="Открытых задач" value={openTasksCount} tone="warning" />
+          </MetricStrip>
         )}
       </div>
 
-      {showQuestionnaires ? (
-        <Card>
-          <SectionTitle
-            title="Анкеты"
-            action={
-              <div className="flex flex-wrap items-center gap-3">
-                <Link href="/questionnaires/new">
-                  <Button type="button">Новая анкета</Button>
-                </Link>
-                <Link
-                  href="/questionnaires"
-                  className="text-sm font-semibold text-brand-600 hover:text-brand-700"
-                >
-                  Все анкеты →
-                </Link>
-              </div>
-            }
-          />
-          <p className="text-sm text-muted">
-            Первичный отбор на банкротство. Заполните анкету до договора — она сохранится, даже если
-            клиент ещё не заведён.
-          </p>
-        </Card>
+      {showOrgFinance ? <SectionNav items={DASHBOARD_SECTIONS} onSelect={goToSection} /> : null}
+
+      {showQuestionnaires && !canEditClients ? (
+        <Panel
+          title="Анкеты"
+          dot="brand"
+          description="Первичный отбор на банкротство. Анкета сохранится, даже если клиент ещё не заведён."
+          action={
+            <>
+              <Link href="/questionnaires" className={PANEL_LINK}>
+                Все анкеты
+              </Link>
+              <Link href="/questionnaires/new">
+                <Button type="button">Новая анкета</Button>
+              </Link>
+            </>
+          }
+        />
       ) : null}
 
       {showOrgFinance && (
-        <div className="page-group">
-          <DashboardSection
-            id="dash-cash"
-            tone="income"
-            title="Касса"
-            description="Остаток на начало задаётся вручную. Дальше касса живёт по факту: прибавляются поступления, вычитаются реально сделанные выплаты. Если были неучтённые траты — актуализируйте сумму «сейчас в кассе»"
+        <>
+          <Panel
+            id="dash-flow"
+            dot="brand"
+            title={`Движение денег за ${monthLabel}`}
+            description="Только деньги этого месяца, без остатка с прошлого. Слева — что уже случилось, справа — что ещё предстоит до конца месяца."
           >
-            <div className="stat-grid">
-              <StatCard
-                label="Остаток на начало"
-                value={formatMoney(summary.cash_opening_balance)}
-                hint={summary.cash_opening_is_set ? "Указан вручную" : "Не указан"}
-              />
-              <StatCard
-                label={`Поступило за ${monthLabel}`}
-                value={formatMoney(summary.cash_in_this_month)}
-                tone="success"
-                hint="Рассрочка + сбор документов + гражданка"
-              />
-              <StatCard
-                label={`Выплачено за ${monthLabel}`}
-                value={formatMoney(cashOutThisMonth)}
-                tone="warning"
-                hint="Обязательные платежи + оплаченные расходы"
-              />
-              <StatCard
-                label="Сейчас в кассе"
-                value={formatMoney(summary.cash_on_hand)}
-                tone={Number(summary.cash_on_hand) >= 0 ? "success" : "danger"}
-              />
-            </div>
-            <div className="mt-2 space-y-2 rounded-xl border border-status-success-border bg-surface px-3 py-3">
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="min-w-[180px] flex-1 sm:max-w-[220px]">
-                  <label className="mb-1 block text-xs font-semibold text-muted">
-                    Фактически сейчас в кассе, ₽
-                  </label>
-                  <AmountInput
-                    value={cashActualDraft}
-                    onValueChange={setCashActualDraft}
-                    placeholder="0"
+            <div className="grid gap-5 lg:grid-cols-2 lg:gap-8">
+              <div>
+                <p className="type-caption mb-1">Уже произошло</p>
+                <LedgerRow
+                  sign="+"
+                  label="Рассрочка"
+                  hint="Платежи клиентов за вычетом возвратов"
+                  value={formatMoney(summary.collected_this_month)}
+                />
+                <LedgerRow
+                  sign="+"
+                  label="Сбор документов"
+                  value={formatMoney(summary.document_collection_this_month.collection_cash)}
+                />
+                <LedgerRow
+                  sign="+"
+                  label="Гражданские дела"
+                  hint="Фактические оплаты по делам"
+                  value={formatMoney(summary.civil_income_this_month)}
+                />
+                <LedgerRow
+                  sign="−"
+                  label="Отдано на депозит"
+                  value={formatMoney(summary.mandatory_paid_this_month.deposit)}
+                />
+                <LedgerRow
+                  sign="−"
+                  label="Отдано на фин. управление"
+                  value={formatMoney(summary.mandatory_paid_this_month.financial_management)}
+                />
+                {Number(summary.mandatory_paid_this_month.court_fee) > 0 ? (
+                  <LedgerRow
+                    sign="−"
+                    label="Госпошлина"
+                    value={formatMoney(summary.mandatory_paid_this_month.court_fee)}
                   />
+                ) : null}
+                <LedgerRow
+                  sign="−"
+                  label="Оплаченные расходы"
+                  hint="Зарплаты, аренда и разовые траты"
+                  value={formatMoney(summary.expenses_paid_this_month)}
+                />
+                <div className="ledger-total">
+                  <span>Чистыми за месяц</span>
+                  <span
+                    className={`tabular text-lg ${
+                      Number(summary.month_net_flow) >= 0
+                        ? "text-status-success-text"
+                        : "text-status-danger-text"
+                    }`}
+                  >
+                    {formatMoney(summary.month_net_flow)}
+                  </span>
                 </div>
-                <Button type="button" disabled={cashSaving} onClick={handleActualizeCashOnHand}>
-                  {cashSaving ? "Сохранение..." : "Актуализировать"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={cashSaving}
-                  onClick={handleCarryForwardCash}
-                >
-                  Перенести {formatMoney(summary.cash_on_hand)} в{" "}
-                  {formatMonthLabel(nextMonth(month))}
-                </Button>
               </div>
-              <p className="type-hint">
-                Введите реальную сумму после пересчёта купюр. Остаток на начало месяца
-                подстроится автоматически, чтобы «сейчас в кассе» совпало с фактом.
-              </p>
-              <details className="rounded-lg border border-border bg-surface-muted px-3 py-2">
-                <summary className="interactive cursor-pointer text-xs font-semibold text-muted">
-                  Задать остаток на начало {monthLabel} вручную
-                </summary>
-                <div className="mt-2 flex flex-wrap items-end gap-2">
-                  <div className="min-w-[180px] flex-1 sm:max-w-[220px]">
-                    <label className="mb-1 block text-xs text-muted">Остаток на начало, ₽</label>
+
+              <div>
+                <p className="type-caption mb-1">Ещё предстоит</p>
+                <LedgerRow
+                  sign="+"
+                  label="Ожидается по графикам"
+                  hint="Неоплаченные платежи клиентов этого месяца"
+                  value={formatMoney(summary.expected_this_month)}
+                />
+                <LedgerRow
+                  sign="−"
+                  label="Депозит к отдаче"
+                  hint="Вписано на карточках, ещё не отдано"
+                  value={formatMoney(summary.mandatory_pending?.deposit ?? "0")}
+                />
+                <LedgerRow
+                  sign="−"
+                  label="Фин. управление к отдаче"
+                  hint="21 000 / 11 000 ₽ — по признанным банкротами"
+                  value={formatMoney(summary.mandatory_pending?.financial_management ?? "0")}
+                />
+                {Number(summary.mandatory_pending?.court_fee ?? 0) > 0 ? (
+                  <LedgerRow
+                    sign="−"
+                    label="Госпошлина к отдаче"
+                    value={formatMoney(summary.mandatory_pending?.court_fee ?? "0")}
+                  />
+                ) : null}
+                <LedgerRow
+                  sign="−"
+                  label="Неоплаченные расходы"
+                  hint={`План ${formatMoney(summary.fixed_monthly_expenses)}`}
+                  value={formatMoney(summary.expenses_remaining_this_month)}
+                />
+                <div className="ledger-total">
+                  <span>Останется чистыми к концу месяца</span>
+                  <span
+                    className={`tabular text-lg ${
+                      Number(summary.month_net_forecast) >= 0
+                        ? "text-status-success-text"
+                        : "text-status-danger-text"
+                    }`}
+                  >
+                    {formatMoney(summary.month_net_forecast)}
+                  </span>
+                </div>
+                <p className="type-hint mt-1.5">
+                  «Чистыми за месяц» плюс ожидаемые платежи, минус всё, что ещё нужно отдать.
+                </p>
+              </div>
+            </div>
+
+            {summary.deposit_missing_count > 0 ? (
+              <div className="alert-warning space-y-1.5">
+                <p className="font-semibold">
+                  Депозит не вписан у {summary.deposit_missing_count}{" "}
+                  {summary.deposit_missing_count === 1 ? "клиента" : "клиентов"}, которые уже
+                  платят
+                </p>
+                <p>
+                  Пока сумма не вписана, депозит не попадает в «к отдаче», и остаток выглядит
+                  больше реального. Откройте карточку и укажите 25 000 или 35 000 ₽:
+                </p>
+                <p className="flex flex-wrap gap-x-3 gap-y-1">
+                  {summary.deposit_missing_preview.map((client) => (
+                    <Link
+                      key={client.id}
+                      href={`/clients/${client.id}`}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      {formatShortName(client.full_name)}
+                    </Link>
+                  ))}
+                  {summary.deposit_missing_count > summary.deposit_missing_preview.length
+                    ? `и ещё ${summary.deposit_missing_count - summary.deposit_missing_preview.length}`
+                    : null}
+                </p>
+              </div>
+            ) : null}
+          </Panel>
+
+          <Panel
+            id="dash-cash"
+            dot="success"
+            title="Касса"
+            description="Остаток на начало задаётся вручную, дальше касса живёт по факту: плюс поступления, минус реально сделанные выплаты."
+            footer={
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[180px] flex-1 sm:max-w-[240px]">
+                    <label className="mb-1 block text-xs font-semibold text-muted">
+                      Фактически в кассе после пересчёта, ₽
+                    </label>
                     <AmountInput
-                      value={cashDraft}
-                      onValueChange={setCashDraft}
+                      value={cashActualDraft}
+                      onValueChange={setCashActualDraft}
                       placeholder="0"
                     />
                   </div>
+                  <Button type="button" disabled={cashSaving} onClick={handleActualizeCashOnHand}>
+                    {cashSaving ? "Сохранение..." : "Актуализировать"}
+                  </Button>
                   <Button
                     type="button"
                     variant="secondary"
                     disabled={cashSaving}
-                    onClick={handleSaveCashBalance}
+                    onClick={handleCarryForwardCash}
                   >
-                    {cashSaving ? "Сохранение..." : "Сохранить остаток"}
+                    Перенести {formatMoney(summary.cash_on_hand)} на{" "}
+                    {formatMonthLabel(nextMonth(month))}
                   </Button>
                 </div>
-              </details>
-            </div>
-            {cashError ? <p className="mt-2 text-xs text-status-danger-text">{cashError}</p> : null}
-            {summary.cash_opening_comment ? (
-              <p className="mt-2 type-hint">Последняя правка: {summary.cash_opening_comment}</p>
-            ) : null}
-          </DashboardSection>
-
-          <DashboardSection
-            id="dash-portfolio"
-            tone="clients"
-            title="Портфель"
-            description="Деньги, которые клиенты ещё должны по графикам. Не зависит от выбранного месяца"
+                <p className="type-hint">
+                  Остаток на начало подстроится сам, чтобы «сейчас в кассе» совпало с фактом.
+                </p>
+                <details className="group">
+                  <summary className="interactive inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-muted hover:text-foreground [&::-webkit-details-marker]:hidden">
+                    <span className="transition-transform group-open:rotate-90" aria-hidden>
+                      ›
+                    </span>
+                    Задать остаток на начало {monthLabel} вручную
+                  </summary>
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <div className="min-w-[180px] flex-1 sm:max-w-[240px]">
+                      <label className="mb-1 block text-xs text-muted">Остаток на начало, ₽</label>
+                      <AmountInput
+                        value={cashDraft}
+                        onValueChange={setCashDraft}
+                        placeholder="0"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={cashSaving}
+                      onClick={handleSaveCashBalance}
+                    >
+                      {cashSaving ? "Сохранение..." : "Сохранить остаток"}
+                    </Button>
+                  </div>
+                </details>
+                {cashError ? <p className="alert-danger">{cashError}</p> : null}
+                {summary.cash_opening_comment ? (
+                  <p className="type-hint">Последняя правка: {summary.cash_opening_comment}</p>
+                ) : null}
+              </div>
+            }
           >
-            <div className="stat-grid">
-              <StatCard
-                label="Остаток по графикам"
-                value={formatMoney(summary.total_remainder)}
-                tone="brand"
-                hint="Сколько ещё предстоит получить"
+            <MetricStrip columns={4}>
+              <Metric
+                label="Остаток на начало"
+                value={formatMoney(summary.cash_opening_balance)}
+                tone={summary.cash_opening_is_set ? "default" : "muted"}
+                hint={summary.cash_opening_is_set ? "Указан вручную" : "Не указан"}
               />
-              <StatCard
-                label="Из них просрочено"
-                value={formatMoney(summary.overdue_amount)}
-                tone="danger"
-                hint={`${summary.clients_overdue} клиентов`}
-              />
-              <StatCard
-                label="Сумма активных договоров"
-                value={formatMoney(summary.active_contract_total)}
-                hint={`${summary.clients_active} активных клиентов`}
-              />
-              <StatCard
-                label="Получено за всё время"
-                value={formatMoney(summary.total_collected)}
+              <Metric
+                label={`Поступило за ${monthLabel}`}
+                value={formatMoney(summary.cash_in_this_month)}
                 tone="success"
+                hint="Рассрочка, сбор документов, гражданка"
               />
-            </div>
-          </DashboardSection>
-
-          <DashboardSection
-            id="dash-month"
-            tone="profit"
-            title={`Итоги за ${monthLabel}`}
-            description="Прибыль по банкротству: рассрочка + касса сбора − обязательные − расходы. Гражданка идёт в кассу, но в эту прибыль не входит"
-          >
-            <div className="stat-grid">
-              <StatCard
-                label="Чистая прибыль"
-                value={formatMoney(summary.net_profit_this_month)}
-                tone={Number(summary.net_profit_this_month) >= 0 ? "success" : "danger"}
-              />
-              <StatCard
-                label="Поступило по рассрочке"
-                value={formatMoney(summary.collected_this_month)}
-                tone="success"
-                hint={`Касса сбора ${formatMoney(summary.document_collection_this_month.collection_cash)}`}
-              />
-              <StatCard
-                label="Обязательные платежи"
-                value={formatMoney(summary.mandatory_paid_this_month.total)}
+              <Metric
+                label={`Выплачено за ${monthLabel}`}
+                value={formatMoney(cashOutThisMonth)}
                 tone="warning"
-                hint="Депозит, фин. управление, госпошлина"
+                hint="Обязательные платежи и оплаченные расходы"
               />
-              <StatCard
-                label="Расходы: оплачено"
-                value={formatMoney(summary.expenses_paid_this_month)}
-                tone="warning"
-                hint={`План ${formatMoney(summary.monthly_expenses)} · осталось ${formatMoney(summary.expenses_remaining_this_month)}`}
+              <Metric
+                label="Сейчас в кассе"
+                value={formatMoney(summary.cash_on_hand)}
+                tone={cashPositive ? "success" : "danger"}
               />
-            </div>
-            <div className="mt-2 rounded-md border border-status-success-border bg-surface px-3 py-2">
-              <p className="text-xs font-semibold text-foreground">Формула прибыли</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">
-                Рассрочка{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(summary.collected_this_month)}
-                </span>
-                {" + "}
-                Касса сбора{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(summary.document_collection_this_month.collection_cash)}
-                </span>
-                {" − "}
-                Обязательные{" "}
-                <span className="font-semibold text-status-warning-text">
-                  {formatMoney(summary.mandatory_paid_this_month.total)}
-                </span>
-                {" − "}
-                Расходы (план){" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(summary.monthly_expenses)}
-                </span>
-                {" = "}
-                <span
-                  className={`font-bold ${
-                    Number(summary.net_profit_this_month) >= 0
-                      ? "text-status-success-text"
-                      : "text-status-danger-text"
-                  }`}
-                >
-                  {formatMoney(summary.net_profit_this_month)}
-                </span>
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">
-                Прибыль считает расходы по бюджету, касса — по факту оплаты. Поэтому «сейчас в
-                кассе» выше прибыли ровно на неоплаченные{" "}
-                <span className="font-semibold text-foreground">
-                  {formatMoney(summary.expenses_remaining_this_month)}
-                </span>
-                .
-              </p>
-            </div>
-          </DashboardSection>
-        </div>
-      )}
+            </MetricStrip>
+          </Panel>
 
-      {showOrgFinance && (
-        <div className="page-group">
-          <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
-            <h2 className="section-title">Детализация</h2>
-            <Button
-              type="button"
-              variant="secondary"
-              aria-expanded={showDetails}
-              onClick={() => setShowDetails((value) => !value)}
+          <div className="grid gap-5 xl:grid-cols-2">
+            <Panel
+              id="dash-portfolio"
+              title="Портфель"
+              description="Что клиенты ещё должны по графикам. Не зависит от выбранного месяца."
+              action={
+                <Link href="/clients/contracts" className={PANEL_LINK}>
+                  Договоры
+                </Link>
+              }
             >
-              {showDetails ? "Свернуть" : "Подробнее"}
-            </Button>
+              <MetricStrip columns={2}>
+                <Metric
+                  label="Остаток по графикам"
+                  value={formatMoney(summary.total_remainder)}
+                  tone="brand"
+                  hint="Сколько ещё предстоит получить"
+                />
+                <Metric
+                  label="Из них просрочено"
+                  value={formatMoney(summary.overdue_amount)}
+                  tone="danger"
+                  hint={`${summary.clients_overdue} клиентов`}
+                />
+                <Metric
+                  label="Активные договоры"
+                  value={formatMoney(summary.active_contract_total)}
+                  hint={`${summary.clients_active} активных клиентов`}
+                />
+                <Metric
+                  label="Получено за всё время"
+                  value={formatMoney(summary.total_collected)}
+                  tone="success"
+                />
+              </MetricStrip>
+            </Panel>
+
+            <Panel
+              id="dash-month"
+              dot="success"
+              title={`Итоги за ${monthLabel}`}
+              description="Прибыль по банкротству. Гражданка идёт в кассу, но в эту прибыль не входит."
+            >
+              <div>
+                <LedgerRow
+                  sign="+"
+                  label="Рассрочка"
+                  value={formatMoney(summary.collected_this_month)}
+                />
+                <LedgerRow
+                  sign="+"
+                  label="Касса сбора документов"
+                  value={formatMoney(summary.document_collection_this_month.collection_cash)}
+                />
+                <LedgerRow
+                  sign="−"
+                  label="Обязательные платежи"
+                  hint="Депозит, фин. управление, госпошлина"
+                  value={formatMoney(summary.mandatory_paid_this_month.total)}
+                />
+                <LedgerRow
+                  sign="−"
+                  label="Расходы по плану"
+                  hint={`Оплачено ${formatMoney(summary.expenses_paid_this_month)}`}
+                  value={formatMoney(summary.monthly_expenses)}
+                />
+                <div className="ledger-total">
+                  <span>Чистая прибыль</span>
+                  <span
+                    className={`tabular text-lg ${
+                      profitPositive ? "text-status-success-text" : "text-status-danger-text"
+                    }`}
+                  >
+                    {formatMoney(summary.net_profit_this_month)}
+                  </span>
+                </div>
+              </div>
+              <p className="type-hint">
+                Прибыль считает расходы по плану, касса — по факту оплаты, поэтому касса выше
+                прибыли на неоплаченные {formatMoney(summary.expenses_remaining_this_month)}.
+              </p>
+            </Panel>
           </div>
 
-          {showDetails ? (
-            <>
-              <DashboardSection
-                id="dash-activity"
-                tone="activity"
-                title={`Активность за ${monthLabel}`}
-                description="Сколько человек пришло, оплатило сбор документов и заключило договор банкротства"
-                action={
-                  <div className="flex flex-wrap gap-2">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold tracking-tight text-foreground">
+                  Детализация
+                </h2>
+                <p className="type-hint">
+                  Активность, гражданка, сбор документов, обязательные платежи и расходы
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-expanded={showDetails}
+                onClick={() => setShowDetails((value) => !value)}
+              >
+                {showDetails ? "Свернуть" : "Показать"}
+              </Button>
+            </div>
+
+            {showDetails ? (
+              <div className="grid gap-5 xl:grid-cols-2">
+                <Panel
+                  id="dash-activity"
+                  dot="warning"
+                  title={`Активность за ${monthLabel}`}
+                  description="Кто пришёл, оплатил сбор документов и заключил договор."
+                  action={
+                    <>
+                      <Link href="/clients/collection" className={PANEL_LINK}>
+                        Сбор
+                      </Link>
+                      <Link href="/clients/contracts" className={PANEL_LINK}>
+                        Договоры
+                      </Link>
+                    </>
+                  }
+                >
+                  <MetricStrip columns={2}>
+                    <Metric
+                      label="Новых клиентов"
+                      value={summary.clients_new_this_month}
+                      tone="brand"
+                      hint="По дате договора"
+                    />
                     <Link
-                      href="/clients/collection"
-                      className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
+                      href={clientListPath("collection", {
+                        collection_view: "all",
+                        collection_paid_month: month,
+                      })}
+                      className="group block bg-surface"
                     >
-                      Сбор документов →
+                      <Metric
+                        className="h-full group-hover:bg-surface-muted"
+                        label="Оплатили сбор"
+                        value={summary.document_collection_this_month.paid_count}
+                        hint="Открыть список поимённо →"
+                      />
                     </Link>
-                    <Link
-                      href="/clients/contracts"
-                      className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
-                    >
-                      Договоры →
+                    <Metric
+                      label="Заключили договор"
+                      value={summary.contracts_signed_this_month}
+                      tone="success"
+                      hint="Переведены на банкротство"
+                    />
+                    <Metric
+                      label="Сейчас на сборе"
+                      value={summary.collection_in_progress}
+                      tone="warning"
+                      hint="На сегодня, не зависит от месяца"
+                    />
+                  </MetricStrip>
+                </Panel>
+
+                <Panel
+                  id="dash-civil"
+                  dot="success"
+                  title="Гражданские дела"
+                  description="Доход — фактические оплаты по дате оплаты. Число дел — по дате обращения."
+                  action={
+                    <Link href="/civil-cases" className={PANEL_LINK}>
+                      Все дела
                     </Link>
-                  </div>
-                }
-              >
-                <div className="stat-grid">
-                  <StatCard
-                    label="Новых клиентов"
-                    value={summary.clients_new_this_month}
-                    tone="brand"
-                    hint={`Дата договора в ${monthLabel}`}
-                  />
-              <Link
-                href={clientListPath("collection", {
-                  collection_view: "all",
-                  collection_paid_month: month,
-                })}
-                className="interactive block"
-              >
-                <StatCard
-                  label="Оплатили сбор документов"
-                  value={summary.document_collection_this_month.paid_count}
-                  hint="Нажмите, чтобы увидеть поимённо, кто именно вошёл в счёт"
-                />
-              </Link>
-                  <StatCard
-                    label="Заключили договор"
-                    value={summary.contracts_signed_this_month}
-                    tone="success"
-                    hint="Переведены на банкротство"
-                  />
-                  <StatCard
-                    label="Сейчас на сборе"
-                    value={summary.collection_in_progress}
-                    tone="warning"
-                    hint="Текущее состояние, не зависит от месяца"
-                  />
-                </div>
-              </DashboardSection>
+                  }
+                >
+                  <MetricStrip columns={2}>
+                    <Metric
+                      label={`Доход за ${monthLabel}`}
+                      value={formatMoney(summary.civil_income_this_month)}
+                      tone="success"
+                    />
+                    <Metric
+                      label={`Дел за ${monthLabel}`}
+                      value={summary.civil_cases_this_month}
+                      tone="brand"
+                    />
+                    <Metric label="Доход всего" value={formatMoney(summary.civil_income_total)} />
+                    <Metric label="Всего дел" value={summary.civil_cases_total} />
+                  </MetricStrip>
+                </Panel>
 
-              <DashboardSection
-                id="dash-civil"
-                tone="income"
-                title="Гражданские дела"
-                description="Доход по цене дел, отдельно от рассрочки. За месяц — по дате обращения"
-                action={
-                  <Link
-                    href="/civil-cases"
-                    className="interactive text-xs font-semibold text-status-success-text hover:opacity-80"
-                  >
-                    Гражданские дела →
-                  </Link>
-                }
-              >
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  <StatCard
-                    label={`Доход за ${monthLabel}`}
-                    value={formatMoney(summary.civil_income_this_month)}
-                    tone="success"
-                  />
-                  <StatCard label="Доход всего" value={formatMoney(summary.civil_income_total)} />
-                  <StatCard
-                    label={`Дел за ${monthLabel}`}
-                    value={summary.civil_cases_this_month}
-                    tone="brand"
-                  />
-                  <StatCard label="Всего дел" value={summary.civil_cases_total} />
-                </div>
-              </DashboardSection>
+                <Panel
+                  id="dash-collection"
+                  dot="brand"
+                  title="Сбор документов"
+                  description="10 000 ₽ в кассу · 2 000 ₽ нотариусу · 1 000 ₽ менеджеру. Выписки и госпошлина — отдельно."
+                >
+                  <MetricStrip columns={2}>
+                    <Metric
+                      label={`Касса за ${monthLabel}`}
+                      value={formatMoney(summary.document_collection_this_month.collection_cash)}
+                      tone="success"
+                      hint={`${summary.document_collection_this_month.paid_count} оплат`}
+                    />
+                    <Metric
+                      label="Касса всего"
+                      value={formatMoney(summary.document_collection_total.collection_cash)}
+                      hint={`${summary.document_collection_total.paid_count} оплат`}
+                    />
+                    <Metric
+                      label="Нотариусу всего"
+                      value={formatMoney(summary.document_collection_total.notary_fee)}
+                    />
+                    <Metric
+                      label="Менеджерам всего"
+                      value={formatMoney(summary.document_collection_total.manager_commission)}
+                    />
+                  </MetricStrip>
+                </Panel>
 
-              <DashboardSection
-                id="dash-collection"
-                tone="collection"
-                title="Сбор документов"
-                description="10 000 ₽ в кассу · 2 000 ₽ нотариус · 1 000 ₽ менеджеру. Выписки/госпошлина — отдельно, вручную"
-              >
-                <div className="stat-grid">
-                  <StatCard
-                    label={`Касса сбора за ${monthLabel}`}
-                    value={formatMoney(summary.document_collection_this_month.collection_cash)}
-                    tone="success"
-                    hint={`${summary.document_collection_this_month.paid_count} оплат`}
-                  />
-                  <StatCard
-                    label="Касса (всего)"
-                    value={formatMoney(summary.document_collection_total.collection_cash)}
-                    hint={`${summary.document_collection_total.paid_count} оплат`}
-                  />
-                  <StatCard
-                    label="Нотариус (всего)"
-                    value={formatMoney(summary.document_collection_total.notary_fee)}
-                  />
-                  <StatCard
-                    label="Менеджерам (всего)"
-                    value={formatMoney(summary.document_collection_total.manager_commission)}
-                  />
-                </div>
-              </DashboardSection>
+                <Panel
+                  id="dash-expenses"
+                  dot="danger"
+                  title="Расходы организации"
+                  description="Плановые статьи и разовые траты за выбранный месяц."
+                  action={
+                    <Link href="/expenses" className={PANEL_LINK}>
+                      Управление
+                    </Link>
+                  }
+                >
+                  <MetricStrip columns={2}>
+                    <Metric
+                      label="Всего за месяц"
+                      value={formatMoney(summary.monthly_expenses)}
+                      tone="warning"
+                      hint="План и разовые"
+                      className="col-span-2"
+                    />
+                    <Metric
+                      label="Плановые статьи"
+                      value={formatMoney(summary.fixed_monthly_expenses)}
+                      hint="Ежемесячный бюджет"
+                    />
+                    <Metric
+                      label={`Разовые за ${monthLabel}`}
+                      value={formatMoney(summary.one_time_expenses_this_month)}
+                      tone="danger"
+                    />
+                  </MetricStrip>
+                </Panel>
 
-              <DashboardSection
-                id="dash-mandatory"
-                tone="mandatory"
-                title="Обязательные платежи"
-                description="Депозит, финансовое управление и госпошлина — отдельно по каждой статье"
-                action={
-                  <Link
-                    href="/expenses#deposit-fin"
-                    className="interactive text-xs font-semibold text-status-warning-text hover:opacity-80"
-                  >
-                    По месяцам →
-                  </Link>
-                }
-              >
-                <MandatoryPaymentsTable
-                  month={summary.mandatory_paid_this_month}
-                  monthLabel={monthLabel}
-                  total={summary.mandatory_paid_total}
-                />
-              </DashboardSection>
-
-              <DashboardSection
-                id="dash-expenses"
-                tone="expenses"
-                title="Расходы организации"
-                description="Фиксированные статьи + разовые траты за выбранный месяц"
-                action={
-                  <Link
-                    href="/expenses"
-                    className="interactive text-xs font-semibold text-status-danger-text hover:opacity-80"
-                  >
-                    Управление расходами →
-                  </Link>
-                }
-              >
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  <StatCard
-                    label="Расходы в месяц"
-                    value={formatMoney(summary.monthly_expenses)}
-                    tone="warning"
-                    hint="План + разовые"
+                <Panel
+                  id="dash-mandatory"
+                  dot="warning"
+                  title="Обязательные платежи"
+                  description="Депозит, финансовое управление и госпошлина по каждой статье."
+                  className="xl:col-span-2"
+                  action={
+                    <Link href="/expenses#deposit-fin" className={PANEL_LINK}>
+                      По месяцам
+                    </Link>
+                  }
+                >
+                  <MandatoryPaymentsTable
+                    month={summary.mandatory_paid_this_month}
+                    monthLabel={monthLabel}
+                    total={summary.mandatory_paid_total}
                   />
-                  <StatCard
-                    label="Плановые статьи"
-                    value={formatMoney(summary.fixed_monthly_expenses)}
-                    hint="Ежемесячный бюджет"
-                  />
-                  <StatCard
-                    label={`Разовые за ${monthLabel}`}
-                    value={formatMoney(summary.one_time_expenses_this_month)}
-                    tone="danger"
-                  />
-                </div>
-              </DashboardSection>
-            </>
-          ) : null}
-        </div>
+                </Panel>
+              </div>
+            ) : null}
+          </div>
+        </>
       )}
 
       {canEditClients && (
-        <Card>
-          <SectionTitle
-            title="Клиенты с просрочкой"
-            action={
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="secondary"
-                  disabled={exportingOverdue}
-                  onClick={async () => {
-                    setExportingOverdue(true);
-                    try {
-                      await exportsApi.overdueClients();
-                    } finally {
-                      setExportingOverdue(false);
-                    }
-                  }}
-                >
-                  {exportingOverdue ? "Выгрузка..." : "Excel"}
-                </Button>
-                <Link
-                  href="/clients/contracts?overdue=true"
-                  className="text-sm font-semibold text-brand-600 hover:text-brand-700"
-                >
-                  Все клиенты →
-                </Link>
-              </div>
-            }
-          />
+        <Panel
+          id="dash-overdue"
+          dot="danger"
+          title={
+            <>
+              Клиенты с просрочкой
+              {overdueClients.length > 0 ? (
+                <Badge tone="danger">{summary.clients_overdue}</Badge>
+              ) : null}
+            </>
+          }
+          action={
+            <>
+              <Button
+                variant="secondary"
+                disabled={exportingOverdue}
+                onClick={async () => {
+                  setExportingOverdue(true);
+                  try {
+                    await exportsApi.overdueClients();
+                  } finally {
+                    setExportingOverdue(false);
+                  }
+                }}
+              >
+                {exportingOverdue ? "Выгрузка..." : "Excel"}
+              </Button>
+              <Link href="/clients/contracts?overdue=true" className={PANEL_LINK}>
+                Все клиенты
+              </Link>
+            </>
+          }
+        >
           {overdueClients.length === 0 ? (
-            <p className="alert-success">Просроченных платежей нет — отличная работа!</p>
+            <p className="alert-success">Просроченных платежей нет.</p>
           ) : (
             <>
-              <div className="desktop-only overflow-x-auto">
+              <div className="desktop-only overflow-x-auto rounded-lg border border-border">
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>ФИО</th>
                       <th>Телефон</th>
                       <th>Договор</th>
-                      <th>Сумма</th>
+                      <th className="text-right">Сумма</th>
                       <th>Статус</th>
                     </tr>
                   </thead>
@@ -919,9 +1030,9 @@ export default function DashboardPage() {
                             {formatShortName(client.full_name)}
                           </Link>
                         </td>
-                        <td className="text-muted">{client.phone}</td>
-                        <td className="text-muted">{formatDate(client.contract_date)}</td>
-                        <td className="font-medium text-foreground">
+                        <td className="tabular text-muted">{client.phone}</td>
+                        <td className="tabular text-muted">{formatDate(client.contract_date)}</td>
+                        <td className="tabular text-right font-medium text-foreground">
                           {formatMoney(client.contract_total ?? "0")}
                         </td>
                         <td>
@@ -967,7 +1078,7 @@ export default function DashboardPage() {
               </div>
             </>
           )}
-        </Card>
+        </Panel>
       )}
     </div>
   );

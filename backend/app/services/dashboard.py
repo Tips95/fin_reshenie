@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.models.civil_case import CivilCase
+from app.models.civil_case import CivilCase, CivilCasePayment
 from app.models.client import Client
 from app.models.enums import ClientStatus, EngagementStage, TaskStatus, UserRole
 from app.models.installment_plan import InstallmentPlan
@@ -15,6 +15,7 @@ from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
 from app.schemas.dashboard import (
+    DashboardClientRef,
     DashboardOverdueClientItem,
     DashboardSummary,
     DocumentCollectionBreakdown,
@@ -26,7 +27,13 @@ from app.services.document_collection_stats import (
     count_contracts_signed_in_period,
     get_document_collection_paid_totals,
 )
-from app.services.mandatory_payment_stats import MandatoryPaymentTotals, breakdown_from_totals, get_mandatory_paid_totals
+from app.services.mandatory_payment_stats import (
+    MandatoryPaymentTotals,
+    breakdown_from_totals,
+    get_clients_missing_deposit,
+    get_mandatory_paid_totals,
+    get_mandatory_pending_totals,
+)
 from app.services.client_finances import contract_totals_by_client, sum_active_contract_totals
 from app.services.expense_totals import monthly_expenses_total, paid_fixed_expenses_total
 from app.services.phone import month_bounds
@@ -118,19 +125,30 @@ def get_civil_income_stats(
 ) -> CivilIncomeStats:
     org_filter = CivilCase.organization_id == organization_id
     cases_total = db.scalar(select(func.count()).select_from(CivilCase).where(org_filter)) or 0
-    income_total = _as_money(
-        db.scalar(select(func.coalesce(func.sum(CivilCase.price), 0)).where(org_filter))
-    )
-    month_filters = (
-        org_filter,
-        CivilCase.appeal_date >= month_start,
-        CivilCase.appeal_date <= month_end,
-    )
     cases_this_month = (
-        db.scalar(select(func.count()).select_from(CivilCase).where(*month_filters)) or 0
+        db.scalar(
+            select(func.count())
+            .select_from(CivilCase)
+            .where(
+                org_filter,
+                CivilCase.appeal_date >= month_start,
+                CivilCase.appeal_date <= month_end,
+            )
+        )
+        or 0
     )
+    # Доход — только фактические оплаты, по дате оплаты, а не цена дела.
+    paid_filter = CivilCasePayment.organization_id == organization_id
+    paid_sum = select(func.coalesce(func.sum(CivilCasePayment.amount), 0))
+    income_total = _as_money(db.scalar(paid_sum.where(paid_filter)))
     income_this_month = _as_money(
-        db.scalar(select(func.coalesce(func.sum(CivilCase.price), 0)).where(*month_filters))
+        db.scalar(
+            paid_sum.where(
+                paid_filter,
+                CivilCasePayment.payment_date >= month_start,
+                CivilCasePayment.payment_date <= month_end,
+            )
+        )
     )
     return CivilIncomeStats(
         cases_total=int(cases_total),
@@ -399,7 +417,37 @@ def get_dashboard_summary(
         - mandatory_paid_this_month.total
         - expenses_paid_this_month
     )
-    cash_forecast_end = cash_on_hand + expected_this_month - expenses_remaining_this_month
+    # Отказники не должны висеть долгом по депозиту и фин. управлению.
+    obligated_client_ids = [
+        client.id for client in clients if client.status != ClientStatus.CANCELLED
+    ]
+    mandatory_pending = _to_breakdown(get_mandatory_pending_totals(db, obligated_client_ids))
+    bankruptcy_client_ids = [
+        client.id
+        for client in clients
+        if client.status != ClientStatus.CANCELLED
+        and client.engagement_stage == EngagementStage.BANKRUPTCY
+    ]
+    missing_deposit_ids = set(get_clients_missing_deposit(db, bankruptcy_client_ids))
+    deposit_missing_preview = [
+        DashboardClientRef(id=client.id, full_name=client.full_name)
+        for client in clients
+        if client.id in missing_deposit_ids
+    ][:10]
+
+    cash_forecast_end = (
+        cash_on_hand
+        + expected_this_month
+        - expenses_remaining_this_month
+        - mandatory_pending.total
+    )
+    month_net_flow = cash_in_this_month - mandatory_paid_this_month.total - expenses_paid_this_month
+    month_net_forecast = (
+        month_net_flow
+        + expected_this_month
+        - mandatory_pending.total
+        - expenses_remaining_this_month
+    )
 
     return DashboardSummary(
         period_month=period_month,
@@ -434,6 +482,11 @@ def get_dashboard_summary(
         expenses_remaining_this_month=expenses_remaining_this_month,
         cash_on_hand=cash_on_hand,
         cash_forecast_end=cash_forecast_end,
+        month_net_flow=month_net_flow,
+        month_net_forecast=month_net_forecast,
+        mandatory_pending=mandatory_pending,
+        deposit_missing_count=len(missing_deposit_ids),
+        deposit_missing_preview=deposit_missing_preview,
         civil_cases_total=civil_income.cases_total,
         civil_cases_this_month=civil_income.cases_this_month,
         civil_income_total=civil_income.income_total,

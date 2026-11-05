@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.security import verify_password
-from app.models import Base, OperatingExpense, Organization, PricingTier, RetailTermRate, User
+from app.models import Base, OperatingExpense, Organization, PricingTier, User
 from app.models.enums import OrganizationType, UserRole
 from app.services.accounts import (
     LOGIN_TAKEN_MESSAGE,
@@ -208,142 +208,7 @@ class TestRegisterOrganization:
         assert first_tiers.isdisjoint(second_tiers)
 
 
-class TestRetailRegistration:
-    def test_creates_retail_company_with_term_rates(self, db):
-        owner = register_organization(
-            db,
-            organization_name="Магазин",
-            login="shop@company.ru",
-            password="secret123",
-            organization_type=OrganizationType.RETAIL,
-        )
-
-        organization = db.get(Organization, owner.organization_id)
-        assert organization.organization_type == OrganizationType.RETAIL
-        assert owner.role == UserRole.OWNER
-
-        rates = list(
-            db.scalars(
-                select(RetailTermRate).where(
-                    RetailTermRate.organization_id == owner.organization_id
-                )
-            )
-        )
-        assert len(rates) > 0
-        assert all(rate.is_active for rate in rates)
-
-    def test_retail_company_gets_no_bankruptcy_defaults(self, db):
-        owner = register_organization(
-            db,
-            organization_name="Магазин",
-            login="shop@company.ru",
-            password="secret123",
-            organization_type=OrganizationType.RETAIL,
-        )
-
-        tiers = db.scalar(
-            select(func.count())
-            .select_from(PricingTier)
-            .where(PricingTier.organization_id == owner.organization_id)
-        )
-        expenses = db.scalar(
-            select(func.count())
-            .select_from(OperatingExpense)
-            .where(OperatingExpense.organization_id == owner.organization_id)
-        )
-        assert tiers == 0
-        assert expenses == 0
-
-    def test_same_login_allowed_in_both_contours(self, db):
-        legal = register_organization(
-            db,
-            organization_name="Юрфирма",
-            login="boss@company.ru",
-            password="secret123",
-        )
-        retail = register_organization(
-            db,
-            organization_name="Магазин",
-            login="boss@company.ru",
-            password="secret123",
-            organization_type=OrganizationType.RETAIL,
-        )
-
-        assert legal.organization_id != retail.organization_id
-        assert legal.email == retail.email
-
-    def test_rejects_taken_login_inside_retail(self, db):
-        register_organization(
-            db,
-            organization_name="Первый магазин",
-            login="+79286433230",
-            password="secret123",
-            organization_type=OrganizationType.RETAIL,
-        )
-
-        with pytest.raises(HTTPException) as error:
-            register_organization(
-                db,
-                organization_name="Второй магазин",
-                login="89286433230",
-                password="secret123",
-                organization_type=OrganizationType.RETAIL,
-            )
-
-        assert error.value.status_code == 409
-
-    def test_retail_companies_have_own_term_rates(self, db):
-        first = register_organization(
-            db,
-            organization_name="Первый магазин",
-            login="first@shop.ru",
-            password="secret123",
-            organization_type=OrganizationType.RETAIL,
-        )
-        second = register_organization(
-            db,
-            organization_name="Второй магазин",
-            login="second@shop.ru",
-            password="secret123",
-            organization_type=OrganizationType.RETAIL,
-        )
-
-        first_rates = set(
-            db.scalars(
-                select(RetailTermRate.id).where(
-                    RetailTermRate.organization_id == first.organization_id
-                )
-            )
-        )
-        second_rates = set(
-            db.scalars(
-                select(RetailTermRate.id).where(
-                    RetailTermRate.organization_id == second.organization_id
-                )
-            )
-        )
-        assert first_rates and second_rates
-        assert first_rates.isdisjoint(second_rates)
-
-
 class TestContactsAvailability:
-    def test_login_of_other_contour_does_not_block(self, db):
-        register_organization(
-            db,
-            organization_name="Юрфирма",
-            login="shared@company.ru",
-            password="secret123",
-        )
-
-        assert (
-            find_user_by_contacts(
-                db,
-                organization_type=OrganizationType.RETAIL,
-                email="shared@company.ru",
-            )
-            is None
-        )
-
     def test_employee_cannot_take_login_of_another_company(self, db):
         register_organization(
             db,
@@ -413,7 +278,7 @@ class TestUserRolesAfterRegistration:
 
 
 def test_redeploy_seed_keeps_renamed_owner(db):
-    from app.services.retail_seed import _upsert_owner
+    from app.services.seed import _upsert_owner
 
     organization = Organization(name="Решение", organization_type=OrganizationType.BANKRUPTCY)
     db.add(organization)

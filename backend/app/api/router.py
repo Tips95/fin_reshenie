@@ -20,7 +20,6 @@ from app.api import (
     questionnaires,
     tasks,
     users,
-    retail,
 )
 
 api_router = APIRouter()
@@ -71,4 +70,3 @@ api_router.include_router(
     prefix="/civil-cases",
     tags=["civil-cases"],
 )
-api_router.include_router(retail.router, prefix="/retail", tags=["retail"])

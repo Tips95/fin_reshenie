@@ -14,7 +14,6 @@ export type MobileNavItem = {
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
-  if (href === "/retail") return pathname === "/retail";
   if (href === "/clients/collection") return pathname.startsWith("/clients/collection");
   if (href === "/clients/contracts") {
     return (

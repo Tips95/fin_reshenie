@@ -69,14 +69,7 @@ function roleTone(role: UserRole): "default" | "success" | "warning" | "danger" 
   return "default";
 }
 
-export function UsersPageContent({
-  homeHref = "/",
-  excludeInvestors = false,
-}: {
-  homeHref?: string;
-  /** В рассрочке инвесторы живут отдельно — в «Команде» их не показываем. */
-  excludeInvestors?: boolean;
-}) {
+export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
   const { user: currentUser, refreshUser } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
@@ -103,7 +96,7 @@ export function UsersPageContent({
     try {
       const items = await usersApi.list();
       if (seq !== loadSeq.current) return;
-      setUsers(excludeInvestors ? items.filter((item) => item.role !== "investor") : items);
+      setUsers(items);
     } finally {
       if (seq === loadSeq.current) setLoading(false);
     }
@@ -113,7 +106,7 @@ export function UsersPageContent({
     if (currentUser?.role === "owner") {
       void loadUsers();
     }
-  }, [currentUser?.role, excludeInvestors]);
+  }, [currentUser?.role]);
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
@@ -245,11 +238,7 @@ export function UsersPageContent({
     <div className="page-stack">
       <PageHeader
         title="Команда"
-        subtitle={
-          excludeInvestors
-            ? "Сотрудники компании: менеджеры и сбор документов. Инвесторов добавляйте отдельно."
-            : "Команда организации, роли и доступ к системе"
-        }
+        subtitle="Команда организации, роли и доступ к системе"
         action={
           <Button onClick={() => setShowForm((value) => !value)}>
             {showForm ? "Скрыть форму" : "Добавить сотрудника"}
@@ -315,12 +304,8 @@ export function UsersPageContent({
             >
               <option value="manager">Менеджер</option>
               <option value="call_center">Сбор документов</option>
-              {currentUser?.organization_type !== "retail" ? (
-                <>
-                  <option value="head_manager">Начальник отдела</option>
-                  <option value="executor">Исполнитель</option>
-                </>
-              ) : null}
+              <option value="head_manager">Начальник отдела</option>
+              <option value="executor">Исполнитель</option>
               <option value="owner">Руководитель</option>
             </Select>
             <label className="flex items-center gap-2 text-sm text-foreground">
@@ -425,12 +410,8 @@ export function UsersPageContent({
                               >
                                 <option value="manager">Менеджер</option>
                                 <option value="call_center">Сбор документов</option>
-                                {currentUser?.organization_type !== "retail" ? (
-                                  <>
-                                    <option value="head_manager">Начальник отдела</option>
-                                    <option value="executor">Исполнитель</option>
-                                  </>
-                                ) : null}
+                                <option value="head_manager">Начальник отдела</option>
+                                <option value="executor">Исполнитель</option>
                                 <option value="owner">Руководитель</option>
                               </Select>
                             </FormField>

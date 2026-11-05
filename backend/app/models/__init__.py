@@ -1,7 +1,7 @@
 from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.cash_balance import CashBalance
-from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovement
+from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovement, CivilCasePayment
 from app.models.client import Client
 from app.models.client_mandatory_payment import ClientMandatoryPayment
 from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRecord
@@ -16,11 +16,6 @@ from app.models.organization import Organization
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.models.pricing_tier import PricingTier
-from app.models.retail_client import RetailClient
-from app.models.retail_contract import RetailContract, RetailPaymentSchedule
-from app.models.retail_overdue_log import RetailOverdueLog
-from app.models.retail_payment import RetailPayment
-from app.models.retail_term_rate import RetailTermRate
 from app.models.user import User
 from app.models.installment_plan import InstallmentPlan
 
@@ -32,6 +27,7 @@ __all__ = [
     "CivilCase",
     "CivilCaseDocument",
     "CivilCaseMovement",
+    "CivilCasePayment",
     "ClientMandatoryPayment",
     "ClientMandatoryPaymentRecord",
     "ClientQuestionnaire",
@@ -47,11 +43,5 @@ __all__ = [
     "PaymentSchedule",
     "PricingTier",
     "QuestionnaireCall",
-    "RetailClient",
-    "RetailContract",
-    "RetailOverdueLog",
-    "RetailPayment",
-    "RetailPaymentSchedule",
-    "RetailTermRate",
     "User",
 ]

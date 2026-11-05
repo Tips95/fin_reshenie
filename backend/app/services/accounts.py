@@ -1,9 +1,8 @@
 """Учётные записи: самостоятельная регистрация компании и занятость логина.
 
-Вход ищет пользователя по email или телефону внутри контура, поэтому один и тот
-же логин в двух компаниях одного контура сломал бы вход обоим. Уникальность
-проверяем здесь — до записи в базу. Контуры при этом независимы: один и тот же
-email может быть логином и в юрфирме, и в товарной рассрочке.
+Вход ищет пользователя по email или телефону, поэтому один и тот же логин
+в двух компаниях сломал бы вход обоим. Уникальность проверяем здесь — до
+записи в базу.
 """
 
 import uuid
@@ -19,7 +18,6 @@ from app.models.user import User
 from app.services.client_duplicates import phones_equivalent
 from app.services.organization_defaults import seed_bankruptcy_organization_defaults
 from app.services.phone import normalize_phone
-from app.services.retail_term_rates import sync_default_term_rates
 
 LOGIN_TAKEN_MESSAGE = "Этот логин уже используется"
 LOGIN_REQUIRED_MESSAGE = "Укажите email или телефон"
@@ -119,21 +117,6 @@ def assert_contacts_available(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=LOGIN_TAKEN_MESSAGE)
 
 
-def seed_new_organization_defaults(
-    db: Session,
-    organization_id: uuid.UUID,
-    organization_type: OrganizationType,
-) -> None:
-    """Стартовые тарифы: без них компания не оформит ни одного договора.
-
-    Это шаблон, а не жёсткие правила — компания правит его под себя в «Тарифах».
-    """
-    if organization_type == OrganizationType.RETAIL:
-        sync_default_term_rates(db, organization_id)
-        return
-    seed_bankruptcy_organization_defaults(db, organization_id)
-
-
 def register_organization(
     db: Session,
     *,
@@ -141,7 +124,6 @@ def register_organization(
     login: str,
     password: str,
     owner_name: str | None = None,
-    organization_type: OrganizationType = OrganizationType.BANKRUPTCY,
 ) -> User:
     """Создаёт компанию и её руководителя. Возвращает руководителя."""
     name = normalize_organization_name(organization_name)
@@ -156,7 +138,7 @@ def register_organization(
 
     assert_contacts_available(
         db,
-        organization_type=organization_type,
+        organization_type=OrganizationType.BANKRUPTCY,
         email=email,
         phone=phone,
     )
@@ -164,7 +146,7 @@ def register_organization(
     organization = Organization(
         id=uuid.uuid4(),
         name=name,
-        organization_type=organization_type,
+        organization_type=OrganizationType.BANKRUPTCY,
     )
     db.add(organization)
     db.flush()
@@ -181,7 +163,8 @@ def register_organization(
     )
     db.add(owner)
 
-    seed_new_organization_defaults(db, organization.id, organization_type)
+    # Стартовые тарифы — шаблон: без них компания не оформит ни одного договора.
+    seed_bankruptcy_organization_defaults(db, organization.id)
 
     db.commit()
     db.refresh(owner)

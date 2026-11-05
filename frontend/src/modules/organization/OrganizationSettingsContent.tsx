@@ -13,13 +13,12 @@ import {
   SectionTitle,
 } from "@/components/ui";
 import { ApiRequestError, organizationsApi } from "@/lib/api-client";
-import type { Organization, OrganizationFeatures, OrganizationType } from "@/lib/types";
-import { WORKSPACE_LABELS } from "@/lib/workspace";
+import type { Organization, OrganizationFeatures } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 type FeatureKey = keyof OrganizationFeatures;
 
-const LEGAL_FEATURES: { key: FeatureKey; label: string; hint: string }[] = [
+const FEATURES: { key: FeatureKey; label: string; hint: string }[] = [
   {
     key: "document_collection",
     label: "Сбор документов",
@@ -47,21 +46,7 @@ const LEGAL_FEATURES: { key: FeatureKey; label: string; hint: string }[] = [
   },
 ];
 
-const RETAIL_FEATURES: { key: FeatureKey; label: string; hint: string }[] = [
-  {
-    key: "investors",
-    label: "Инвесторы",
-    hint: "Раздел инвесторов и их вкладов",
-  },
-];
-
-export function OrganizationSettingsContent({
-  homeHref,
-  organizationType,
-}: {
-  homeHref: string;
-  organizationType: OrganizationType;
-}) {
+export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) {
   const { user, refreshUser } = useAuth();
   const router = useRouter();
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -109,7 +94,6 @@ export function OrganizationSettingsContent({
         feature_expenses: features.expenses,
         feature_pricing: features.pricing,
         feature_analytics: features.analytics,
-        feature_investors: features.investors,
       });
       setOrganization(updated);
       setName(updated.name);
@@ -131,15 +115,11 @@ export function OrganizationSettingsContent({
     return <LoadingState text="Загрузка настроек..." />;
   }
 
-  const featureList = organizationType === "retail" ? RETAIL_FEATURES : LEGAL_FEATURES;
-  const contourLabel =
-    organizationType === "retail" ? WORKSPACE_LABELS.retail : WORKSPACE_LABELS.legal;
-
   return (
     <div className="page-stack">
       <PageHeader
         title="Настройки компании"
-        subtitle={`${contourLabel} · подстройте название и разделы под себя`}
+        subtitle="Подстройте название и разделы под себя"
       />
 
       {error && <p className="alert-danger">{error}</p>}
@@ -166,7 +146,7 @@ export function OrganizationSettingsContent({
           </FormField>
           {organization && (
             <p className="mt-2 text-[11px] text-muted">
-              Контур: {contourLabel} · id {organization.id.slice(0, 8)}…
+              id {organization.id.slice(0, 8)}…
             </p>
           )}
         </Card>
@@ -177,7 +157,7 @@ export function OrganizationSettingsContent({
             description="Выключите то, чем не пользуетесь. Скрытый раздел пропадает из меню; уже внесённые данные остаются в базе."
           />
           <div className="space-y-2">
-            {featureList.map((item) => (
+            {FEATURES.map((item) => (
               <label
                 key={item.key}
                 className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-surface-muted px-3 py-2"

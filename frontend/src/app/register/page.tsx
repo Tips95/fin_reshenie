@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import {
   BrandFooter,
@@ -11,9 +11,7 @@ import {
   FormField,
   Input,
   LogoLockup,
-  WorkspaceSwitch,
 } from "@/components/ui";
-import type { Workspace } from "@/lib/types";
 import {
   collectErrors,
   hasErrors,
@@ -21,27 +19,14 @@ import {
   validateLogin,
   validatePassword,
 } from "@/lib/validation";
-import {
-  WORKSPACE_LABELS,
-  resolveWorkspace,
-  setStoredWorkspace,
-} from "@/lib/workspace";
 import { getAuthErrorMessage, useAuth } from "@/modules/auth/AuthProvider";
 
-const HINTS: Record<Workspace, string> = {
-  legal:
-    "Вы становитесь руководителем компании: сотрудников добавите сами в разделе «Команда». Данные компаний не пересекаются.",
-  retail:
-    "Вы становитесь руководителем компании: сотрудников — в «Команде», инвесторов — в «Инвесторах». Данные компаний не пересекаются.",
-};
+const HINT =
+  "Вы становитесь руководителем компании: сотрудников добавите сами в разделе «Команда». Данные компаний не пересекаются.";
 
 function RegisterForm() {
   const { user, loading, register } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [workspace, setWorkspace] = useState<Workspace>(() =>
-    resolveWorkspace(searchParams.get("workspace")),
-  );
   const [organizationName, setOrganizationName] = useState("");
   const [fullName, setFullName] = useState("");
   const [loginValue, setLoginValue] = useState("");
@@ -53,17 +38,9 @@ function RegisterForm() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace(user.organization_type === "retail" ? "/retail" : "/");
+      router.replace("/");
     }
   }, [loading, user, router]);
-
-  function changeWorkspace(next: Workspace) {
-    setWorkspace(next);
-    setStoredWorkspace(next);
-    setError(null);
-    // Пишем в адрес: ошибка валидации или перезагрузка больше не сбрасывают выбор.
-    router.replace(`/register?workspace=${next}`, { scroll: false });
-  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -80,13 +57,11 @@ function RegisterForm() {
 
     setSubmitting(true);
     try {
-      setStoredWorkspace(workspace);
       await register({
         organizationName: organizationName.trim(),
         login: normalizeLoginValue(loginValue),
         password,
         fullName,
-        workspace,
       });
     } catch (err) {
       setError(getAuthErrorMessage(err));
@@ -99,13 +74,7 @@ function RegisterForm() {
     <Card className="w-full max-w-sm">
       <div className="mb-4 space-y-2">
         <LogoLockup />
-        <p className="text-center text-xs text-muted">
-          Регистрация в контуре «{WORKSPACE_LABELS[workspace]}»
-        </p>
-      </div>
-
-      <div className="mb-4">
-        <WorkspaceSwitch value={workspace} onChange={changeWorkspace} />
+        <p className="text-center text-xs text-muted">Регистрация компании</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -150,9 +119,7 @@ function RegisterForm() {
         </FormField>
 
         {error && (
-          <p className="alert-danger px-2 py-1.5 text-xs">
-            {error} · контур «{WORKSPACE_LABELS[workspace]}»
-          </p>
+          <p className="alert-danger px-2 py-1.5 text-xs">{error}</p>
         )}
 
         <Button type="submit" className="w-full" disabled={submitting}>
@@ -167,7 +134,7 @@ function RegisterForm() {
         </Link>
       </p>
 
-      <p className="mt-3 text-[11px] text-muted">{HINTS[workspace]}</p>
+      <p className="mt-3 text-[11px] text-muted">{HINT}</p>
     </Card>
   );
 }
@@ -175,9 +142,7 @@ function RegisterForm() {
 export default function RegisterPage() {
   return (
     <div className="auth-page relative flex min-h-screen items-center justify-center px-4 py-6">
-      <Suspense fallback={<p className="text-chrome-muted">Загрузка...</p>}>
-        <RegisterForm />
-      </Suspense>
+      <RegisterForm />
 
       <div className="absolute bottom-3 left-0 right-0">
         <BrandFooter onDark />

@@ -14,7 +14,6 @@ def test_organization_features_default_to_enabled():
     assert features.expenses is True
     assert features.pricing is True
     assert features.analytics is True
-    assert features.investors is True
 
 
 def test_organization_features_respect_disabled_flags():
@@ -24,7 +23,6 @@ def test_organization_features_respect_disabled_flags():
         feature_expenses=False,
         feature_pricing=True,
         feature_analytics=False,
-        feature_investors=True,
     )
     features = organization_features(organization)
     assert features.document_collection is False
@@ -44,7 +42,6 @@ def test_serialize_organization_includes_type_and_features():
         feature_expenses=True,
         feature_pricing=True,
         feature_analytics=True,
-        feature_investors=True,
     )
     payload = serialize_organization(organization)
     assert payload.name == "Тест"

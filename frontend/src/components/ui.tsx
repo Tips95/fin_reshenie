@@ -7,8 +7,6 @@ import { digitsOnly, groupAmountDigits } from "@/lib/format";
 import { APP_LOGO_FULL, APP_LOGO_MARK, APP_NAME } from "@/lib/brand";
 import { PHONE_PREFIX, applyPhoneInput } from "@/lib/phone";
 import { applyPassportInput, PASSPORT_PLACEHOLDER } from "@/lib/passport";
-import type { Workspace } from "@/lib/types";
-import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { DatePicker, MonthPicker } from "@/components/date-picker";
 
 export function LogoMark({ className }: { className?: string }) {
@@ -687,42 +685,173 @@ export function StatCard({
   );
 }
 
+type MetricTone = "default" | "success" | "warning" | "danger" | "brand" | "muted";
+
+const METRIC_TONES: Record<MetricTone, string> = {
+  default: "text-foreground",
+  success: "text-status-success-text",
+  warning: "text-status-warning-text",
+  danger: "text-status-danger-text",
+  brand: "text-brand-900",
+  muted: "text-muted",
+};
+
+const PANEL_DOTS = {
+  neutral: "bg-status-neutral-solid",
+  success: "bg-status-success-solid",
+  warning: "bg-status-warning-solid",
+  danger: "bg-status-danger-solid",
+  brand: "bg-brand-600",
+} as const;
+
+export function Panel({
+  id,
+  title,
+  description,
+  action,
+  dot = "neutral",
+  footer,
+  children,
+  className,
+  bodyClassName,
+}: {
+  id?: string;
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  dot?: keyof typeof PANEL_DOTS;
+  footer?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
+  return (
+    <section id={id} className={cn("panel", className)}>
+      <header className="panel-header">
+        <div className="min-w-0 flex-1">
+          <h2 className="panel-title">
+            <span className={cn("panel-dot", PANEL_DOTS[dot])} aria-hidden />
+            {title}
+          </h2>
+          {description ? (
+            <p className="mt-1 max-w-3xl pl-4 type-hint">{description}</p>
+          ) : null}
+        </div>
+        {action ? <div className="flex flex-wrap items-center gap-2">{action}</div> : null}
+      </header>
+      {children ? <div className={cn("panel-body", bodyClassName)}>{children}</div> : null}
+      {footer ? <div className="panel-footer">{footer}</div> : null}
+    </section>
+  );
+}
+
+const METRIC_COLUMNS = {
+  2: "grid-cols-2",
+  3: "grid-cols-2 lg:grid-cols-3",
+  4: "grid-cols-2 lg:grid-cols-4",
+  5: "grid-cols-2 lg:grid-cols-5",
+} as const;
+
+export function MetricStrip({
+  columns = 4,
+  children,
+  className,
+}: {
+  columns?: keyof typeof METRIC_COLUMNS;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("metric-strip", METRIC_COLUMNS[columns], className)}>{children}</div>
+  );
+}
+
+export function Metric({
+  label,
+  value,
+  hint,
+  tone = "default",
+  size = "md",
+  className,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: MetricTone;
+  size?: "md" | "lg";
+  className?: string;
+}) {
+  return (
+    <div className={cn("metric-cell", className)}>
+      <p className="type-caption truncate">{label}</p>
+      <p
+        className={cn(
+          "metric-cell-value",
+          size === "lg" && "metric-cell-value-lg",
+          METRIC_TONES[tone],
+        )}
+      >
+        {value}
+      </p>
+      {hint ? <p className="type-hint line-clamp-2">{hint}</p> : null}
+    </div>
+  );
+}
+
+/** Якорная навигация длинной страницы с подсветкой раздела, который сейчас на экране. */
+export function SectionNav({
+  items,
+  onSelect,
+}: {
+  items: ReadonlyArray<{ id: string; label: string }>;
+  onSelect?: (id: string) => void;
+}) {
+  const [active, setActive] = useState<string | null>(items[0]?.id ?? null);
+
+  useEffect(() => {
+    function update() {
+      let current: string | null = items[0]?.id ?? null;
+      for (const item of items) {
+        const element = document.getElementById(item.id);
+        if (element && element.getBoundingClientRect().top <= 140) current = item.id;
+      }
+      setActive(current);
+    }
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, [items]);
+
+  return (
+    <nav className="section-nav" aria-label="Разделы страницы">
+      <div className="section-nav-track">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={cn("section-nav-item", active === item.id && "section-nav-item-active")}
+            onClick={() => {
+              setActive(item.id);
+              if (onSelect) {
+                onSelect(item.id);
+                return;
+              }
+              document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
 export function LoadingState({ text = "Загрузка..." }: { text?: string }) {
   return (
     <div className="interactive flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted shadow-soft">
       <span className="inline-flex h-3.5 w-3.5 animate-spin rounded-full border-2 border-border border-t-brand-700" />
       {text}
-    </div>
-  );
-}
-
-/** Выбор контура на страницах входа и регистрации. */
-export function WorkspaceSwitch({
-  value,
-  onChange,
-}: {
-  value: Workspace;
-  onChange: (workspace: Workspace) => void;
-}) {
-  const options = Object.keys(WORKSPACE_LABELS) as Workspace[];
-
-  return (
-    <div className="grid grid-cols-2 gap-1.5">
-      {options.map((option) => (
-        <button
-          key={option}
-          type="button"
-          onClick={() => onChange(option)}
-          aria-pressed={value === option}
-          className={
-            value === option
-              ? "btn-primary interactive rounded-md border px-2 py-1.5 text-xs font-medium"
-              : "interactive rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-muted shadow-soft hover:border-border-strong hover:bg-surface-muted"
-          }
-        >
-          {WORKSPACE_LABELS[option]}
-        </button>
-      ))}
     </div>
   );
 }

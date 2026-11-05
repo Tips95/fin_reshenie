@@ -9,7 +9,6 @@ import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { canUseCivilCases, canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff, isCivilExecutor } from "@/lib/organization-features";
-import { WORKSPACE_LABELS } from "@/lib/workspace";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -130,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const openTasksCount = useOpenTasksCount();
   const features = getOrganizationFeatures(user);
-  const companyName = user?.organization_name || WORKSPACE_LABELS.legal;
+  const companyName = user?.organization_name || "Компания";
 
   const visibleNav = navItems.filter((item) => {
     if (isCivilExecutor(user)) return item.href === "/civil-cases";
@@ -159,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <LogoMark />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold leading-tight tracking-tight">{companyName}</p>
-              <p className="mt-0.5 text-[11px] leading-tight text-chrome-muted">{WORKSPACE_LABELS.legal}</p>
+              <p className="mt-0.5 text-[11px] leading-tight text-chrome-muted">Компания</p>
             </div>
           </div>
 
@@ -186,12 +185,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="mt-auto space-y-2 border-t border-chrome-border pt-3">
-            <Link
-              href="/login"
-              className="interactive block rounded-lg border border-chrome-border px-2.5 py-2 text-xs text-chrome-muted hover:border-brand-600 hover:bg-chrome-hover hover:text-chrome-text"
-            >
-              {WORKSPACE_LABELS.retail}
-            </Link>
             {user && (
               <div className="rounded-lg border border-chrome-border bg-chrome-elevated px-2.5 py-2.5">
                 <p className="text-xs font-semibold tracking-tight">{user.full_name}</p>
@@ -248,7 +241,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             primaryHrefs={mobilePrimary}
             pathname={pathname}
             badges={{ "/tasks": openTasksCount }}
-            extraLinks={[{ href: "/login", label: WORKSPACE_LABELS.retail }]}
           />
         </div>
       </div>

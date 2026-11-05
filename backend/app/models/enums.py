@@ -3,6 +3,8 @@ import enum
 
 class OrganizationType(str, enum.Enum):
     BANKRUPTCY = "bankruptcy"
+    # Товарная рассрочка удалена; значение остаётся, чтобы старые строки
+    # в базе читались, пока их не уберёт миграция o6f7g8h9i53.
     RETAIL = "retail"
 
 
@@ -11,6 +13,7 @@ class UserRole(str, enum.Enum):
     MANAGER = "manager"
     HEAD_MANAGER = "head_manager"
     CALL_CENTER = "call_center"
+    # Роль товарной рассрочки: в командах не выдаётся, только читается из базы.
     INVESTOR = "investor"
     EXECUTOR = "executor"
 
@@ -108,26 +111,6 @@ class MandatoryPaymentStatus(str, enum.Enum):
     PAID = "paid"
     PARTIAL = "partial"
     NOT_APPLICABLE = "not_applicable"
-
-
-class RetailContractStatus(str, enum.Enum):
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    OVERDUE = "overdue"
-    CANCELLED = "cancelled"
-
-
-class RetailPaymentType(str, enum.Enum):
-    DOWN_PAYMENT = "down_payment"
-    MONTHLY = "monthly"
-    EARLY_REPAYMENT = "early_repayment"
-
-
-class RetailOverdueStatus(str, enum.Enum):
-    IN_PROGRESS = "in_progress"
-    PROMISED = "promised"
-    NO_CONTACT = "no_contact"
-    CLOSED = "closed"
 
 
 class CivilCaseStage(str, enum.Enum):

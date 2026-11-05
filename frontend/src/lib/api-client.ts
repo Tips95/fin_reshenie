@@ -23,13 +23,6 @@ import type {
   PricingTier,
   TokenResponse,
   AuditLogEntry,
-  RetailContractDetail,
-  RetailContractBrief,
-  RetailClient,
-  RetailDashboardSummary,
-  RetailDealResponse,
-  RetailTermRate,
-  Workspace,
   Organization,
   User,
   Questionnaire,
@@ -318,17 +311,16 @@ export async function uploadFiles<T = unknown>(
 }
 
 export const authApi = {
-  login: (login: string, password: string, workspace: Workspace = "legal") =>
+  login: (login: string, password: string) =>
     apiFetch<TokenResponse>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ login, password, workspace }),
+      body: JSON.stringify({ login, password }),
     }),
   register: (data: {
     organization_name: string;
     login: string;
     password: string;
     full_name?: string;
-    workspace: Workspace;
   }) => apiFetch<TokenResponse>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
   me: () => apiFetch<User>("/auth/me"),
 };
@@ -339,78 +331,6 @@ export const organizationsApi = {
     apiFetch<Organization>("/organizations/current", {
       method: "PATCH",
       body: JSON.stringify(data),
-    }),
-};
-
-export const retailApi = {
-  dashboard: () => apiFetch<RetailDashboardSummary>("/retail/dashboard/summary"),
-  termRates: () => apiFetch<RetailTermRate[]>("/retail/term-rates"),
-  listClients: () => apiFetch<RetailClient[]>("/retail/clients"),
-  getClient: (id: string) => apiFetch<RetailClient>(`/retail/clients/${id}`),
-  createClient: (data: Record<string, unknown>) =>
-    apiFetch<RetailClient>("/retail/clients", { method: "POST", body: JSON.stringify(data) }),
-  createDeal: (data: Record<string, unknown>) =>
-    apiFetch<RetailDealResponse>("/retail/deals", { method: "POST", body: JSON.stringify(data) }),
-  updateClient: (id: string, data: Record<string, unknown>) =>
-    apiFetch<RetailClient>(`/retail/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  deleteClient: (id: string) => apiFetch<void>(`/retail/clients/${id}`, { method: "DELETE" }),
-  listContracts: (status?: string, retailClientId?: string) => {
-    const params = new URLSearchParams();
-    if (status) params.set("status_filter", status);
-    if (retailClientId) params.set("retail_client_id", retailClientId);
-    const query = params.toString();
-    return apiFetch<RetailContractBrief[]>(`/retail/contracts${query ? `?${query}` : ""}`);
-  },
-  getContract: (id: string) => apiFetch<RetailContractDetail>(`/retail/contracts/${id}`),
-  createContract: (data: Record<string, unknown>) =>
-    apiFetch<RetailContractDetail>("/retail/contracts", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  deleteContract: (id: string) => apiFetch<void>(`/retail/contracts/${id}`, { method: "DELETE" }),
-  recordPayment: (contractId: string, data: Record<string, unknown>) =>
-    apiFetch(`/retail/contracts/${contractId}/payments`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  createOverdueLog: (contractId: string, data: Record<string, unknown>) =>
-    apiFetch(`/retail/contracts/${contractId}/overdue-logs`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  deletePayment: (paymentId: string) =>
-    apiFetch<void>(`/retail/payments/${paymentId}`, { method: "DELETE" }),
-  listInvestors: () => apiFetch<User[]>("/retail/investors"),
-  createInvestor: (data: Record<string, unknown>) =>
-    apiFetch<User>("/retail/investors", { method: "POST", body: JSON.stringify(data) }),
-  updateInvestor: (id: string, data: Record<string, unknown>) =>
-    apiFetch<User>(`/retail/investors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  deleteInvestor: (id: string) => apiFetch<void>(`/retail/investors/${id}`, { method: "DELETE" }),
-  getMyInvestment: () => apiFetch<User>("/retail/investors/me"),
-  updateMyInvestment: (investment_amount: string) =>
-    apiFetch<User>("/retail/investors/me", {
-      method: "PATCH",
-      body: JSON.stringify({ investment_amount }),
-    }),
-  uploadClientPassportPdf: (clientId: string, file: File) =>
-    uploadFile<RetailClient>(`/retail/clients/${clientId}/passport-pdf`, file),
-  downloadClientPassportPdf: (clientId: string, fallbackFilename: string) =>
-    downloadFile(`/retail/clients/${clientId}/passport-pdf`, fallbackFilename),
-  deleteClientPassportPdf: (clientId: string) =>
-    apiFetch<RetailClient>(`/retail/clients/${clientId}/passport-pdf`, { method: "DELETE" }),
-  uploadGuarantorPassportPdf: (clientId: string, file: File) =>
-    uploadFile<RetailClient>(`/retail/clients/${clientId}/guarantor-passport-pdf`, file),
-  downloadGuarantorPassportPdf: (clientId: string, fallbackFilename: string) =>
-    downloadFile(`/retail/clients/${clientId}/guarantor-passport-pdf`, fallbackFilename),
-  deleteGuarantorPassportPdf: (clientId: string) =>
-    apiFetch<RetailClient>(`/retail/clients/${clientId}/guarantor-passport-pdf`, { method: "DELETE" }),
-  uploadSignedContractPdf: (contractId: string, file: File) =>
-    uploadFile<RetailContractDetail>(`/retail/contracts/${contractId}/signed-contract-pdf`, file),
-  downloadSignedContractPdf: (contractId: string, fallbackFilename: string) =>
-    downloadFile(`/retail/contracts/${contractId}/signed-contract-pdf`, fallbackFilename),
-  deleteSignedContractPdf: (contractId: string) =>
-    apiFetch<RetailContractDetail>(`/retail/contracts/${contractId}/signed-contract-pdf`, {
-      method: "DELETE",
     }),
 };
 
@@ -698,6 +618,13 @@ export const civilCasesApi = {
       method: "POST",
       body: JSON.stringify({ body }),
     }),
+  addPayment: (id: string, data: { amount: string; payment_date: string; comment?: string | null }) =>
+    apiFetch<CivilCase>(`/civil-cases/${id}/payments`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deletePayment: (id: string, paymentId: string) =>
+    apiFetch<CivilCase>(`/civil-cases/${id}/payments/${paymentId}`, { method: "DELETE" }),
   uploadDocument: (id: string, file: File, kind: CivilCaseDocumentKind) =>
     uploadFiles<CivilCase>(`/civil-cases/${id}/documents?kind=${kind}`, [file], "files"),
   uploadDocuments: (id: string, files: File[], kind: CivilCaseDocumentKind) =>

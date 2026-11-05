@@ -3,12 +3,9 @@ export type UserRole =
   | "manager"
   | "head_manager"
   | "call_center"
-  | "investor"
   | "executor";
 
-export type OrganizationType = "bankruptcy" | "retail";
-
-export type Workspace = "legal" | "retail";
+export type OrganizationType = "bankruptcy";
 
 export interface OrganizationFeatures {
   document_collection: boolean;
@@ -16,7 +13,6 @@ export interface OrganizationFeatures {
   expenses: boolean;
   pricing: boolean;
   analytics: boolean;
-  investors: boolean;
 }
 
 export const DEFAULT_ORGANIZATION_FEATURES: OrganizationFeatures = {
@@ -25,7 +21,6 @@ export const DEFAULT_ORGANIZATION_FEATURES: OrganizationFeatures = {
   expenses: true,
   pricing: true,
   analytics: true,
-  investors: true,
 };
 
 export type ClientStatus = "active" | "completed" | "defaulted" | "cancelled";
@@ -80,7 +75,6 @@ export interface User {
   email: string | null;
   role: UserRole;
   is_active: boolean;
-  investment_amount?: string | null;
   created_at?: string;
 }
 
@@ -326,6 +320,11 @@ export interface DashboardSummary {
   expenses_remaining_this_month: string;
   cash_on_hand: string;
   cash_forecast_end: string;
+  month_net_flow: string;
+  month_net_forecast: string;
+  mandatory_pending: MandatoryPaymentBreakdown | null;
+  deposit_missing_count: number;
+  deposit_missing_preview: { id: string; full_name: string }[];
   civil_cases_total: number;
   civil_cases_this_month: number;
   civil_income_total: string;
@@ -558,136 +557,6 @@ export interface OneTimeExpense {
   created_by_name?: string;
 }
 
-export type RetailContractStatus = "active" | "completed" | "overdue" | "cancelled";
-
-export type RetailPaymentType = "down_payment" | "monthly" | "early_repayment";
-
-export type RetailOverdueStatus = "in_progress" | "promised" | "no_contact" | "closed";
-
-export interface RetailClient {
-  id: string;
-  organization_id: string;
-  full_name: string;
-  phone: string;
-  passport: string | null;
-  address: string | null;
-  guarantor_full_name: string | null;
-  guarantor_phone: string | null;
-  guarantor_passport: string | null;
-  contracts_count: number;
-  purchase_total: string;
-  revenue_total: string;
-  collected_total: string;
-  expected_profit: string;
-  collected_profit: string;
-  remainder_total: string;
-  has_passport_pdf: boolean;
-  passport_pdf_filename: string | null;
-  has_guarantor_passport_pdf: boolean;
-  guarantor_passport_pdf_filename: string | null;
-}
-
-export interface RetailTermRate {
-  id: string;
-  term_months: number;
-  markup_percent: string;
-}
-
-export interface RetailPaymentScheduleItem {
-  id: string;
-  month_number: number;
-  due_date: string;
-  planned_amount: string;
-  paid_amount: string;
-  paid_date: string | null;
-  status: PaymentScheduleStatus;
-}
-
-export interface RetailPayment {
-  id: string;
-  payment_type: RetailPaymentType;
-  amount: string;
-  payment_date: string;
-  comment: string | null;
-  payment_schedule_id: string | null;
-  created_by_id: string;
-}
-
-export interface RetailOverdueLog {
-  id: string;
-  action_date: string;
-  comment: string;
-  promised_date: string | null;
-  status: RetailOverdueStatus;
-  created_by_id: string;
-}
-
-export interface RetailContractBrief {
-  id: string;
-  retail_client_id: string;
-  investor_id: string;
-  investor_name: string;
-  client_name: string;
-  product_name: string;
-  purchase_price: string;
-  product_price: string;
-  term_months: number;
-  markup_percent: string;
-  total_amount: string;
-  down_payment: string;
-  financed_amount: string;
-  monthly_payment: string;
-  contract_date: string;
-  status: RetailContractStatus;
-  collected_total: string;
-  remainder_total: string;
-  expected_profit: string;
-  collected_profit: string;
-  markup_amount: string;
-  has_overdue: boolean;
-  has_signed_contract_pdf: boolean;
-  signed_contract_pdf_filename: string | null;
-}
-
-export interface RetailContractDetail extends RetailContractBrief {
-  payment_schedule: RetailPaymentScheduleItem[];
-  payments: RetailPayment[];
-  overdue_logs: RetailOverdueLog[];
-}
-
-export interface InvestorSummaryItem {
-  investor_id: string;
-  investor_name: string;
-  investment_amount: string;
-  contracts_count: number;
-  purchase_total: string;
-  total_amount: string;
-  collected_total: string;
-  remainder_total: string;
-  expected_profit: string;
-  collected_profit: string;
-  overdue_count: number;
-}
-
-export interface RetailDashboardSummary {
-  contracts_count: number;
-  active_count: number;
-  overdue_count: number;
-  purchase_total: string;
-  total_amount: string;
-  collected_total: string;
-  remainder_total: string;
-  expected_profit: string;
-  collected_profit: string;
-  down_payment_total: string;
-  investors: InvestorSummaryItem[];
-}
-
-export interface RetailDealResponse {
-  client: RetailClient;
-  contract: RetailContractDetail;
-}
-
 export interface QuestionnaireDebt {
   creditor: string;
   origin_date: string | null;
@@ -841,11 +710,23 @@ export interface CivilCaseDocument {
   created_at: string;
 }
 
+export interface CivilCasePayment {
+  id: string;
+  amount: string;
+  payment_date: string;
+  comment: string | null;
+  created_by_id: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
 export interface CivilCaseBrief {
   id: string;
   full_name: string;
   phone: string;
   price: string;
+  paid_total: string;
+  remaining: string;
   appeal_date: string;
   subject: string;
   stage: CivilCaseStage;
@@ -871,6 +752,7 @@ export interface CivilCase extends CivilCaseBrief {
   execution_note: string | null;
   movements: CivilCaseMovement[];
   documents: CivilCaseDocument[];
+  payments: CivilCasePayment[];
 }
 
 

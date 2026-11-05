@@ -80,6 +80,38 @@ class CivilCase(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="CivilCaseDocument.created_at.desc()",
     )
+    payments: Mapped[list["CivilCasePayment"]] = relationship(
+        back_populates="civil_case",
+        cascade="all, delete-orphan",
+        order_by="(CivilCasePayment.payment_date.desc(), CivilCasePayment.created_at.desc())",
+    )
+
+
+class CivilCasePayment(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
+    """Фактическая оплата по делу: в кассу гражданка попадает по дате оплаты."""
+
+    __tablename__ = "civil_case_payments"
+
+    civil_case_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("civil_cases.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    payment_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    civil_case: Mapped["CivilCase"] = relationship(back_populates="payments")
+    created_by: Mapped["User | None"] = relationship()
 
 
 class CivilCaseMovement(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):

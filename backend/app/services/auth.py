@@ -17,29 +17,22 @@ from app.models.enums import OrganizationType
 from app.models.user import User
 from app.schemas.auth import TokenResponse
 
-WORKSPACE_TO_ORG_TYPE = {
-    "legal": OrganizationType.BANKRUPTCY,
-    "retail": OrganizationType.RETAIL,
-}
-
-
-def get_user_by_login(db: Session, login: str, workspace: str = "legal") -> User | None:
+def get_user_by_login(db: Session, login: str) -> User | None:
     normalized_login = login.strip()
-    org_type = WORKSPACE_TO_ORG_TYPE.get(workspace, OrganizationType.BANKRUPTCY)
     stmt = (
         select(User)
         .options(joinedload(User.organization))
         .where(
             or_(User.email == normalized_login, User.phone == normalized_login),
             User.is_active.is_(True),
-            User.organization.has(organization_type=org_type),
+            User.organization.has(organization_type=OrganizationType.BANKRUPTCY),
         )
     )
     return db.scalars(stmt).unique().first()
 
 
-def authenticate_user(db: Session, login: str, password: str, workspace: str = "legal") -> User | None:
-    user = get_user_by_login(db, login, workspace=workspace)
+def authenticate_user(db: Session, login: str, password: str) -> User | None:
+    user = get_user_by_login(db, login)
     if user is None or not verify_password(password, user.password_hash):
         return None
     return user

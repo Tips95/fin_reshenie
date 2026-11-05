@@ -13,12 +13,7 @@ from app.schemas.auth import (
 )
 from app.schemas.organization import organization_features
 from app.services.accounts import register_organization
-from app.services.auth import (
-    WORKSPACE_TO_ORG_TYPE,
-    authenticate_user,
-    issue_tokens,
-    refresh_access_token,
-)
+from app.services.auth import authenticate_user, issue_tokens, refresh_access_token
 
 router = APIRouter()
 
@@ -35,13 +30,12 @@ def _user_response(user: User) -> UserResponse:
         email=user.email,
         role=user.role,
         is_active=user.is_active,
-        investment_amount=user.investment_amount,
     )
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    user = authenticate_user(db, payload.login, payload.password, workspace=payload.workspace)
+    user = authenticate_user(db, payload.login, payload.password)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -59,7 +53,6 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
         login=payload.login,
         password=payload.password,
         owner_name=payload.full_name,
-        organization_type=WORKSPACE_TO_ORG_TYPE[payload.workspace],
     )
     return issue_tokens(owner)
 

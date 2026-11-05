@@ -139,7 +139,6 @@ export function statusLabel(status: string): string {
     manager: "Менеджер",
     head_manager: "Начальник отдела",
     call_center: "Сбор документов",
-    investor: "Инвестор",
     executor: "Исполнитель",
     salary: "Зарплата",
     rent: "Аренда",

@@ -11,6 +11,8 @@ import {
   FormField,
   Input,
   LoadingState,
+  Metric,
+  MetricStrip,
   PageHeader,
   PhoneInput,
   SectionTitle,
@@ -163,6 +165,9 @@ export default function CivilCaseDetailPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [movement, setMovement] = useState("");
+  const [paymentForm, setPaymentForm] = useState({ amount: "", payment_date: todayIsoDate(), comment: "" });
+  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
+  const [paymentSaving, setPaymentSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [intake, setIntake] = useState({
@@ -324,6 +329,53 @@ export default function CivilCaseDetailPage() {
       });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAddPayment(event: React.FormEvent) {
+    event.preventDefault();
+    const errors = collectErrors({
+      amount: validatePositiveAmount(paymentForm.amount, { label: "Сумма" }),
+      payment_date: validateRequiredDate(paymentForm.payment_date),
+    });
+    if (hasErrors(errors)) {
+      setPaymentErrors(errors);
+      return;
+    }
+    setPaymentErrors({});
+    setPaymentSaving(true);
+    try {
+      const updated = await civilCasesApi.addPayment(params.id, {
+        amount: paymentForm.amount.trim(),
+        payment_date: paymentForm.payment_date,
+        comment: paymentForm.comment.trim() || null,
+      });
+      setItem(updated);
+      setPaymentForm({ amount: "", payment_date: todayIsoDate(), comment: "" });
+      setToast({ message: "Оплата внесена", tone: "success" });
+    } catch (err) {
+      setToast({
+        message: err instanceof ApiRequestError ? err.message : "Не удалось внести оплату",
+        tone: "error",
+      });
+    } finally {
+      setPaymentSaving(false);
+    }
+  }
+
+  async function handleDeletePayment(paymentId: string) {
+    if (!window.confirm("Удалить эту оплату? Она пропадёт из кассы.")) return;
+    setPaymentSaving(true);
+    try {
+      const updated = await civilCasesApi.deletePayment(params.id, paymentId);
+      setItem(updated);
+    } catch (err) {
+      setToast({
+        message: err instanceof ApiRequestError ? err.message : "Не удалось удалить оплату",
+        tone: "error",
+      });
+    } finally {
+      setPaymentSaving(false);
     }
   }
 
@@ -582,6 +634,88 @@ export default function CivilCaseDetailPage() {
           </dl>
         </Card>
       )}
+
+      <Card>
+        <SectionTitle
+          title="Оплаты"
+          description="В кассу и дашборд гражданка попадает по дате фактической оплаты, а не по цене дела."
+        />
+        <MetricStrip columns={3}>
+          <Metric label="Цена дела" value={formatMoney(item.price)} />
+          <Metric label="Оплачено" value={formatMoney(item.paid_total)} tone="success" />
+          <Metric
+            label="Осталось"
+            value={formatMoney(item.remaining)}
+            tone={Number(item.remaining) > 0 ? "warning" : "muted"}
+          />
+        </MetricStrip>
+        {canManageIntake && Number(item.remaining) > 0 ? (
+          <form
+            onSubmit={(event) => void handleAddPayment(event)}
+            className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_auto] md:items-end"
+          >
+            <FormField label="Сумма" error={paymentErrors.amount}>
+              <Input
+                inputMode="decimal"
+                value={paymentForm.amount}
+                placeholder={item.remaining}
+                onChange={(event) =>
+                  setPaymentForm({ ...paymentForm, amount: filterDecimalInput(event.target.value) })
+                }
+              />
+            </FormField>
+            <FormField label="Дата оплаты" error={paymentErrors.payment_date}>
+              <Input
+                type="date"
+                value={paymentForm.payment_date}
+                onChange={(event) => setPaymentForm({ ...paymentForm, payment_date: event.target.value })}
+              />
+            </FormField>
+            <FormField label="Комментарий">
+              <Input
+                value={paymentForm.comment}
+                placeholder="Наличные, перевод..."
+                onChange={(event) => setPaymentForm({ ...paymentForm, comment: event.target.value })}
+              />
+            </FormField>
+            <Button type="submit" disabled={paymentSaving}>
+              {paymentSaving ? "Сохранение..." : "Внести оплату"}
+            </Button>
+          </form>
+        ) : null}
+        {item.payments.length === 0 ? (
+          <p className="mt-3 text-xs text-muted">Оплат пока нет — в кассу дело не попало</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {item.payments.map((payment) => (
+              <li
+                key={payment.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-muted px-2 py-1.5 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold tabular-nums">
+                    {formatMoney(payment.amount)} · {formatDate(payment.payment_date)}
+                  </p>
+                  <p className="text-[11px] text-muted">
+                    {payment.comment ? `${payment.comment} · ` : ""}
+                    {payment.created_by_name || "сотрудник"}
+                  </p>
+                </div>
+                {canManageIntake ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={paymentSaving}
+                    onClick={() => void handleDeletePayment(payment.id)}
+                  >
+                    Удалить
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <CivilDocumentSlot

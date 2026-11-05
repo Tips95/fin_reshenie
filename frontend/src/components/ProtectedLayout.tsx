@@ -4,14 +4,9 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/AppShell";
-import { RetailShell } from "@/components/RetailShell";
 import { LoadingState } from "@/components/ui";
 import { isCollectionStaff, legalHomePath } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
-
-function isRetailPath(pathname: string): boolean {
-  return pathname.startsWith("/retail");
-}
 
 function isCivilCasesPath(pathname: string): boolean {
   return pathname.startsWith("/civil-cases");
@@ -29,20 +24,11 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
     }
     if (!user) return;
 
-    const retailUser = user.organization_type === "retail";
-    if (retailUser && !isRetailPath(pathname)) {
-      router.replace("/retail");
-      return;
-    }
-    if (!retailUser && isRetailPath(pathname)) {
-      router.replace(legalHomePath(user));
-      return;
-    }
-    if (!retailUser && user.role === "executor" && !isCivilCasesPath(pathname)) {
+    if (user.role === "executor" && !isCivilCasesPath(pathname)) {
       router.replace("/civil-cases");
       return;
     }
-    if (!retailUser && isCollectionStaff(user) && pathname === "/") {
+    if (isCollectionStaff(user) && pathname === "/") {
       router.replace(legalHomePath(user));
     }
   }, [loading, user, router, pathname]);
@@ -56,10 +42,6 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return null;
-
-  if (isRetailPath(pathname)) {
-    return <RetailShell>{children}</RetailShell>;
-  }
 
   return <AppShell>{children}</AppShell>;
 }

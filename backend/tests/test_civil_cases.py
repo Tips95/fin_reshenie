@@ -9,15 +9,23 @@ from sqlalchemy.pool import StaticPool
 
 from app.models import Base, Organization, User
 from app.models.enums import CivilCaseDocumentKind, CivilCaseStage, OrganizationType, UserRole
-from app.schemas.civil_case import CivilCaseCreate, CivilCaseMovementCreate, CivilCaseUpdate
+from app.schemas.civil_case import (
+    CivilCaseCreate,
+    CivilCaseMovementCreate,
+    CivilCasePaymentCreate,
+    CivilCaseUpdate,
+)
 from app.services.civil_cases import (
     add_document,
     add_movement,
+    add_payment,
     create_civil_case,
     delete_document,
+    delete_payment,
     get_organization_civil_case,
     list_civil_cases,
     list_executors,
+    to_civil_case_brief,
     to_civil_case_response,
     update_civil_case,
 )
@@ -278,9 +286,9 @@ class TestCivilCases:
             )
         assert exc.value.status_code == 403
 
-    def test_civil_income_stats_by_appeal_date(self, db):
+    def test_civil_income_counts_actual_payments_by_payment_date(self, db):
         manager = _user(db)
-        create_civil_case(
+        august_case = create_civil_case(
             db,
             manager,
             CivilCaseCreate(
@@ -291,7 +299,7 @@ class TestCivilCases:
                 subject="Жалоба в администрацию",
             ),
         )
-        create_civil_case(
+        july_case = create_civil_case(
             db,
             manager,
             CivilCaseCreate(
@@ -302,6 +310,19 @@ class TestCivilCases:
                 subject="Иск о разделе имущества",
             ),
         )
+        add_payment(
+            db,
+            manager,
+            august_case.id,
+            CivilCasePaymentCreate(amount=Decimal("4000.00"), payment_date=date(2026, 8, 5)),
+        )
+        add_payment(
+            db,
+            manager,
+            july_case.id,
+            CivilCasePaymentCreate(amount=Decimal("5000.00"), payment_date=date(2026, 8, 10)),
+        )
+
         stats = get_civil_income_stats(
             db,
             manager.organization_id,
@@ -310,8 +331,76 @@ class TestCivilCases:
         )
         assert stats.cases_total == 2
         assert stats.cases_this_month == 1
-        assert stats.income_total == Decimal("15000.00")
-        assert stats.income_this_month == Decimal("10000.00")
+        assert stats.income_total == Decimal("9000.00")
+        assert stats.income_this_month == Decimal("9000.00")
+
+        brief = to_civil_case_brief(get_organization_civil_case(db, case_id=august_case.id, user=manager))
+        assert brief.paid_total == Decimal("4000.00")
+        assert brief.remaining == Decimal("6000.00")
+
+    def test_payment_cannot_exceed_remaining_and_can_be_deleted(self, db):
+        manager = _user(db)
+        case = create_civil_case(
+            db,
+            manager,
+            CivilCaseCreate(
+                full_name="Петров Пётр Петрович",
+                phone="+7 928 000-00-00",
+                price=Decimal("10000.00"),
+                appeal_date=date(2026, 8, 5),
+                subject="Жалоба в администрацию",
+            ),
+        )
+        case = add_payment(
+            db,
+            manager,
+            case.id,
+            CivilCasePaymentCreate(amount=Decimal("7000.00"), payment_date=date(2026, 8, 5)),
+        )
+        with pytest.raises(HTTPException) as exc:
+            add_payment(
+                db,
+                manager,
+                case.id,
+                CivilCasePaymentCreate(amount=Decimal("3000.01"), payment_date=date(2026, 8, 6)),
+            )
+        assert exc.value.status_code == 422
+        with pytest.raises(HTTPException) as exc:
+            update_civil_case(db, manager, case.id, CivilCaseUpdate(price=Decimal("6000.00")))
+        assert exc.value.status_code == 422
+
+        case = delete_payment(db, manager, case.id, case.payments[0].id)
+        assert case.payments == []
+
+    def test_executor_cannot_add_payment(self, db):
+        manager = _user(db)
+        executor = _user(
+            db,
+            organization=manager.organization,
+            role=UserRole.EXECUTOR,
+            email="executor@test.local",
+            full_name="Исполнитель Делов",
+        )
+        case = create_civil_case(
+            db,
+            manager,
+            CivilCaseCreate(
+                full_name="Петров Пётр Петрович",
+                phone="+7 928 000-00-00",
+                price=Decimal("10000.00"),
+                appeal_date=date(2026, 8, 5),
+                subject="Жалоба в администрацию",
+                assigned_executor_id=executor.id,
+            ),
+        )
+        with pytest.raises(HTTPException) as exc:
+            add_payment(
+                db,
+                executor,
+                case.id,
+                CivilCasePaymentCreate(amount=Decimal("1000.00"), payment_date=date(2026, 8, 5)),
+            )
+        assert exc.value.status_code == 403
 
     def test_manager_uploads_client_docs_executor_uploads_prepared(self, db, monkeypatch):
         monkeypatch.setattr("app.services.civil_cases.save_bytes_best_effort", lambda *_args, **_kwargs: None)

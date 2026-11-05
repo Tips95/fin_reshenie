@@ -1,7 +1,6 @@
 import uuid
-from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Numeric, String, TypeDecorator
+from sqlalchemy import Boolean, ForeignKey, String, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -39,7 +38,6 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(UserRoleType(), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    investment_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
     assigned_clients: Mapped[list["Client"]] = relationship(

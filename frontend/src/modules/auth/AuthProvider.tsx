@@ -6,20 +6,19 @@ import { useRouter } from "next/navigation";
 import { ApiRequestError, authApi } from "@/lib/api-client";
 import { clearTokens, isAuthenticated, setTokens } from "@/lib/auth-storage";
 import { legalHomePath } from "@/lib/organization-features";
-import type { User, Workspace } from "@/lib/types";
+import type { User } from "@/lib/types";
 
 interface RegisterPayload {
   organizationName: string;
   login: string;
   password: string;
   fullName?: string;
-  workspace?: Workspace;
 }
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (login: string, password: string, workspace?: Workspace) => Promise<void>;
+  login: (login: string, password: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -55,12 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(
-    async (loginValue: string, password: string, workspace: Workspace = "legal") => {
-      const tokens = await authApi.login(loginValue, password, workspace);
+    async (loginValue: string, password: string) => {
+      const tokens = await authApi.login(loginValue, password);
       setTokens(tokens.access_token, tokens.refresh_token);
       const me = await authApi.me();
       setUser(me);
-      router.push(workspace === "retail" ? "/retail" : legalHomePath(me));
+      router.push(legalHomePath(me));
     },
     [router],
   );
@@ -71,19 +70,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login: loginValue,
       password,
       fullName,
-      workspace = "legal",
     }: RegisterPayload) => {
       const tokens = await authApi.register({
         organization_name: organizationName,
         login: loginValue,
         password,
         full_name: fullName?.trim() ? fullName.trim() : undefined,
-        workspace,
       });
       setTokens(tokens.access_token, tokens.refresh_token);
       const me = await authApi.me();
       setUser(me);
-      router.push(workspace === "retail" ? "/retail" : legalHomePath(me));
+      router.push(legalHomePath(me));
     },
     [router],
   );

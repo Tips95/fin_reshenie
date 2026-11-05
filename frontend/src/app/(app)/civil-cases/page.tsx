@@ -154,7 +154,14 @@ export default function CivilCasesPage() {
                     </Link>
                   </td>
                   <td data-label="Телефон">{item.phone || "—"}</td>
-                  <td data-label="Цена">{formatMoney(item.price)}</td>
+                  <td data-label="Цена">
+                    {formatMoney(item.price)}
+                    {Number(item.remaining) > 0 ? (
+                      <span className="block text-[11px] text-status-warning-text">
+                        долг {formatMoney(item.remaining)}
+                      </span>
+                    ) : null}
+                  </td>
                   <td data-label="Дата обращения">{formatDate(item.appeal_date)}</td>
                   <td data-label="Предмет" className="max-w-[280px] truncate">
                     {item.subject}

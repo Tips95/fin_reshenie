@@ -13,6 +13,7 @@ from app.schemas.civil_case import (
     CivilCaseCreate,
     CivilCaseExecutorOption,
     CivilCaseMovementCreate,
+    CivilCasePaymentCreate,
     CivilCaseResponse,
     CivilCaseUpdate,
 )
@@ -21,9 +22,11 @@ from app.services.civil_case_shares import mark_civil_shares
 from app.services.civil_cases import (
     add_document,
     add_movement,
+    add_payment,
     create_civil_case,
     delete_civil_case,
     delete_document,
+    delete_payment,
     ensure_legal_org,
     get_case_document,
     get_organization_civil_case,
@@ -134,6 +137,28 @@ def post_movement(
     db: Session = Depends(get_db),
 ) -> CivilCaseResponse:
     item = add_movement(db, current_user, case_id, payload)
+    return to_civil_case_response(item)
+
+
+@router.post("/{case_id}/payments", response_model=CivilCaseResponse)
+def post_payment(
+    case_id: UUID,
+    payload: CivilCasePaymentCreate,
+    current_user: User = Depends(_require_civil_staff),
+    db: Session = Depends(get_db),
+) -> CivilCaseResponse:
+    item = add_payment(db, current_user, case_id, payload)
+    return to_civil_case_response(item)
+
+
+@router.delete("/{case_id}/payments/{payment_id}", response_model=CivilCaseResponse)
+def remove_payment(
+    case_id: UUID,
+    payment_id: UUID,
+    current_user: User = Depends(_require_civil_staff),
+    db: Session = Depends(get_db),
+) -> CivilCaseResponse:
+    item = delete_payment(db, current_user, case_id, payment_id)
     return to_civil_case_response(item)
 
 

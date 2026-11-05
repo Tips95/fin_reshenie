@@ -12,7 +12,6 @@ class OrganizationFeatures(BaseModel):
     expenses: bool = True
     pricing: bool = True
     analytics: bool = True
-    investors: bool = True
 
 
 class OrganizationResponse(BaseModel):
@@ -32,7 +31,6 @@ class OrganizationUpdate(BaseModel):
     feature_expenses: bool | None = None
     feature_pricing: bool | None = None
     feature_analytics: bool | None = None
-    feature_investors: bool | None = None
 
 
 def organization_features(organization) -> OrganizationFeatures:
@@ -42,7 +40,6 @@ def organization_features(organization) -> OrganizationFeatures:
         expenses=bool(getattr(organization, "feature_expenses", True)),
         pricing=bool(getattr(organization, "feature_pricing", True)),
         analytics=bool(getattr(organization, "feature_analytics", True)),
-        investors=bool(getattr(organization, "feature_investors", True)),
     )
 
 

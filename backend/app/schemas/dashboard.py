@@ -30,6 +30,11 @@ class DashboardOverdueClientItem(BaseModel):
     contract_total: Decimal | None = None
 
 
+class DashboardClientRef(BaseModel):
+    id: UUID
+    full_name: str
+
+
 class CashBalanceUpdate(BaseModel):
     month: str = Field(pattern=r"^\d{4}-\d{2}$")
     opening_amount: Decimal = Field(decimal_places=2)
@@ -88,6 +93,12 @@ class DashboardSummary(BaseModel):
     expenses_remaining_this_month: Decimal = Decimal("0.00")
     cash_on_hand: Decimal = Decimal("0.00")
     cash_forecast_end: Decimal = Decimal("0.00")
+    # Движение за месяц без остатка на начало: поступило − отдано − оплачено.
+    month_net_flow: Decimal = Decimal("0.00")
+    month_net_forecast: Decimal = Decimal("0.00")
+    mandatory_pending: MandatoryPaymentBreakdown | None = None
+    deposit_missing_count: int = 0
+    deposit_missing_preview: list[DashboardClientRef] = []
     civil_cases_total: int = 0
     civil_cases_this_month: int = 0
     civil_income_total: Decimal = Decimal("0.00")

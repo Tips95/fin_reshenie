@@ -7,15 +7,16 @@ import { useRouter } from "next/navigation";
 import {
   Badge,
   Button,
-  Card,
   EmptyState,
   FormField,
   Input,
   LoadingState,
+  Metric,
+  MetricStrip,
   PageHeader,
-  SectionTitle,
+  Panel,
+  SectionNav,
   Select,
-  StatCard,
 } from "@/components/ui";
 import { ApiRequestError, analyticsApi, civilCasesApi, clientsApi, expensesApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -38,8 +39,19 @@ import type {
   OneTimeExpense,
   OperatingExpense,
 } from "@/lib/types";
-import { PayoutTracking } from "@/modules/expenses/PayoutTracking";
+import { PayeeRow, PayoutTracking } from "@/modules/expenses/PayoutTracking";
 import { useAuth } from "@/modules/auth/AuthProvider";
+
+const EXPENSE_SECTIONS = [
+  { id: "manager-payouts", label: "Менеджерские" },
+  { id: "civil-shares", label: "Гражданка" },
+  { id: "deposit-fin", label: "Депозит и фин." },
+  { id: "one-time", label: "Разовые" },
+  { id: "salary", label: "Зарплата" },
+  { id: "production", label: "Производственные" },
+  { id: "add-expense", label: "Новая статья" },
+  { id: "history", label: "История" },
+] as const;
 
 const emptyOneTimeForm = {
   name: "",
@@ -156,7 +168,7 @@ function ExpenseTable({
   if (items.length === 0) return <EmptyState>Статьи не добавлены</EmptyState>;
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <table className="data-table table-cards text-xs">
         <thead>
           <tr>
@@ -170,7 +182,7 @@ function ExpenseTable({
                 <th>Статус</th>
               </>
             )}
-            <th>Действия</th>
+            <th className="text-right">Действия</th>
           </tr>
         </thead>
         <tbody>
@@ -254,7 +266,7 @@ function ExpenseTable({
               <tr
                 key={item.id}
                 className={cn(
-                  trackMonthlyPayments && isPaid && "bg-status-success-bg/70 hover:bg-status-success-bg",
+                  trackMonthlyPayments && isPaid && "bg-status-success-bg hover:bg-status-success-bg",
                 )}
               >
                 <td data-label="Название" className="font-medium text-foreground">{item.name}</td>
@@ -355,9 +367,15 @@ function ExpenseTable({
                     {!isEditingPayment && (
                       <>
                         <Button type="button" variant="ghost" onClick={() => onStartEdit(item)}>
-                          Статья
+                          Изменить
                         </Button>
-                        <Button type="button" variant="ghost" onClick={() => onDelete(item.id, item.name)}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          aria-label={`Удалить ${item.name}`}
+                          title="Удалить статью"
+                          onClick={() => onDelete(item.id, item.name)}
+                        >
                           ×
                         </Button>
                       </>
@@ -541,11 +559,6 @@ export default function ExpensesPage() {
     } finally {
       setMarkingManagerKey(null);
     }
-  }
-
-  function managerSurname(fullName: string): string {
-    const part = fullName.trim().split(/\s+/)[0];
-    return part || fullName;
   }
 
   function normalizeAmount(value: string): string {
@@ -801,64 +814,87 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="page-stack">
-      <PageHeader
-        title="Ежемесячные расходы"
-        subtitle="Зарплатный проект, производственные расходы и учёт выплат"
-      />
-
-      <div className="grid gap-2 md:grid-cols-3">
-        <StatCard label="Зарплатный проект" value={formatMoney(salaryTotal)} tone="warning" />
-        <StatCard
-          label="Производственные расходы"
-          value={formatMoney(productionTotal)}
-          tone="brand"
-        />
-        <StatCard
-          label="Итого в месяц"
-          value={formatMoney(totalWithOneTime)}
-          tone="danger"
-          hint={`${activeExpenses.length} статей + ${oneTimeExpenses.length} разовых`}
-        />
-      </div>
-
-      <Card variant="accent">
-        <SectionTitle
-          title={`Менеджерские 10 000 ₽ · ${formatMonthLabel(periodMonth)}`}
-          description="С октября 2026: 10 000 ₽ за каждого клиента с договором на банкротство. 1 000 ₽ за доверку не учитываем"
+    <div className="space-y-5">
+      <div className="space-y-4">
+        <PageHeader
+          title="Расходы и выплаты"
+          subtitle="Зарплатный проект, производственные расходы, доли и обязательные платежи"
           action={
-            <Input
-              type="month"
-              value={periodMonth}
-              onChange={(e) => {
-                setPeriodMonth(e.target.value || currentMonthValue());
-                cancelPaymentEdit();
-              }}
-              className="w-[150px]"
-              aria-label="Месяц менеджерских"
-            />
+            <div className="flex items-center gap-2">
+              <span className="type-caption hidden sm:inline">Месяц</span>
+              <Input
+                type="month"
+                value={periodMonth}
+                onChange={(e) => {
+                  setPeriodMonth(e.target.value || currentMonthValue());
+                  cancelPaymentEdit();
+                }}
+                className="w-[160px]"
+                aria-label="Расчётный месяц"
+              />
+            </div>
           }
         />
+
+        {error && <p className="alert-danger">{error}</p>}
+
+        <MetricStrip columns={5}>
+          <Metric
+            label="Итого в месяц"
+            value={formatMoney(totalWithOneTime)}
+            tone="danger"
+            hint={`${activeExpenses.length} статей и ${oneTimeExpenses.length} разовых`}
+          />
+          <Metric
+            label="Зарплатный проект"
+            value={formatMoney(salaryTotal)}
+            hint={`${salaryExpenses.length} сотрудников`}
+          />
+          <Metric
+            label="Производственные"
+            value={formatMoney(productionTotal)}
+            hint={`${productionExpenses.length} статей`}
+          />
+          <Metric
+            label={`Разовые · ${formatMonthLabel(periodMonth)}`}
+            value={formatMoney(oneTimeMonthTotal)}
+            tone="warning"
+            hint={`${oneTimeExpenses.length} записей`}
+          />
+          <Metric
+            label="Зарплата выплачена"
+            value={formatMoney(monthPaidTotal)}
+            tone="success"
+            hint={`${monthPaidCount} из ${salaryExpenses.length} · ждут ${monthPendingCount}`}
+            className="col-span-2 lg:col-span-1"
+          />
+        </MetricStrip>
+      </div>
+
+      <SectionNav items={EXPENSE_SECTIONS} />
+
+      <Panel
+        id="manager-payouts"
+        dot="brand"
+        title={`Менеджерские 10 000 ₽ · ${formatMonthLabel(periodMonth)}`}
+        description="С октября 2026: 10 000 ₽ за каждого клиента с договором на банкротство. 1 000 ₽ за доверенность сюда не входит."
+      >
         {managerPayouts ? (
           <>
-            <div className="mb-3 grid gap-2 sm:grid-cols-3">
-              <StatCard
+            <MetricStrip columns={3}>
+              <Metric
                 label="К выдаче"
                 value={formatMoney(managerPayouts.to_pay_amount)}
                 tone="warning"
                 hint={`${managerPayouts.clients_count} клиентов`}
               />
-              <StatCard
+              <Metric
                 label="Выплачено"
                 value={formatMoney(managerPayouts.paid_amount)}
                 tone="success"
               />
-              <StatCard
-                label="Всего за месяц"
-                value={formatMoney(managerPayouts.total_amount)}
-                tone="brand"
-              />
-            </div>
+              <Metric label="Начислено за месяц" value={formatMoney(managerPayouts.total_amount)} />
+            </MetricStrip>
             {managerPayouts.managers.length === 0 ? (
               <EmptyState>За этот месяц нет договоров на банкротство</EmptyState>
             ) : (
@@ -869,126 +905,89 @@ export default function ExpensesPage() {
                   const unpaidIds = row.clients
                     .filter((item) => !item.collected)
                     .map((item) => item.client_id);
-                  const paidIds = row.clients
-                    .filter((item) => item.collected)
-                    .map((item) => item.client_id);
                   const busy =
                     markingManagerKey === managerKey ||
                     row.clients.some((item) => markingClientId === item.client_id);
 
                   return (
-                    <div
+                    <PayeeRow
                       key={managerKey}
-                      className="rounded-md border border-border bg-surface-muted/40"
+                      name={row.manager_name}
+                      meta={`${row.clients_count} кл. · выплачено ${formatMoney(row.paid_amount)} из ${formatMoney(row.total_amount)}`}
+                      toPay={row.to_pay_amount}
+                      paid={row.paid_amount}
+                      total={row.total_amount}
+                      open={expanded}
+                      onToggle={() => toggleManagerExpanded(managerKey)}
+                      action={
+                        unpaidIds.length > 0 ? (
+                          <Button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void handleMarkManagerPayoutAll(managerKey, unpaidIds, true)
+                            }
+                          >
+                            {markingManagerKey === managerKey ? "…" : "Выплатить всё"}
+                          </Button>
+                        ) : (
+                          <Badge tone="success">Закрыто</Badge>
+                        )
+                      }
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-                        <button
-                          type="button"
-                          className="link-brand text-left text-sm font-semibold"
-                          onClick={() => toggleManagerExpanded(managerKey)}
-                          aria-expanded={expanded}
-                        >
-                          {managerSurname(row.manager_name)}
-                          <span className="ml-1.5 font-normal text-muted">
-                            {expanded ? "▾" : "▸"} {row.clients_count} кл. · к выдаче{" "}
-                            {formatMoney(row.to_pay_amount)}
-                          </span>
-                        </button>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {unpaidIds.length > 0 ? (
-                            <Button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => {
-                                if (!expanded) toggleManagerExpanded(managerKey);
-                                void handleMarkManagerPayoutAll(managerKey, unpaidIds, true);
-                              }}
-                            >
-                              {markingManagerKey === managerKey
-                                ? "…"
-                                : `Выплатить всё · ${formatMoney(row.to_pay_amount)}`}
-                            </Button>
-                          ) : null}
-                          {paidIds.length > 0 && unpaidIds.length === 0 ? (
-                            <Badge tone="success">Всё выплачено</Badge>
-                          ) : null}
-                        </div>
+                      <div className="overflow-x-auto">
+                        <table className="data-table table-cards text-xs">
+                          <thead>
+                            <tr>
+                              <th>Клиент</th>
+                              <th>Договор</th>
+                              <th className="text-right">Сумма</th>
+                              <th>Статус</th>
+                              <th />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {row.clients.map((item) => (
+                              <tr key={item.client_id}>
+                                <td data-label="Клиент">
+                                  <Link href={`/clients/${item.client_id}`} className="link-brand">
+                                    {formatShortName(item.client_name)}
+                                  </Link>
+                                </td>
+                                <td data-label="Договор" className="tabular text-muted">
+                                  {formatDate(item.contract_date)}
+                                </td>
+                                <td data-label="Сумма" className="tabular text-right font-medium">
+                                  {formatMoney(item.amount)}
+                                </td>
+                                <td data-label="Статус">
+                                  <Badge tone={item.collected ? "success" : "warning"}>
+                                    {item.collected ? "Выплачено" : "К выдаче"}
+                                  </Badge>
+                                </td>
+                                <td data-label="Действие" className="text-right">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={item.collected ? "ghost" : "secondary"}
+                                    disabled={busy}
+                                    onClick={() =>
+                                      handleMarkManagerPayout(item.client_id, !item.collected)
+                                    }
+                                  >
+                                    {markingClientId === item.client_id
+                                      ? "…"
+                                      : item.collected
+                                        ? "Снять"
+                                        : "Выплатить"}
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-
-                      {expanded ? (
-                        <div className="border-t border-border px-3 py-2">
-                          <div className="overflow-x-auto">
-                            <table className="data-table table-cards text-xs">
-                              <thead>
-                                <tr>
-                                  <th>Клиент</th>
-                                  <th>Договор</th>
-                                  <th className="text-right">Сумма</th>
-                                  <th>Статус</th>
-                                  <th />
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {row.clients.map((item) => (
-                                  <tr key={item.client_id}>
-                                    <td data-label="Клиент">
-                                      <Link
-                                        href={`/clients/${item.client_id}`}
-                                        className="link-brand"
-                                      >
-                                        {formatShortName(item.client_name)}
-                                      </Link>
-                                    </td>
-                                    <td data-label="Договор" className="text-muted">
-                                      {formatDate(item.contract_date)}
-                                    </td>
-                                    <td data-label="Сумма" className="text-right font-medium">
-                                      {formatMoney(item.amount)}
-                                    </td>
-                                    <td data-label="Статус">
-                                      <Badge tone={item.collected ? "success" : "warning"}>
-                                        {item.collected ? "Выплачено" : "К выдаче"}
-                                      </Badge>
-                                    </td>
-                                    <td>
-                                      <Button
-                                        type="button"
-                                        variant={item.collected ? "ghost" : "secondary"}
-                                        disabled={busy}
-                                        onClick={() =>
-                                          handleMarkManagerPayout(item.client_id, !item.collected)
-                                        }
-                                      >
-                                        {markingClientId === item.client_id
-                                          ? "…"
-                                          : item.collected
-                                            ? "Снять"
-                                            : "Выплатить"}
-                                      </Button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          {unpaidIds.length > 1 ? (
-                            <div className="mt-2 flex justify-end">
-                              <Button
-                                type="button"
-                                disabled={busy}
-                                onClick={() =>
-                                  handleMarkManagerPayoutAll(managerKey, unpaidIds, true)
-                                }
-                              >
-                                {markingManagerKey === managerKey
-                                  ? "…"
-                                  : `Выплатить все (${unpaidIds.length})`}
-                              </Button>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
+                    </PayeeRow>
                   );
                 })}
               </div>
@@ -997,7 +996,7 @@ export default function ExpensesPage() {
         ) : (
           <EmptyState>Не удалось загрузить менеджерские</EmptyState>
         )}
-      </Card>
+      </Panel>
 
       <PayoutTracking
         month={periodMonth}
@@ -1012,214 +1011,127 @@ export default function ExpensesPage() {
         }
       />
 
-      <Card variant="accent">
-        <SectionTitle
-          title={`Разовые расходы · ${formatMonthLabel(periodMonth)}`}
-          description="Дополнительные траты только за выбранный месяц — попадают в чистую прибыль на дашборде"
-        />
-        <form onSubmit={handleCreateOneTime} className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-          <Input
-            placeholder="Название расхода"
-            value={oneTimeForm.name}
-            onChange={(e) => setOneTimeForm({ ...oneTimeForm, name: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Сумма"
-            type="number"
-            min={1}
-            step={1}
-            value={oneTimeForm.amount}
-            onChange={(e) => setOneTimeForm({ ...oneTimeForm, amount: e.target.value })}
-            required
-          />
-          <Input
-            type="date"
-            value={oneTimeForm.expense_date}
-            onChange={(e) => setOneTimeForm({ ...oneTimeForm, expense_date: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Комментарий (необязательно)"
-            value={oneTimeForm.comment}
-            onChange={(e) => setOneTimeForm({ ...oneTimeForm, comment: e.target.value })}
-          />
-          <Button type="submit" disabled={oneTimeSaving}>
-            {oneTimeSaving ? "Сохранение..." : "Добавить"}
-          </Button>
-        </form>
-        <div className="mt-3">
-          {loading ? (
-            <LoadingState text="Загрузка..." />
-          ) : oneTimeExpenses.length === 0 ? (
-            <EmptyState>Разовых расходов за этот месяц пока нет</EmptyState>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table table-cards text-xs">
-                <thead>
-                  <tr>
-                    <th>Название</th>
-                    <th className="text-right">Сумма</th>
-                    <th>Дата оплаты</th>
-                    <th>Комментарий</th>
-                    <th>Кто добавил</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {oneTimeExpenses.map((item) => (
-                    <tr key={item.id}>
-                      <td data-label="Название" className="font-medium text-foreground">
-                        {item.name}
-                      </td>
-                      <td data-label="Сумма" className="text-right font-semibold text-status-danger-text">
-                        {formatMoney(item.amount)}
-                      </td>
-                      <td data-label="Дата оплаты">{formatDate(item.expense_date)}</td>
-                      <td data-label="Комментарий" className="text-muted">
-                        {item.comment || "—"}
-                      </td>
-                      <td data-label="Кто добавил" className="text-muted">
-                        {item.created_by_name ?? "—"}
-                      </td>
-                      <td data-label="">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => handleDeleteOneTime(item.id, item.name)}
-                        >
-                          Удалить
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <div className="mt-3">
-          <StatCard
-            label={`Разовые за ${formatMonthLabel(periodMonth)}`}
-            value={formatMoney(oneTimeMonthTotal)}
-            tone="warning"
-            hint={`${oneTimeExpenses.length} записей`}
-          />
-        </div>
-      </Card>
-
-      <Card variant="accent">
-        <SectionTitle
-          title="Выплаты за месяц"
-          description="Выберите месяц — выплаченные строки подсветятся зелёным, сумму можно изменить"
-        />
-        <div className="grid gap-3 md:grid-cols-[minmax(0,220px)_1fr] md:items-end">
-          <FormField label="Расчётный месяц">
-            <Input
-              type="month"
-              value={periodMonth}
-              onChange={(e) => {
-                setPeriodMonth(e.target.value);
-                cancelPaymentEdit();
-              }}
-            />
-          </FormField>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <StatCard
-              label="Выплачено"
-              value={formatMoney(monthPaidTotal)}
-              tone="success"
-              hint={`${monthPaidCount} из ${salaryExpenses.length}`}
-            />
-            <StatCard
-              label="Ожидает"
-              value={String(monthPendingCount)}
-              tone="warning"
-              hint="сотрудников без выплаты"
-            />
-            <StatCard
-              label="План по зарплате"
-              value={formatMoney(salaryTotal)}
-              tone="default"
-            />
-          </div>
-        </div>
-      </Card>
-
-      <Card variant="accent">
-        <SectionTitle title="Добавить расход" />
-        <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          <Input
-            placeholder="Название (ФИО или статья)"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-          />
-          <Select
-            value={form.expense_group}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                expense_group: e.target.value as ExpenseGroup,
-                category: e.target.value === "salary_project" ? "salary" : form.category,
-              })
-            }
+      <Panel
+        id="one-time"
+        dot="warning"
+        title={`Разовые расходы · ${formatMonthLabel(periodMonth)}`}
+        description="Траты только за выбранный месяц — попадают в чистую прибыль на дашборде."
+        action={
+          <span className="tabular text-sm font-semibold text-foreground">
+            {formatMoney(oneTimeMonthTotal)}
+          </span>
+        }
+        footer={
+          <form
+            onSubmit={handleCreateOneTime}
+            className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1.4fr)_auto]"
           >
-            <option value="salary_project">Зарплатный проект</option>
-            <option value="production">Производственные расходы</option>
-          </Select>
-          <Select
-            value={form.category}
-            onChange={(e) =>
-              setForm({ ...form, category: e.target.value as ExpenseCategory })
-            }
-          >
-            <option value="salary">Зарплата</option>
-            <option value="rent">Аренда</option>
-            <option value="utilities">Коммунальные</option>
-            <option value="marketing">Маркетинг</option>
-            <option value="other">Прочее</option>
-          </Select>
-          <Input
-            placeholder="Сумма в месяц"
-            type="number"
-            min={1}
-            step={1}
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            required
-          />
-          {form.expense_group === "salary_project" && (
             <Input
-              placeholder="День выплаты (1-31)"
+              placeholder="Название расхода"
+              value={oneTimeForm.name}
+              onChange={(e) => setOneTimeForm({ ...oneTimeForm, name: e.target.value })}
+              required
+            />
+            <Input
+              placeholder="Сумма, ₽"
               type="number"
               min={1}
-              max={31}
-              value={form.pay_day}
-              onChange={(e) => setForm({ ...form, pay_day: e.target.value })}
+              step={1}
+              value={oneTimeForm.amount}
+              onChange={(e) => setOneTimeForm({ ...oneTimeForm, amount: e.target.value })}
+              required
             />
-          )}
-          <Input
-            placeholder="Порядок сортировки"
-            type="number"
-            min={0}
-            step={1}
-            value={form.sort_order}
-            onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
+            <Input
+              type="date"
+              value={oneTimeForm.expense_date}
+              onChange={(e) => setOneTimeForm({ ...oneTimeForm, expense_date: e.target.value })}
+              required
+            />
+            <Input
+              placeholder="Комментарий (необязательно)"
+              value={oneTimeForm.comment}
+              onChange={(e) => setOneTimeForm({ ...oneTimeForm, comment: e.target.value })}
+            />
+            <Button type="submit" disabled={oneTimeSaving}>
+              {oneTimeSaving ? "Сохранение..." : "Добавить"}
+            </Button>
+          </form>
+        }
+      >
+        {loading ? (
+          <LoadingState text="Загрузка..." />
+        ) : oneTimeExpenses.length === 0 ? (
+          <EmptyState>Разовых расходов за этот месяц пока нет</EmptyState>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="data-table table-cards text-xs">
+              <thead>
+                <tr>
+                  <th>Название</th>
+                  <th className="text-right">Сумма</th>
+                  <th>Дата оплаты</th>
+                  <th>Комментарий</th>
+                  <th>Кто добавил</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {oneTimeExpenses.map((item) => (
+                  <tr key={item.id}>
+                    <td data-label="Название" className="font-medium text-foreground">
+                      {item.name}
+                    </td>
+                    <td data-label="Сумма" className="tabular text-right font-semibold text-foreground">
+                      {formatMoney(item.amount)}
+                    </td>
+                    <td data-label="Дата оплаты" className="tabular">
+                      {formatDate(item.expense_date)}
+                    </td>
+                    <td data-label="Комментарий" className="text-muted">
+                      {item.comment || "—"}
+                    </td>
+                    <td data-label="Кто добавил" className="text-muted">
+                      {item.created_by_name ?? "—"}
+                    </td>
+                    <td data-label="Действие" className="text-right">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteOneTime(item.id, item.name)}
+                      >
+                        Удалить
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        id="salary"
+        dot="success"
+        title={`Зарплатный проект · ${formatMonthLabel(periodMonth)}`}
+        description="Зелёная строка — выплачено за выбранный месяц. Сумму выплаты можно поправить."
+      >
+        <MetricStrip columns={3}>
+          <Metric
+            label="Выплачено"
+            value={formatMoney(monthPaidTotal)}
+            tone="success"
+            hint={`${monthPaidCount} из ${salaryExpenses.length}`}
           />
-          <Button type="submit" className="md:col-span-2 xl:col-span-3">
-            Добавить
-          </Button>
-        </form>
-      </Card>
-
-      {error && <p className="alert-danger">{error}</p>}
-
-      <Card>
-        <SectionTitle
-          title={`Зарплатный проект · ${formatMonthLabel(periodMonth)}`}
-          description="Выплаты за выбранный месяц — зелёная строка значит выплачено"
-        />
+          <Metric
+            label="Ожидают выплаты"
+            value={monthPendingCount}
+            tone={monthPendingCount > 0 ? "warning" : "muted"}
+            hint="сотрудников"
+          />
+          <Metric label="План по зарплате" value={formatMoney(salaryTotal)} />
+        </MetricStrip>
         {loading ? (
           <LoadingState text="Загрузка..." />
         ) : (
@@ -1248,13 +1160,18 @@ export default function ExpensesPage() {
             setPaymentEditForm={setPaymentEditForm}
           />
         )}
-      </Card>
+      </Panel>
 
-      <Card>
-        <SectionTitle
-          title="Производственные расходы"
-          description="Аренда, коммунальные, маркетинг и прочие затраты"
-        />
+      <Panel
+        id="production"
+        title="Производственные расходы"
+        description="Аренда, коммунальные, маркетинг и прочие затраты."
+        action={
+          <span className="tabular text-sm font-semibold text-foreground">
+            {formatMoney(productionTotal)} / мес.
+          </span>
+        }
+      >
         {loading ? (
           <LoadingState text="Загрузка..." />
         ) : (
@@ -1273,33 +1190,113 @@ export default function ExpensesPage() {
             setEditForm={setEditForm}
           />
         )}
-      </Card>
+      </Panel>
 
-      <Card>
-        <SectionTitle
-          title="История выплат"
-          description="Кто, за какой месяц и сколько получил — суммы можно исправить"
-        />
-        <div className="mb-3 max-w-xs">
-          <FormField label="Фильтр по месяцу">
+      <Panel
+        id="add-expense"
+        title="Новая статья расхода"
+        description="Сотрудник в зарплатный проект или постоянная производственная статья."
+      >
+        <form onSubmit={handleCreate} className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <FormField label="Название" required>
+            <Input
+              placeholder="ФИО или статья"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Группа">
             <Select
-              value={historyMonthFilter || periodMonth}
-              onChange={(e) => setHistoryMonthFilter(e.target.value)}
+              value={form.expense_group}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  expense_group: e.target.value as ExpenseGroup,
+                  category: e.target.value === "salary_project" ? "salary" : form.category,
+                })
+              }
             >
-              {historyMonthOptions.map((month) => (
-                <option key={month} value={month}>
-                  {formatMonthLabel(month)}
-                </option>
-              ))}
+              <option value="salary_project">Зарплатный проект</option>
+              <option value="production">Производственные расходы</option>
             </Select>
           </FormField>
-        </div>
+          <FormField label="Категория">
+            <Select
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value as ExpenseCategory })}
+            >
+              <option value="salary">Зарплата</option>
+              <option value="rent">Аренда</option>
+              <option value="utilities">Коммунальные</option>
+              <option value="marketing">Маркетинг</option>
+              <option value="other">Прочее</option>
+            </Select>
+          </FormField>
+          <FormField label="Сумма в месяц, ₽" required>
+            <Input
+              placeholder="0"
+              type="number"
+              min={1}
+              step={1}
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              required
+            />
+          </FormField>
+          {form.expense_group === "salary_project" && (
+            <FormField label="День выплаты">
+              <Input
+                placeholder="1–31"
+                type="number"
+                min={1}
+                max={31}
+                value={form.pay_day}
+                onChange={(e) => setForm({ ...form, pay_day: e.target.value })}
+              />
+            </FormField>
+          )}
+          <FormField label="Порядок в списке">
+            <Input
+              placeholder="0"
+              type="number"
+              min={0}
+              step={1}
+              value={form.sort_order}
+              onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
+            />
+          </FormField>
+          <div className="flex justify-end md:col-span-2 xl:col-span-3">
+            <Button type="submit">Добавить статью</Button>
+          </div>
+        </form>
+      </Panel>
+
+      <Panel
+        id="history"
+        title="История выплат"
+        description="Кто, за какой месяц и сколько получил — суммы можно исправить."
+        action={
+          <Select
+            value={historyMonthFilter || periodMonth}
+            onChange={(e) => setHistoryMonthFilter(e.target.value)}
+            className="w-[180px]"
+            aria-label="Месяц истории"
+          >
+            {historyMonthOptions.map((month) => (
+              <option key={month} value={month}>
+                {formatMonthLabel(month)}
+              </option>
+            ))}
+          </Select>
+        }
+      >
         {loading ? (
           <LoadingState text="Загрузка выплат..." />
         ) : filteredHistory.length === 0 ? (
           <EmptyState>Выплаты ещё не зафиксированы</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <table className="data-table table-cards text-xs">
               <thead>
                 <tr>
@@ -1314,14 +1311,10 @@ export default function ExpensesPage() {
               <tbody>
                 {filteredHistory.map((payment) => {
                   const isEditing = editingPaymentId === payment.id && paymentEditForm;
-                  const isCurrentMonth = payment.period_month.slice(0, 7) === periodMonth;
 
                   return (
-                    <tr
-                      key={payment.id}
-                      className={cn(isCurrentMonth && "bg-status-success-bg/40")}
-                    >
-                      <td data-label="Месяц" className="capitalize">
+                    <tr key={payment.id}>
+                      <td data-label="Месяц" className="first-letter:uppercase">
                         {formatMonthLabel(payment.period_month.slice(0, 7))}
                       </td>
                       <td data-label="Получатель" className="font-medium text-foreground">
@@ -1340,12 +1333,12 @@ export default function ExpensesPage() {
                             }
                           />
                         ) : (
-                          <span className="font-semibold text-status-success-text">
+                          <span className="tabular font-semibold text-status-success-text">
                             {formatMoney(payment.amount)}
                           </span>
                         )}
                       </td>
-                      <td data-label="Дата выплаты">
+                      <td data-label="Дата выплаты" className="tabular">
                         {isEditing ? (
                           <Input
                             type="date"
@@ -1365,24 +1358,31 @@ export default function ExpensesPage() {
                       <td data-label="Зафиксировал" className="text-muted">
                         {payment.created_by_name ?? "—"}
                       </td>
-                      <td data-label="">
+                      <td data-label="Действие">
                         <div className="flex flex-wrap justify-end gap-1">
                           {isEditing ? (
                             <>
                               <Button
                                 type="button"
+                                size="sm"
                                 disabled={savingPaymentId === payment.id}
                                 onClick={() => handleSavePaymentEdit(payment.id)}
                               >
-                                {savingPaymentId === payment.id ? "…" : "OK"}
+                                {savingPaymentId === payment.id ? "…" : "Сохранить"}
                               </Button>
-                              <Button type="button" variant="ghost" onClick={cancelPaymentEdit}>
-                                ×
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={cancelPaymentEdit}
+                              >
+                                Отмена
                               </Button>
                             </>
                           ) : (
                             <Button
                               type="button"
+                              size="sm"
                               variant="ghost"
                               onClick={() => startPaymentEdit(payment)}
                             >
@@ -1398,7 +1398,7 @@ export default function ExpensesPage() {
             </table>
           </div>
         )}
-      </Card>
+      </Panel>
     </div>
   );
 }

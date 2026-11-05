@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovement
+from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovement, CivilCasePayment
 from app.models.enums import (
     AuditAction,
     CivilCaseDocumentKind,
@@ -23,6 +24,8 @@ from app.schemas.civil_case import (
     CivilCaseExecutorOption,
     CivilCaseMovementCreate,
     CivilCaseMovementResponse,
+    CivilCasePaymentCreate,
+    CivilCasePaymentResponse,
     CivilCaseResponse,
     CivilCaseUpdate,
 )
@@ -115,6 +118,7 @@ def _case_load_options():
         joinedload(CivilCase.concluding_manager),
         selectinload(CivilCase.movements).joinedload(CivilCaseMovement.created_by),
         selectinload(CivilCase.documents).joinedload(CivilCaseDocument.uploaded_by),
+        selectinload(CivilCase.payments).joinedload(CivilCasePayment.created_by),
     )
 
 
@@ -268,6 +272,7 @@ def list_civil_cases(
             joinedload(CivilCase.created_by),
             joinedload(CivilCase.concluding_manager),
             selectinload(CivilCase.documents),
+            selectinload(CivilCase.payments),
         )
         .where(CivilCase.organization_id == user.organization_id)
         .order_by(CivilCase.appeal_date.desc(), CivilCase.created_at.desc())
@@ -355,6 +360,13 @@ def update_civil_case(db: Session, user: User, case_id: UUID, payload: CivilCase
             manager_id=updates["concluding_manager_id"],
         )
         updates["concluding_manager_id"] = concluding_manager.id
+    if updates.get("price") is not None:
+        paid_total = case_paid_total(case)
+        if updates["price"] < paid_total:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Цена не может быть меньше уже оплаченного ({paid_total:.2f} ₽)",
+            )
 
     for field, value in updates.items():
         old_value = getattr(case, field)
@@ -403,6 +415,72 @@ def add_movement(
         field_name="movement",
         new_value=payload.body[:255],
     )
+    db.commit()
+    return get_organization_civil_case(db, case_id=case.id, user=user)
+
+
+def case_paid_total(case: CivilCase) -> Decimal:
+    return sum((item.amount for item in case.payments or []), Decimal("0.00"))
+
+
+def add_payment(
+    db: Session,
+    user: User,
+    case_id: UUID,
+    payload: CivilCasePaymentCreate,
+) -> CivilCase:
+    ensure_legal_org(user)
+    if not can_manage_intake(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Оплаты вносит менеджер")
+    case = get_organization_civil_case(db, case_id=case_id, user=user)
+    remaining = (case.price or Decimal("0.00")) - case_paid_total(case)
+    if payload.amount > remaining:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Сумма больше остатка по делу ({remaining:.2f} ₽). Сначала поправьте цену.",
+        )
+
+    payment = CivilCasePayment(
+        civil_case_id=case.id,
+        organization_id=user.organization_id,
+        amount=payload.amount,
+        payment_date=payload.payment_date,
+        comment=payload.comment,
+        created_by_id=user.id,
+    )
+    db.add(payment)
+    db.flush()
+    log_audit(
+        db,
+        user=user,
+        entity_type="civil_case",
+        entity_id=case.id,
+        action=AuditAction.CREATE,
+        field_name="payment",
+        new_value=f"{payload.amount:.2f} ₽ от {payload.payment_date.isoformat()}",
+    )
+    db.commit()
+    return get_organization_civil_case(db, case_id=case.id, user=user)
+
+
+def delete_payment(db: Session, user: User, case_id: UUID, payment_id: UUID) -> CivilCase:
+    ensure_legal_org(user)
+    if not can_manage_intake(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Оплаты удаляет менеджер")
+    case = get_organization_civil_case(db, case_id=case_id, user=user)
+    payment = next((item for item in case.payments if item.id == payment_id), None)
+    if payment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Оплата не найдена")
+    log_audit(
+        db,
+        user=user,
+        entity_type="civil_case",
+        entity_id=case.id,
+        action=AuditAction.DELETE,
+        field_name="payment",
+        old_value=f"{payment.amount:.2f} ₽ от {payment.payment_date.isoformat()}",
+    )
+    db.delete(payment)
     db.commit()
     return get_organization_civil_case(db, case_id=case.id, user=user)
 
@@ -545,13 +623,28 @@ def _document_response(item: CivilCaseDocument) -> CivilCaseDocumentResponse:
     )
 
 
+def _payment_response(item: CivilCasePayment) -> CivilCasePaymentResponse:
+    return CivilCasePaymentResponse(
+        id=item.id,
+        amount=item.amount,
+        payment_date=item.payment_date,
+        comment=item.comment,
+        created_by_id=item.created_by_id,
+        created_by_name=item.created_by.full_name if item.created_by else None,
+        created_at=item.created_at,
+    )
+
+
 def to_civil_case_brief(case: CivilCase) -> CivilCaseBrief:
     documents_count, client_documents_count, prepared_documents_count = _document_counts(case)
+    paid_total = case_paid_total(case)
     return CivilCaseBrief(
         id=case.id,
         full_name=case.full_name,
         phone=case.phone,
         price=case.price,
+        paid_total=paid_total,
+        remaining=max((case.price or Decimal("0.00")) - paid_total, Decimal("0.00")),
         appeal_date=case.appeal_date,
         subject=case.subject,
         stage=case.stage,
@@ -581,4 +674,5 @@ def to_civil_case_response(case: CivilCase) -> CivilCaseResponse:
         execution_note=case.execution_note,
         movements=[_movement_response(item) for item in case.movements],
         documents=[_document_response(item) for item in case.documents],
+        payments=[_payment_response(item) for item in case.payments],
     )

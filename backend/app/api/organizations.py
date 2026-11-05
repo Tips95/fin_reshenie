@@ -19,7 +19,6 @@ FEATURE_FIELDS = (
     "feature_expenses",
     "feature_pricing",
     "feature_analytics",
-    "feature_investors",
 )
 
 

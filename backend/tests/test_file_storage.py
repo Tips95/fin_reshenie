@@ -57,8 +57,7 @@ def test_attachment_content_disposition_keeps_ascii_name() -> None:
 
 def test_save_and_delete_roundtrip() -> None:
     org_id = uuid4()
-    client_id = uuid4()
-    key = file_storage.retail_client_passport_key(org_id, client_id)
+    key = file_storage.civil_case_document_key(org_id, uuid4(), uuid4(), "isk.pdf")
     file_storage.save_bytes(key, b"%PDF-1.4")
     path = file_storage.resolve_storage_path(key)
     assert path.exists()
