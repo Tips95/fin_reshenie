@@ -417,18 +417,20 @@ def get_dashboard_summary(
         - mandatory_paid_this_month.total
         - expenses_paid_this_month
     )
-    # Отказники не должны висеть долгом по депозиту и фин. управлению.
-    obligated_client_ids = [
-        client.id for client in clients if client.status != ClientStatus.CANCELLED
-    ]
-    mandatory_pending = _to_breakdown(get_mandatory_pending_totals(db, obligated_client_ids))
-    bankruptcy_client_ids = [
+    # «К отдаче» — только по договорам, заключённым в этом месяце: у старых
+    # клиентов депозит и фин. управление обычно уже отданы, просто не отмечены.
+    # Если всё же отдали за старого клиента, это попадёт в «отдано» по дате выплаты.
+    # Отказники не должны висеть долгом.
+    month_contract_client_ids = [
         client.id
         for client in clients
         if client.status != ClientStatus.CANCELLED
         and client.engagement_stage == EngagementStage.BANKRUPTCY
+        and client.contract_date is not None
+        and month_start <= client.contract_date <= month_end
     ]
-    missing_deposit_ids = set(get_clients_missing_deposit(db, bankruptcy_client_ids))
+    mandatory_pending = _to_breakdown(get_mandatory_pending_totals(db, month_contract_client_ids))
+    missing_deposit_ids = set(get_clients_missing_deposit(db, month_contract_client_ids))
     deposit_missing_preview = [
         DashboardClientRef(id=client.id, full_name=client.full_name)
         for client in clients

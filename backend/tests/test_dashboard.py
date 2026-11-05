@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -520,6 +520,63 @@ class TestDashboardSummary:
         assert summary.cash_forecast_end == Decimal("109000.00")
         assert summary.deposit_missing_count == 1
         assert summary.deposit_missing_preview[0].full_name == "Иванов Иван"
+
+    @pytest.mark.parametrize(
+        ("contract_date", "expected_ids"),
+        [(date.today(), [CLIENT_ID]), (date.today() - timedelta(days=62), [])],
+    )
+    def test_pending_mandatory_only_for_contracts_of_this_month(
+        self, monkeypatch, contract_date, expected_ids
+    ):
+        client = make_client(contract_date=contract_date)
+        client.full_name = "Иванов Иван"
+        db = MagicMock()
+        db.scalars.side_effect = [[client], []]
+        db.execute.return_value = []
+        for name, value in (
+            ("clients_overdue_map", {}),
+            ("_count_open_tasks", 0),
+            ("_build_overdue_clients_preview", []),
+            ("sum_active_contract_totals", Decimal("0.00")),
+            ("count_contracts_signed_in_period", 0),
+            ("get_mandatory_paid_totals", _totals()),
+            ("monthly_expenses_total", (Decimal("0.00"), Decimal("0.00"), Decimal("0.00"))),
+        ):
+            monkeypatch.setattr(
+                f"app.services.dashboard.{name}", lambda *_a, _v=value, **_k: _v
+            )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_document_collection_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.document_collection_stats",
+                fromlist=["DocumentCollectionTotals"],
+            ).DocumentCollectionTotals(
+                collection_cash=Decimal("0.00"),
+                notary_fee=Decimal("0.00"),
+                manager_commission=Decimal("0.00"),
+                paid_count=0,
+            ),
+        )
+        seen: dict[str, list] = {}
+
+        def fake_pending(_db, ids):
+            seen["pending"] = list(ids)
+            return _totals()
+
+        def fake_missing(_db, ids):
+            seen["missing"] = list(ids)
+            return []
+
+        monkeypatch.setattr("app.services.dashboard.get_mandatory_pending_totals", fake_pending)
+        monkeypatch.setattr("app.services.dashboard.get_clients_missing_deposit", fake_missing)
+        patch_civil_income(monkeypatch)
+        patch_paid_expenses(monkeypatch)
+        patch_cash_balance(monkeypatch)
+
+        get_dashboard_summary(db, make_user())
+
+        assert seen["pending"] == expected_ids
+        assert seen["missing"] == expected_ids
 
     def test_call_center_gets_limited_summary(self, monkeypatch):
         client = make_client()

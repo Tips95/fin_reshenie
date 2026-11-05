@@ -540,13 +540,13 @@ export default function DashboardPage() {
                 <LedgerRow
                   sign="−"
                   label="Депозит к отдаче"
-                  hint="Вписано на карточках, ещё не отдано"
+                  hint={`По договорам за ${monthLabel}, ещё не отдано`}
                   value={formatMoney(summary.mandatory_pending?.deposit ?? "0")}
                 />
                 <LedgerRow
                   sign="−"
                   label="Фин. управление к отдаче"
-                  hint="21 000 / 11 000 ₽ — по признанным банкротами"
+                  hint={`По договорам за ${monthLabel}, ещё не отдано`}
                   value={formatMoney(summary.mandatory_pending?.financial_management ?? "0")}
                 />
                 {Number(summary.mandatory_pending?.court_fee ?? 0) > 0 ? (
@@ -576,6 +576,8 @@ export default function DashboardPage() {
                 </div>
                 <p className="type-hint mt-1.5">
                   «Чистыми за месяц» плюс ожидаемые платежи, минус всё, что ещё нужно отдать.
+                  Депозит и фин. управление за клиентов прошлых месяцев сюда не входят: когда
+                  отдадите за них, сумма попадёт в «отдано» за этот месяц.
                 </p>
               </div>
             </div>
@@ -584,8 +586,8 @@ export default function DashboardPage() {
               <div className="alert-warning space-y-1.5">
                 <p className="font-semibold">
                   Депозит не вписан у {summary.deposit_missing_count}{" "}
-                  {summary.deposit_missing_count === 1 ? "клиента" : "клиентов"}, которые уже
-                  платят
+                  {summary.deposit_missing_count === 1 ? "клиента" : "клиентов"} этого месяца,
+                  которые уже платят
                 </p>
                 <p>
                   Пока сумма не вписана, депозит не попадает в «к отдаче», и остаток выглядит
