@@ -112,6 +112,8 @@ class QuestionnaireBase(BaseModel):
 
 class QuestionnaireCreate(QuestionnaireBase):
     client_id: UUID | None = None
+    # Удалённый менеджер обязан подтвердить согласие клиента на обработку ПДн.
+    pd_consent: bool = False
 
 
 class QuestionnaireUpdate(QuestionnaireBase):
@@ -169,6 +171,27 @@ class QuestionnaireCallResponse(BaseModel):
     comment: str | None
     created_by_id: UUID | None
     created_by_name: str | None = None
+    created_at: datetime
+
+
+class QuestionnaireCommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("body")
+    @classmethod
+    def normalize_body(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("Напишите текст комментария")
+        return text
+
+
+class QuestionnaireCommentResponse(BaseModel):
+    id: UUID
+    body: str
+    author_id: UUID | None
+    author_name: str | None = None
+    author_role: str | None = None
     created_at: datetime
 
 
@@ -238,6 +261,9 @@ class QuestionnaireBrief(BaseModel):
     appointment_note: str | None = None
     assigned_manager_id: UUID | None = None
     assigned_manager_name: str | None = None
+    source_agent_id: UUID | None = None
+    source_agent_name: str | None = None
+    pd_consent_at: datetime | None = None
 
 
 class QuestionnaireResponse(QuestionnaireBrief):
@@ -263,3 +289,4 @@ class QuestionnaireResponse(QuestionnaireBrief):
     assets: list[QuestionnaireAsset]
     documents: list[QuestionnaireDocument]
     calls: list[QuestionnaireCallResponse] = Field(default_factory=list)
+    comments: list[QuestionnaireCommentResponse] = Field(default_factory=list)

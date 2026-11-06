@@ -9,6 +9,8 @@ import {
   getDuplicateQuestionnaireId,
   questionnairesApi,
 } from "@/lib/api-client";
+import { isRemoteAgent } from "@/lib/organization-features";
+import { useAuth } from "@/modules/auth/AuthProvider";
 import { QuestionnaireForm } from "@/modules/questionnaires/QuestionnaireForm";
 import {
   emptyQuestionnaireForm,
@@ -22,7 +24,10 @@ import {
 
 export default function NewQuestionnairePage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const agentMode = isRemoteAgent(user);
   const [form, setForm] = useState<QuestionnaireFormValue>(() => emptyQuestionnaireForm());
+  const [pdConsent, setPdConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(
     null,
@@ -36,10 +41,20 @@ export default function NewQuestionnairePage() {
 
   async function saveLead() {
     if (savingLockRef.current) return;
+    if (agentMode && !pdConsent) {
+      setToast({
+        message: "Отметьте, что клиент согласен на передачу своих данных компании",
+        tone: "error",
+      });
+      throw new Error("pd consent required");
+    }
     savingLockRef.current = true;
     setSaving(true);
     try {
-      const created = await questionnairesApi.create(formToPayload(form));
+      const created = await questionnairesApi.create({
+        ...formToPayload(form),
+        pd_consent: pdConsent,
+      });
       baselineRef.current = questionnaireFormSnapshot(formToPayload(form));
       try {
         sessionStorage.setItem("lead-saved-flash", "1");
@@ -84,10 +99,32 @@ export default function NewQuestionnairePage() {
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       ) : null}
       <PageHeader
-        title="Новый лид"
-        subtitle="Заведите карточку прямо во время звонка — достаточно телефона, остальное допишете потом"
-        back={<BackLink href="/questionnaires">К списку лидов</BackLink>}
+        title={agentMode ? "Новый клиент" : "Новый лид"}
+        subtitle={
+          agentMode
+            ? "Заполните анкету вместе с клиентом и запишите его на приём в офис"
+            : "Заведите карточку прямо во время звонка — достаточно телефона, остальное допишете потом"
+        }
+        back={
+          <BackLink href={agentMode ? "/agent" : "/questionnaires"}>
+            {agentMode ? "В кабинет" : "К списку лидов"}
+          </BackLink>
+        }
       />
+      {agentMode ? (
+        <label className="flex items-start gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm shadow-soft">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={pdConsent}
+            onChange={(event) => setPdConsent(event.target.checked)}
+          />
+          <span>
+            Клиент согласен, что его данные будут переданы компании для консультации и
+            оформления банкротства
+          </span>
+        </label>
+      ) : null}
       <QuestionnaireForm
         value={form}
         onChange={setForm}

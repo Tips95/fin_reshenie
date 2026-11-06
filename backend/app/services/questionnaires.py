@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.time import local_day_bounds, local_today, to_local_date
 from app.models.client import Client
-from app.models.client_questionnaire import ClientQuestionnaire, QuestionnaireCall
+from app.models.client_questionnaire import (
+    ClientQuestionnaire,
+    QuestionnaireCall,
+    QuestionnaireComment,
+)
 from app.models.enums import (
     AuditAction,
     EngagementStage,
@@ -32,6 +36,8 @@ from app.schemas.questionnaire import (
     QuestionnaireBase,
     QuestionnaireCallCreate,
     QuestionnaireCallResponse,
+    QuestionnaireCommentCreate,
+    QuestionnaireCommentResponse,
     QuestionnaireCreate,
     QuestionnaireCreateClientRequest,
     QuestionnaireManagerOption,
@@ -40,6 +46,7 @@ from app.schemas.questionnaire import (
     QuestionnaireUpdate,
 )
 from app.services.access import ensure_client_read_access, ensure_client_write_access
+from app.services.agents import active_curator_id
 from app.services.audit import log_audit
 from app.services.client_duplicates import (
     INCOMPLETE_PHONE_MESSAGE,
@@ -89,6 +96,7 @@ def _family_logic_fields(payload: QuestionnaireBase) -> dict[str, object]:
 
 LEAD_SUPERVISOR_ROLES = {UserRole.OWNER, UserRole.HEAD_MANAGER}
 LEAD_OWNER_ROLES = {UserRole.MANAGER, UserRole.HEAD_MANAGER}
+LEAD_STATS_ROLES = [UserRole.MANAGER, UserRole.HEAD_MANAGER, UserRole.OWNER, UserRole.AGENT]
 
 
 def ensure_bankruptcy_org(user: User) -> None:
@@ -100,18 +108,31 @@ def ensure_bankruptcy_org(user: User) -> None:
         )
 
 
+AGENT_DUPLICATE_MESSAGE = (
+    "Клиент с этим телефоном уже есть в базе компании — повторно завести его нельзя."
+)
+
+
 def manager_can_access_questionnaire(item: ClientQuestionnaire, user: User) -> bool:
-    """Менеджер видит свои лиды и анкеты закреплённых за ним клиентов. Руководитель,
+    """Менеджер видит свои лиды, анкеты закреплённых за ним клиентов и лиды своих
+    удалённых менеджеров. Агент — только тех, кого привёл сам. Руководитель,
     начальник отдела и сотрудник сбора документов видят все анкеты организации."""
+    if user.role == UserRole.AGENT:
+        return item.source_agent_id == user.id
     if user.role != UserRole.MANAGER:
         return True
     if item.created_by_id == user.id or item.assigned_manager_id == user.id:
+        return True
+    agent = item.source_agent
+    if agent is not None and agent.curator_id == user.id:
         return True
     client = item.client
     return client is not None and client.assigned_manager_id == user.id
 
 
 def _apply_questionnaire_visibility_filter(stmt, user: User):
+    if user.role == UserRole.AGENT:
+        return stmt.where(ClientQuestionnaire.source_agent_id == user.id)
     if user.role != UserRole.MANAGER:
         return stmt
     assigned_to_manager = exists(
@@ -120,11 +141,18 @@ def _apply_questionnaire_visibility_filter(stmt, user: User):
             Client.assigned_manager_id == user.id,
         )
     )
+    curated_agent = exists(
+        select(User.id).where(
+            User.id == ClientQuestionnaire.source_agent_id,
+            User.curator_id == user.id,
+        )
+    )
     return stmt.where(
         or_(
             ClientQuestionnaire.created_by_id == user.id,
             ClientQuestionnaire.assigned_manager_id == user.id,
             assigned_to_manager,
+            curated_agent,
         )
     )
 
@@ -133,8 +161,10 @@ def _questionnaire_load_options():
     return (
         joinedload(ClientQuestionnaire.created_by),
         joinedload(ClientQuestionnaire.assigned_manager),
+        joinedload(ClientQuestionnaire.source_agent),
         joinedload(ClientQuestionnaire.client),
         selectinload(ClientQuestionnaire.calls).joinedload(QuestionnaireCall.created_by),
+        selectinload(ClientQuestionnaire.comments).joinedload(QuestionnaireComment.author),
     )
 
 
@@ -252,14 +282,16 @@ def find_existing_questionnaire_by_phone(
     """Один номер — один лид в организации. Сравнение по последним 10 цифрам."""
     if not phone_has_minimum_digits(phone):
         return None
-    stmt = select(ClientQuestionnaire).where(
+    # Только id и телефон: целые анкеты с JSON кредиторов и документов на
+    # больших базах грузились десятки секунд, и сохранение лида «висело».
+    stmt = select(ClientQuestionnaire.id, ClientQuestionnaire.phone).where(
         ClientQuestionnaire.organization_id == organization_id,
     )
     if exclude_id is not None:
         stmt = stmt.where(ClientQuestionnaire.id != exclude_id)
-    for item in db.scalars(stmt):
-        if phones_equivalent(item.phone, phone):
-            return item
+    for item_id, item_phone in db.execute(stmt):
+        if phones_equivalent(item_phone, phone):
+            return db.get(ClientQuestionnaire, item_id)
     return None
 
 
@@ -287,6 +319,12 @@ def create_questionnaire(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=INCOMPLETE_PHONE_MESSAGE,
         )
+    is_agent = user.role == UserRole.AGENT
+    if is_agent and not payload.pd_consent:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Подтвердите, что клиент согласен на обработку персональных данных",
+        )
     existing = find_existing_questionnaire_by_phone(
         db,
         organization_id=user.organization_id,
@@ -295,15 +333,30 @@ def create_questionnaire(
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=duplicate_questionnaire_payload(existing),
+            # Агенту не раскрываем, чей это лид и как зовут клиента.
+            detail=AGENT_DUPLICATE_MESSAGE if is_agent else duplicate_questionnaire_payload(existing),
         )
+    if is_agent and find_existing_client(
+        db,
+        organization_id=user.organization_id,
+        phone=payload.phone,
+        full_name="",
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=AGENT_DUPLICATE_MESSAGE)
 
-    client_id = _maybe_bind_client(db, user, payload.client_id)
+    if is_agent:
+        client_id = None
+        assigned_manager_id = active_curator_id(user)
+    else:
+        client_id = _maybe_bind_client(db, user, payload.client_id)
+        assigned_manager_id = user.id if user.role in LEAD_OWNER_ROLES else None
     item = ClientQuestionnaire(
         organization_id=user.organization_id,
         client_id=client_id,
         created_by_id=user.id,
-        assigned_manager_id=user.id if user.role in LEAD_OWNER_ROLES else None,
+        assigned_manager_id=assigned_manager_id,
+        source_agent_id=user.id if is_agent else None,
+        pd_consent_at=datetime.now(timezone.utc) if payload.pd_consent else None,
         lead_status=LeadStatus.IN_PROGRESS if payload.appointment_at else LeadStatus.NEW,
         full_name=payload.full_name,
         service_cost=payload.service_cost,
@@ -363,8 +416,20 @@ def update_questionnaire(
     payload: QuestionnaireUpdate,
 ) -> ClientQuestionnaire:
     item = get_organization_questionnaire(db, questionnaire_id=questionnaire_id, user=user)
+    if user.role == UserRole.AGENT:
+        if item.lead_status == LeadStatus.CONVERTED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Клиент уже в работе у офиса — анкету правит менеджер",
+            )
+        if not phones_equivalent(item.phone, payload.phone):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Телефон клиента меняет офис — напишите куратору в комментариях",
+            )
     old_name = item.full_name
-    item.client_id = _maybe_bind_client(db, user, payload.client_id)
+    if user.role != UserRole.AGENT:
+        item.client_id = _maybe_bind_client(db, user, payload.client_id)
     item.full_name = payload.full_name
     item.service_cost = payload.service_cost
     item.phone = payload.phone
@@ -473,6 +538,7 @@ def create_client_from_questionnaire(
     client = Client(
         organization_id=user.organization_id,
         assigned_manager_id=assigned_manager_id,
+        source_agent_id=item.source_agent_id,
         full_name=full_name,
         phone=phone,
         contract_date=payload.contract_date or item.filled_date or date.today(),
@@ -540,6 +606,25 @@ def log_questionnaire_call(
         if item.lead_status in {LeadStatus.NEW, LeadStatus.NO_ANSWER}:
             item.lead_status = LeadStatus.IN_PROGRESS
 
+    db.commit()
+    return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
+
+
+def add_questionnaire_comment(
+    db: Session,
+    user: User,
+    questionnaire_id: UUID,
+    payload: QuestionnaireCommentCreate,
+) -> ClientQuestionnaire:
+    item = get_organization_questionnaire(db, questionnaire_id=questionnaire_id, user=user)
+    db.add(
+        QuestionnaireComment(
+            organization_id=item.organization_id,
+            questionnaire_id=item.id,
+            author_id=user.id,
+            body=payload.body,
+        )
+    )
     db.commit()
     return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
 
@@ -681,7 +766,7 @@ def daily_lead_stats(db: Session, user: User, *, day: date | None = None) -> Lea
     for staff in db.scalars(
         select(User).where(
             User.organization_id == organization_id,
-            User.role.in_([UserRole.MANAGER, UserRole.HEAD_MANAGER, UserRole.OWNER]),
+            User.role.in_(LEAD_STATS_ROLES),
         )
     ):
         names[staff.id] = staff.full_name
@@ -800,7 +885,7 @@ def lead_counts_by_day(
     for staff in db.scalars(
         select(User).where(
             User.organization_id == user.organization_id,
-            User.role.in_([UserRole.MANAGER, UserRole.HEAD_MANAGER, UserRole.OWNER]),
+            User.role.in_(LEAD_STATS_ROLES),
         )
     ):
         names[staff.id] = staff.full_name
@@ -876,6 +961,20 @@ def to_questionnaire_response(item: ClientQuestionnaire) -> QuestionnaireRespons
         assigned_manager_name=(
             item.assigned_manager.full_name if item.assigned_manager is not None else None
         ),
+        source_agent_id=item.source_agent_id,
+        source_agent_name=item.source_agent.full_name if item.source_agent is not None else None,
+        pd_consent_at=item.pd_consent_at,
+        comments=[
+            QuestionnaireCommentResponse(
+                id=comment.id,
+                body=comment.body,
+                author_id=comment.author_id,
+                author_name=comment.author.full_name if comment.author else None,
+                author_role=comment.author.role.value if comment.author else None,
+                created_at=comment.created_at,
+            )
+            for comment in item.comments
+        ],
         calls=[
             QuestionnaireCallResponse(
                 id=call.id,

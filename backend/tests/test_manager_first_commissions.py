@@ -89,6 +89,10 @@ class TestManagerFirstCommissionsOverview:
             month_clients,
             [CLIENT_A_ID, CLIENT_C_ID, outstanding_extra],
         ]
+        no_agent_rows = MagicMock()
+        no_agent_rows.unique.return_value = []
+        db.execute.return_value = no_agent_rows
+        db.scalar.return_value = 0
 
         overview = get_manager_first_commissions_overview(db, make_user(), month="2026-10")
 
@@ -122,6 +126,10 @@ class TestManagerFirstCommissionsOverview:
 
         db = MagicMock()
         db.scalars.side_effect = [month_clients, []]
+        no_agent_rows = MagicMock()
+        no_agent_rows.unique.return_value = []
+        db.execute.return_value = no_agent_rows
+        db.scalar.return_value = 0
 
         overview = get_manager_first_commissions_overview(db, make_user(), month="2026-10")
 

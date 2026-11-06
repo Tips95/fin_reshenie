@@ -17,23 +17,33 @@ from app.models.enums import OrganizationType
 from app.models.user import User
 from app.schemas.auth import TokenResponse
 
-def get_user_by_login(db: Session, login: str) -> User | None:
+def get_user_by_login(db: Session, login: str, *, include_inactive: bool = False) -> User | None:
     normalized_login = login.strip()
     stmt = (
         select(User)
         .options(joinedload(User.organization))
         .where(
             or_(User.email == normalized_login, User.phone == normalized_login),
-            User.is_active.is_(True),
             User.organization.has(organization_type=OrganizationType.BANKRUPTCY),
         )
     )
+    if not include_inactive:
+        stmt = stmt.where(User.is_active.is_(True))
     return db.scalars(stmt).unique().first()
 
 
 def authenticate_user(db: Session, login: str, password: str) -> User | None:
     user = get_user_by_login(db, login)
     if user is None or not verify_password(password, user.password_hash):
+        return None
+    return user
+
+
+def find_inactive_user(db: Session, login: str, password: str) -> User | None:
+    """Неактивный пользователь с верным паролем — чтобы объяснить агенту,
+    что заявка ещё не подтверждена, а не «неверный пароль»."""
+    user = get_user_by_login(db, login, include_inactive=True)
+    if user is None or user.is_active or not verify_password(password, user.password_hash):
         return None
     return user
 

@@ -8,12 +8,21 @@ import { LogoMark } from "@/components/ui";
 import { APP_CREATOR } from "@/lib/brand";
 import { statusLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { canUseCivilCases, canUseQuestionnaires, getOrganizationFeatures, isCollectionStaff, isCivilExecutor } from "@/lib/organization-features";
+import {
+  canUseCivilCases,
+  canUseQuestionnaires,
+  getOrganizationFeatures,
+  isAgentPath,
+  isCivilExecutor,
+  isCollectionStaff,
+  isRemoteAgent,
+} from "@/lib/organization-features";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const navItems = [
-  { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд", hideFor: ["call_center"] },
+  { href: "/agent", label: "Мой кабинет", icon: "◈", shortLabel: "Кабинет", roles: ["agent"] },
+  { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд", hideFor: ["call_center", "agent"] },
   {
     href: "/questionnaires",
     label: "Лиды и анкеты",
@@ -92,6 +101,7 @@ const navItems = [
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
+  if (pathname.startsWith("/agent")) return "Мой кабинет";
   if (pathname.startsWith("/questionnaires/stats")) return "Статистика лидов";
   if (pathname.startsWith("/questionnaires")) return "Лиды и анкеты";
   if (pathname.startsWith("/civil-cases")) return "Гражданские дела";
@@ -131,23 +141,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const features = getOrganizationFeatures(user);
   const companyName = user?.organization_name || "Компания";
 
-  const visibleNav = navItems.filter((item) => {
-    if (isCivilExecutor(user)) return item.href === "/civil-cases";
-    if (item.hideFor?.includes(user?.role ?? "")) return false;
-    if (item.href === "/questionnaires") return canUseQuestionnaires(user);
-    if (item.href === "/civil-cases") return canUseCivilCases(user);
-    if (item.ownerOnly && user?.role !== "owner") return false;
-    if (item.roles && !item.roles.includes(user?.role ?? "")) return false;
-    if (item.feature && !features[item.feature]) return false;
-    return true;
-  });
+  const visibleNav = navItems
+    .filter((item) => {
+      if (isCivilExecutor(user)) return item.href === "/civil-cases";
+      if (isRemoteAgent(user)) return isAgentPath(item.href);
+      if (item.hideFor?.includes(user?.role ?? "")) return false;
+      if (item.href === "/questionnaires") return canUseQuestionnaires(user);
+      if (item.href === "/civil-cases") return canUseCivilCases(user);
+      if (item.ownerOnly && user?.role !== "owner") return false;
+      if (item.roles && !item.roles.includes(user?.role ?? "")) return false;
+      if (item.feature && !features[item.feature]) return false;
+      return true;
+    })
+    .map((item) =>
+      isRemoteAgent(user) && item.href === "/questionnaires"
+        ? { ...item, label: "Мои клиенты", shortLabel: "Клиенты" }
+        : item,
+    );
 
   const mobilePrimary = (
     isCivilExecutor(user)
       ? ["/civil-cases"]
-      : isCollectionStaff(user)
-        ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
-        : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
+      : isRemoteAgent(user)
+        ? ["/agent", "/questionnaires"]
+        : isCollectionStaff(user)
+          ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
+          : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
   ).filter((href) => visibleNav.some((item) => item.href === href));
 
   return (

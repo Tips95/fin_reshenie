@@ -5,7 +5,11 @@ from app.models.civil_case import CivilCase, CivilCaseDocument, CivilCaseMovemen
 from app.models.client import Client
 from app.models.client_mandatory_payment import ClientMandatoryPayment
 from app.models.client_mandatory_payment_record import ClientMandatoryPaymentRecord
-from app.models.client_questionnaire import ClientQuestionnaire, QuestionnaireCall
+from app.models.client_questionnaire import (
+    ClientQuestionnaire,
+    QuestionnaireCall,
+    QuestionnaireComment,
+)
 from app.models.court_deposit_tracking import CourtDepositTracking
 from app.models.document_collection import DocumentCollection
 from app.models.manager_task import ManagerTask
@@ -43,5 +47,6 @@ __all__ = [
     "PaymentSchedule",
     "PricingTier",
     "QuestionnaireCall",
+    "QuestionnaireComment",
     "User",
 ]

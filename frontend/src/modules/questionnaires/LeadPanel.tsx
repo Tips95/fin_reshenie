@@ -21,8 +21,10 @@ export function LeadPanel({
   onUpdated,
   onError,
   onOpenAction,
+  agentMode = false,
 }: {
   item: Questionnaire;
+  agentMode?: boolean;
   managers: LeadManagerOption[];
   canAssign: boolean;
   onUpdated: (next: Questionnaire) => void;
@@ -96,6 +98,21 @@ export function LeadPanel({
 
       {converted ? (
         <p className="text-xs text-muted">Лид переведён в клиента — статусы обзвона больше не меняются.</p>
+      ) : agentMode ? (
+        item.lead_status === "unqualified" ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => onOpenAction("appointment")}
+            >
+              {item.appointment_at ? "Изменить дату приёма" : "Записать в офис"}
+            </Button>
+            <span className="text-xs text-muted">Звонки и договор ведёт офис.</span>
+          </div>
+        )
       ) : (
         <div className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Действия</p>

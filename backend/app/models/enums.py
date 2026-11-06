@@ -16,6 +16,8 @@ class UserRole(str, enum.Enum):
     # Роль товарной рассрочки: в командах не выдаётся, только читается из базы.
     INVESTOR = "investor"
     EXECUTOR = "executor"
+    # Удалённый менеджер: заводит лидов и приглашает в офис, договор заключает штат.
+    AGENT = "agent"
 
 
 def parse_user_role(value: str | UserRole) -> UserRole:

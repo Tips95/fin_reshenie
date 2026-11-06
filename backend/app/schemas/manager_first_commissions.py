@@ -14,6 +14,8 @@ class ManagerFirstCommissionClientItem(BaseModel):
     amount: Decimal
     collected: bool
     collected_at: datetime | None = None
+    from_agent: bool = False
+    first_payment_date: date | None = None
 
 
 class ManagerFirstCommissionManagerRow(BaseModel):

@@ -13,6 +13,10 @@ from app.models.enums import UserRole
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_PREFIX}/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_PREFIX}/auth/login",
+    auto_error=False,
+)
 
 
 def get_current_user(
@@ -77,4 +81,33 @@ require_legal_staff = require_roles(
     UserRole.CALL_CENTER,
 )
 require_civil_staff = require_roles(UserRole.OWNER, UserRole.MANAGER, UserRole.EXECUTOR)
+require_lead_user = require_roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.HEAD_MANAGER,
+    UserRole.CALL_CENTER,
+    UserRole.AGENT,
+)
+require_agent = require_roles(UserRole.AGENT)
 require_any_authenticated = get_current_active_user
+
+
+def forbid_agents(
+    token: str | None = Depends(optional_oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> None:
+    """Вешается на роутеры офиса: удалённому менеджеру доступны только лиды и кабинет.
+    Сам токен здесь не проверяется — это делают зависимости эндпоинтов."""
+    if not token:
+        return
+    try:
+        payload = decode_token(token)
+        user_id = UUID(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        return
+    role = db.scalar(select(User.role).where(User.id == user_id))
+    if role == UserRole.AGENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Раздел недоступен удалённому менеджеру",
+        )

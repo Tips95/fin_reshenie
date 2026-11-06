@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_legal_staff
+from app.api.deps import require_lead_user, require_legal_staff
 from app.core.database import get_db
 from app.models.enums import LeadStatus
 from app.models.user import User
@@ -16,6 +16,7 @@ from app.schemas.questionnaire import (
     QuestionnaireAssignRequest,
     QuestionnaireBrief,
     QuestionnaireCallCreate,
+    QuestionnaireCommentCreate,
     QuestionnaireCreate,
     QuestionnaireCreateClientRequest,
     QuestionnaireManagerOption,
@@ -24,6 +25,7 @@ from app.schemas.questionnaire import (
     QuestionnaireUpdate,
 )
 from app.services.questionnaires import (
+    add_questionnaire_comment,
     assign_questionnaire,
     create_client_from_questionnaire,
     create_questionnaire,
@@ -54,6 +56,14 @@ def _require_legal_staff(
     return current_user
 
 
+def _require_lead_user(
+    current_user: User = Depends(require_lead_user),
+) -> User:
+    """Офис плюс удалённые менеджеры: агент видит и правит только своих лидов."""
+    ensure_bankruptcy_org(current_user)
+    return current_user
+
+
 def _to_brief(item) -> QuestionnaireBrief:
     payload = to_questionnaire_response(item)
     return QuestionnaireBrief.model_validate(payload.model_dump())
@@ -71,7 +81,7 @@ def get_questionnaires(
     appointment_due: bool = Query(default=False),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=200),
-    current_user: User = Depends(_require_legal_staff),
+    current_user: User = Depends(_require_lead_user),
     db: Session = Depends(get_db),
 ) -> list[QuestionnaireBrief]:
     items = list_questionnaires(
@@ -128,7 +138,7 @@ def get_lead_managers(
 @router.post("", response_model=QuestionnaireResponse, status_code=status.HTTP_201_CREATED)
 def post_questionnaire(
     payload: QuestionnaireCreate,
-    current_user: User = Depends(_require_legal_staff),
+    current_user: User = Depends(_require_lead_user),
     db: Session = Depends(get_db),
 ) -> QuestionnaireResponse:
     item = create_questionnaire(db, current_user, payload)
@@ -138,7 +148,7 @@ def post_questionnaire(
 @router.get("/{questionnaire_id}", response_model=QuestionnaireResponse)
 def get_questionnaire(
     questionnaire_id: UUID,
-    current_user: User = Depends(_require_legal_staff),
+    current_user: User = Depends(_require_lead_user),
     db: Session = Depends(get_db),
 ) -> QuestionnaireResponse:
     item = get_organization_questionnaire(
@@ -153,7 +163,7 @@ def get_questionnaire(
 def patch_questionnaire(
     questionnaire_id: UUID,
     payload: QuestionnaireUpdate,
-    current_user: User = Depends(_require_legal_staff),
+    current_user: User = Depends(_require_lead_user),
     db: Session = Depends(get_db),
 ) -> QuestionnaireResponse:
     item = update_questionnaire(db, current_user, questionnaire_id, payload)
@@ -216,10 +226,22 @@ def post_questionnaire_assign(
 def post_questionnaire_appointment(
     questionnaire_id: UUID,
     payload: QuestionnaireAppointmentRequest,
-    current_user: User = Depends(_require_legal_staff),
+    current_user: User = Depends(_require_lead_user),
     db: Session = Depends(get_db),
 ) -> QuestionnaireResponse:
     item = set_questionnaire_appointment(db, current_user, questionnaire_id, payload)
+    return to_questionnaire_response(item)
+
+
+@router.post("/{questionnaire_id}/comments", response_model=QuestionnaireResponse)
+def post_questionnaire_comment(
+    questionnaire_id: UUID,
+    payload: QuestionnaireCommentCreate,
+    current_user: User = Depends(_require_lead_user),
+    db: Session = Depends(get_db),
+) -> QuestionnaireResponse:
+    """Вопрос удалённого менеджера куратору или ответ офиса по конкретному лиду."""
+    item = add_questionnaire_comment(db, current_user, questionnaire_id, payload)
     return to_questionnaire_response(item)
 
 
@@ -237,7 +259,7 @@ def post_create_client(
 @router.get("/{questionnaire_id}/pdf")
 def download_questionnaire_pdf(
     questionnaire_id: UUID,
-    current_user: User = Depends(_require_legal_staff),
+    current_user: User = Depends(_require_lead_user),
     db: Session = Depends(get_db),
 ) -> Response:
     item = get_organization_questionnaire(

@@ -82,6 +82,8 @@ class ClientResponse(BaseModel):
     manager_first_commission_collected_at: datetime | None = None
     manager_first_commission_collected_by: UUID | None = None
     manager_first_commission_collected_by_name: str | None = None
+    source_agent_id: UUID | None = None
+    agent_commission_collected: bool = False
     latest_manager_note: str | None = None
     manager_notes_count: int = 0
 

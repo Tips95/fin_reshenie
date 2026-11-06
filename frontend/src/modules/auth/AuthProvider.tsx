@@ -3,23 +3,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { ApiRequestError, authApi } from "@/lib/api-client";
+import { ApiRequestError, authApi, type AgentRegisterPayload } from "@/lib/api-client";
 import { clearTokens, isAuthenticated, setTokens } from "@/lib/auth-storage";
 import { legalHomePath } from "@/lib/organization-features";
-import type { User } from "@/lib/types";
-
-interface RegisterPayload {
-  organizationName: string;
-  login: string;
-  password: string;
-  fullName?: string;
-}
+import type { TokenResponse, User } from "@/lib/types";
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   login: (login: string, password: string) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  registerAgent: (payload: AgentRegisterPayload) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -53,9 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
-  const login = useCallback(
-    async (loginValue: string, password: string) => {
-      const tokens = await authApi.login(loginValue, password);
+  const startSession = useCallback(
+    async (tokens: TokenResponse) => {
       setTokens(tokens.access_token, tokens.refresh_token);
       const me = await authApi.me();
       setUser(me);
@@ -64,25 +56,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [router],
   );
 
-  const register = useCallback(
-    async ({
-      organizationName,
-      login: loginValue,
-      password,
-      fullName,
-    }: RegisterPayload) => {
-      const tokens = await authApi.register({
-        organization_name: organizationName,
-        login: loginValue,
-        password,
-        full_name: fullName?.trim() ? fullName.trim() : undefined,
-      });
-      setTokens(tokens.access_token, tokens.refresh_token);
-      const me = await authApi.me();
-      setUser(me);
-      router.push(legalHomePath(me));
+  const login = useCallback(
+    async (loginValue: string, password: string) => {
+      await startSession(await authApi.login(loginValue, password));
     },
-    [router],
+    [startSession],
+  );
+
+  const registerAgent = useCallback(
+    async (payload: AgentRegisterPayload) => {
+      await startSession(await authApi.registerAgent(payload));
+    },
+    [startSession],
   );
 
   const logout = useCallback(() => {
@@ -92,8 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, refreshUser }),
-    [user, loading, login, register, logout, refreshUser],
+    () => ({ user, loading, login, registerAgent, logout, refreshUser }),
+    [user, loading, login, registerAgent, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

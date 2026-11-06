@@ -31,8 +31,10 @@ export function LeadClientHeader({
   onOpenClient,
   onDelete,
   canOpenClient,
+  agentMode = false,
 }: {
   item: Questionnaire;
+  agentMode?: boolean;
   canDelete: boolean;
   deleting: boolean;
   creatingClient: boolean;
@@ -70,6 +72,11 @@ export function LeadClientHeader({
               ? ` · ${item.assigned_manager_name || item.created_by_name}`
               : ""}
           </p>
+          {item.source_agent_name && !agentMode ? (
+            <p className="mt-0.5 text-xs font-medium text-brand-700">
+              Привёл удалённый менеджер: {item.source_agent_name}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:max-w-full sm:justify-end">
@@ -84,7 +91,12 @@ export function LeadClientHeader({
               Позвонить
             </Button>
           ) : null}
-          {!converted ? (
+          {!converted && agentMode && !unqualified ? (
+            <Button type="button" size="sm" variant="secondary" onClick={onBookAppointment}>
+              {item.appointment_at ? "Изменить приём" : "Записать в офис"}
+            </Button>
+          ) : null}
+          {!converted && !agentMode ? (
             <>
               <Button type="button" size="sm" variant="secondary" onClick={onCallAnswered}>
                 Дозвонились
@@ -102,7 +114,7 @@ export function LeadClientHeader({
               ) : null}
             </>
           ) : null}
-          {item.client_id ? (
+          {agentMode ? null : item.client_id ? (
             canOpenClient ? (
               <Button type="button" size="sm" variant="secondary" onClick={onOpenClient}>
                 Карточка клиента

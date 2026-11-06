@@ -39,6 +39,9 @@ import type {
   CivilShareMark,
   CivilSharesOverview,
   MandatoryOutflowsOverview,
+  AgentCommissionsOverview,
+  AgentInfo,
+  AgentOverview,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -316,13 +319,45 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ login, password }),
     }),
-  register: (data: {
-    organization_name: string;
-    login: string;
-    password: string;
-    full_name?: string;
-  }) => apiFetch<TokenResponse>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
   me: () => apiFetch<User>("/auth/me"),
+  agentSignup: () =>
+    apiFetch<{ open: boolean; organization_name: string | null }>("/auth/agent-signup"),
+  registerAgent: (data: AgentRegisterPayload) =>
+    apiFetch<TokenResponse>("/auth/register-agent", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+export interface AgentRegisterPayload {
+  full_name: string;
+  phone: string;
+  email?: string | null;
+  telegram?: string | null;
+  inn?: string | null;
+  password: string;
+  accept_terms: boolean;
+  terms_version: string;
+}
+
+export const agentsApi = {
+  myOverview: () => apiFetch<AgentOverview>("/agents/me/overview"),
+  list: () => apiFetch<AgentInfo[]>(`/agents?_=${Date.now()}`),
+  signup: () => apiFetch<{ open: boolean }>("/agents/signup"),
+  setSignup: (open: boolean) =>
+    apiFetch<{ open: boolean }>("/agents/signup", { method: "PUT", body: JSON.stringify({ open }) }),
+  setCurator: (id: string, curatorId: string | null) =>
+    apiFetch<AgentInfo>(`/agents/${id}/curator`, {
+      method: "PATCH",
+      body: JSON.stringify({ curator_id: curatorId }),
+    }),
+  commissions: (month: string) =>
+    apiFetch<AgentCommissionsOverview>(`/agents/commissions?month=${encodeURIComponent(month)}`),
+  markCommissions: (clientIds: string[], collected: boolean) =>
+    apiFetch<{ updated_count: number }>("/agents/commissions/mark", {
+      method: "POST",
+      body: JSON.stringify({ client_ids: clientIds, collected }),
+    }),
 };
 
 export const organizationsApi = {
@@ -556,6 +591,11 @@ export const questionnairesApi = {
     }),
   reopen: (id: string) =>
     apiFetch<Questionnaire>(`/questionnaires/${id}/reopen`, { method: "POST" }),
+  addComment: (id: string, body: string) =>
+    apiFetch<Questionnaire>(`/questionnaires/${id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
   assign: (id: string, managerId: string | null) =>
     apiFetch<Questionnaire>(`/questionnaires/${id}/assign`, {
       method: "POST",

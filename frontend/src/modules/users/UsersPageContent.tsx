@@ -30,12 +30,14 @@ import {
   validatePhoneOptional,
 } from "@/lib/validation";
 import type { User, UserRole } from "@/lib/types";
+import { AgentsSection } from "@/modules/agents/AgentsSection";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const emptyForm = {
   full_name: "",
   email: "",
   phone: "",
+  telegram: "",
   password: "",
   role: "manager" as UserRole,
   is_active: true,
@@ -45,6 +47,7 @@ type EditForm = {
   full_name: string;
   email: string;
   phone: string;
+  telegram: string;
   password: string;
   role: UserRole;
   is_active: boolean;
@@ -55,6 +58,7 @@ function toEditForm(user: User): EditForm {
     full_name: user.full_name,
     email: user.email ?? "",
     phone: user.phone ?? "",
+    telegram: user.telegram ?? "",
     password: "",
     role: user.role,
     is_active: user.is_active,
@@ -131,6 +135,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
         full_name: form.full_name.trim().replace(/\s+/g, " "),
         email: form.email.trim() || null,
         phone: form.phone.trim() && form.phone.trim() !== PHONE_PREFIX ? form.phone.trim() : null,
+        telegram: form.telegram.trim() || null,
         password: form.password,
         role: form.role,
         is_active: form.is_active,
@@ -182,6 +187,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
           editForm.phone.trim() && editForm.phone.trim() !== PHONE_PREFIX
             ? editForm.phone.trim()
             : null,
+        telegram: editForm.telegram.trim() || null,
         role: editForm.role,
         is_active: editForm.is_active,
       };
@@ -232,7 +238,8 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
     return <LoadingState text="Доступ только для руководителя" />;
   }
 
-  const activeCount = users.filter((item) => item.is_active).length;
+  const staffUsers = users.filter((item) => item.role !== "agent");
+  const activeCount = staffUsers.filter((item) => item.is_active).length;
 
   return (
     <div className="page-stack">
@@ -247,9 +254,9 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
       />
 
       <div className="grid gap-2 sm:grid-cols-3">
-        <StatCard label="Всего в команде" value={users.length} tone="brand" />
+        <StatCard label="Всего в команде" value={staffUsers.length} tone="brand" />
         <StatCard label="Активных" value={activeCount} tone="success" />
-        <StatCard label="Деактивированных" value={users.length - activeCount} />
+        <StatCard label="Деактивированных" value={staffUsers.length - activeCount} />
       </div>
 
       {error && (
@@ -286,6 +293,13 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
                 allowEmpty
                 value={form.phone}
                 onValueChange={(phone) => setForm({ ...form, phone })}
+              />
+            </FormField>
+            <FormField label="Telegram · виден удалённым менеджерам, если сотрудник куратор">
+              <Input
+                placeholder="@ivanov"
+                value={form.telegram}
+                onChange={(e) => setForm({ ...form, telegram: e.target.value })}
               />
             </FormField>
             <FormField label="Пароль" error={formErrors.password}>
@@ -327,7 +341,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
         <SectionTitle title="Список команды" />
         {loading ? (
           <LoadingState text="Загрузка команды..." />
-        ) : users.length === 0 ? (
+        ) : staffUsers.length === 0 ? (
           <EmptyState
             action={
               <Button type="button" onClick={() => setShowForm(true)}>
@@ -351,7 +365,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {users.map((item) => {
+                {staffUsers.map((item) => {
                   const isSelf = item.id === currentUser?.id;
                   const isEditing = editingId === item.id;
 
@@ -383,6 +397,15 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
                                 value={editForm.phone || ""}
                                 onValueChange={(phone) =>
                                   setEditForm({ ...editForm, phone })
+                                }
+                              />
+                            </FormField>
+                            <FormField label="Telegram">
+                              <Input
+                                placeholder="@ivanov"
+                                value={editForm.telegram}
+                                onChange={(e) =>
+                                  setEditForm({ ...editForm, telegram: e.target.value })
                                 }
                               />
                             </FormField>
@@ -494,6 +517,8 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
           </div>
         )}
       </Card>
+
+      <AgentsSection staff={staffUsers} />
     </div>
   );
 }

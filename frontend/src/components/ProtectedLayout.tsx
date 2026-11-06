@@ -5,7 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/AppShell";
 import { LoadingState } from "@/components/ui";
-import { isCollectionStaff, legalHomePath } from "@/lib/organization-features";
+import {
+  isAgentPath,
+  isCollectionStaff,
+  isRemoteAgent,
+  legalHomePath,
+} from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 function isCivilCasesPath(pathname: string): boolean {
@@ -26,6 +31,10 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
     if (user.role === "executor" && !isCivilCasesPath(pathname)) {
       router.replace("/civil-cases");
+      return;
+    }
+    if (isRemoteAgent(user) && !isAgentPath(pathname)) {
+      router.replace("/agent");
       return;
     }
     if (isCollectionStaff(user) && pathname === "/") {

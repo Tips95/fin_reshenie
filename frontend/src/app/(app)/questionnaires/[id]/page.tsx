@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-import { BackLink, Button, LoadingState, Toast } from "@/components/ui";
+import { BackLink, Button, EmptyState, LoadingState, Toast } from "@/components/ui";
 import { ApiRequestError, getDuplicateClientId, questionnairesApi } from "@/lib/api-client";
-import { canOpenClientCards, canSuperviseLeads } from "@/lib/organization-features";
+import { canOpenClientCards, canSuperviseLeads, isRemoteAgent } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 import { CallHistoryTimeline } from "@/modules/questionnaires/CallHistoryTimeline";
 import {
@@ -13,6 +13,7 @@ import {
   LeadClientHeader,
 } from "@/modules/questionnaires/LeadClientHeader";
 import { LeadActionModal, type LeadActionKind } from "@/modules/questionnaires/LeadActionModal";
+import { LeadComments } from "@/modules/questionnaires/LeadComments";
 import { LeadOverview } from "@/modules/questionnaires/LeadOverview";
 import { LeadPanel } from "@/modules/questionnaires/LeadPanel";
 import { LeadSectionNav, useActiveLeadSection } from "@/modules/questionnaires/LeadSectionNav";
@@ -37,6 +38,8 @@ export default function QuestionnaireDetailPage() {
   const [baseline, setBaseline] = useState<string>("");
   const [managers, setManagers] = useState<LeadManagerOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [creatingClient, setCreatingClient] = useState(false);
@@ -48,6 +51,7 @@ export default function QuestionnaireDetailPage() {
   );
   const [leaveHref, setLeaveHref] = useState<string | null>(null);
   const { active, scrollTo } = useActiveLeadSection();
+  const agentMode = isRemoteAgent(user);
 
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
@@ -69,6 +73,7 @@ export default function QuestionnaireDetailPage() {
   useEffect(() => {
     void (async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const data = await questionnairesApi.get(params.id);
         const nextForm = questionnaireToForm(data);
@@ -76,15 +81,12 @@ export default function QuestionnaireDetailPage() {
         setForm(nextForm);
         setBaseline(questionnaireFormSnapshot(formToPayload(nextForm)));
       } catch (error) {
-        setToast({
-          message: error instanceof ApiRequestError ? error.message : "Анкета не найдена",
-          tone: "error",
-        });
+        setLoadError(error instanceof ApiRequestError ? error.message : "Не удалось открыть анкету");
       } finally {
         setLoading(false);
       }
     })();
-  }, [params.id]);
+  }, [params.id, reloadKey]);
 
   useEffect(() => {
     if (!canSuperviseLeads(user)) return;
@@ -194,6 +196,25 @@ export default function QuestionnaireDetailPage() {
     }
   }
 
+  if (loadError && !item) {
+    return (
+      <div className="page-stack">
+        <BackLink href={agentMode ? "/agent" : "/questionnaires"}>
+          {agentMode ? "В кабинет" : "К списку лидов"}
+        </BackLink>
+        <EmptyState
+          action={
+            <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
+              Повторить
+            </Button>
+          }
+        >
+          {loadError}
+        </EmptyState>
+      </div>
+    );
+  }
+
   if (loading || !form || !item) {
     return <LoadingState text="Загрузка карточки..." />;
   }
@@ -243,10 +264,11 @@ export default function QuestionnaireDetailPage() {
         <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
       ) : null}
 
-      <BackLink href="/questionnaires">К списку лидов</BackLink>
+      <BackLink href="/questionnaires">{agentMode ? "К моим клиентам" : "К списку лидов"}</BackLink>
 
       <LeadClientHeader
         item={item}
+        agentMode={agentMode}
         canDelete={user?.role === "owner"}
         deleting={deleting}
         creatingClient={creatingClient || saving}
@@ -272,6 +294,7 @@ export default function QuestionnaireDetailPage() {
 
           <LeadPanel
             item={item}
+            agentMode={agentMode}
             managers={managers}
             canAssign={canSuperviseLeads(user)}
             onOpenAction={setPanelForm}
@@ -319,7 +342,14 @@ export default function QuestionnaireDetailPage() {
             }
           />
 
-          <CallHistoryTimeline calls={item.calls} />
+          <LeadComments
+            item={item}
+            agentMode={agentMode}
+            onUpdated={setItem}
+            onError={(message) => setToast({ message, tone: "error" })}
+          />
+
+          {agentMode ? null : <CallHistoryTimeline calls={item.calls} />}
         </div>
       </div>
     </div>

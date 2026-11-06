@@ -238,6 +238,7 @@ export const LEAD_SECTIONS = [
   { id: "family", label: "Доходы и семья" },
   { id: "property", label: "Имущество" },
   { id: "notes", label: "Примечания" },
+  { id: "comments", label: "Комментарии" },
   { id: "history", label: "История" },
 ] as const;
 

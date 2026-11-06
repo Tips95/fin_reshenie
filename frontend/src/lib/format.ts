@@ -140,6 +140,7 @@ export function statusLabel(status: string): string {
     head_manager: "Начальник отдела",
     call_center: "Сбор документов",
     executor: "Исполнитель",
+    agent: "Удалённый менеджер",
     salary: "Зарплата",
     rent: "Аренда",
     utilities: "Коммунальные",

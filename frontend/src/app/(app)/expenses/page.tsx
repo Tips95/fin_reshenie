@@ -39,11 +39,13 @@ import type {
   OneTimeExpense,
   OperatingExpense,
 } from "@/lib/types";
+import { AgentPayouts } from "@/modules/agents/AgentPayouts";
 import { PayeeRow, PayoutTracking } from "@/modules/expenses/PayoutTracking";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const EXPENSE_SECTIONS = [
   { id: "manager-payouts", label: "Менеджерские" },
+  { id: "agent-payouts", label: "Удалённые" },
   { id: "civil-shares", label: "Гражданка" },
   { id: "deposit-fin", label: "Депозит и фин." },
   { id: "one-time", label: "Разовые" },
@@ -876,8 +878,8 @@ export default function ExpensesPage() {
       <Panel
         id="manager-payouts"
         dot="brand"
-        title={`Менеджерские 10 000 ₽ · ${formatMonthLabel(periodMonth)}`}
-        description="С октября 2026: 10 000 ₽ за каждого клиента с договором на банкротство. 1 000 ₽ за доверенность сюда не входит."
+        title={`Менеджерские выплаты · ${formatMonthLabel(periodMonth)}`}
+        description="С октября 2026: 10 000 ₽ за своего клиента с договором на банкротство (по дате договора). За клиента от удалённого менеджера — 5 000 ₽ после первого платежа. 1 000 ₽ за доверенность сюда не входит."
       >
         {managerPayouts ? (
           <>
@@ -953,9 +955,17 @@ export default function ExpensesPage() {
                                   <Link href={`/clients/${item.client_id}`} className="link-brand">
                                     {formatShortName(item.client_name)}
                                   </Link>
+                                  {item.from_agent ? (
+                                    <span className="ml-1.5 text-[10px] font-semibold uppercase text-muted">
+                                      от агента
+                                    </span>
+                                  ) : null}
                                 </td>
                                 <td data-label="Договор" className="tabular text-muted">
                                   {formatDate(item.contract_date)}
+                                  {item.first_payment_date
+                                    ? ` · платёж ${formatDate(item.first_payment_date)}`
+                                    : ""}
                                 </td>
                                 <td data-label="Сумма" className="tabular text-right font-medium">
                                   {formatMoney(item.amount)}
@@ -997,6 +1007,8 @@ export default function ExpensesPage() {
           <EmptyState>Не удалось загрузить менеджерские</EmptyState>
         )}
       </Panel>
+
+      <AgentPayouts month={periodMonth} />
 
       <PayoutTracking
         month={periodMonth}

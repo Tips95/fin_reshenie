@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import Link from "next/link";
-
 import { BrandFooter, Button, Card, Input, LogoLockup } from "@/components/ui";
+import { authApi } from "@/lib/api-client";
 import { legalHomePath } from "@/lib/organization-features";
 import { normalizeLoginValue, validateLogin } from "@/lib/validation";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
@@ -17,12 +16,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [agentSignupOpen, setAgentSignupOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
       router.replace(legalHomePath(user));
     }
   }, [loading, user, router]);
+
+  useEffect(() => {
+    authApi
+      .agentSignup()
+      .then((info) => setAgentSignupOpen(info.open))
+      .catch(() => setAgentSignupOpen(false));
+  }, []);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -66,7 +73,9 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold tracking-wide text-muted">Пароль</label>
+            <label className="mb-1 block text-xs font-semibold tracking-wide text-muted">
+              Пароль
+            </label>
             <Input
               type="password"
               value={password}
@@ -74,20 +83,27 @@ export default function LoginPage() {
               required
             />
           </div>
-          {error && (
-            <p className="alert-danger text-xs">{error}</p>
-          )}
+          {error && <p className="alert-danger text-xs">{error}</p>}
           <Button type="submit" className="w-full" size="lg" disabled={submitting}>
             {submitting ? "Вход..." : "Войти"}
           </Button>
         </form>
 
-        <p className="mt-4 text-center text-xs text-muted">
-          Нет аккаунта?{" "}
-          <Link href="/register" className="link-brand font-semibold">
-            Зарегистрировать компанию
-          </Link>
-        </p>
+        {agentSignupOpen ? (
+          <div className="mt-5 space-y-2 border-t border-border pt-4">
+            <p className="text-center text-xs text-muted">
+              Хотите приводить клиентов и получать 5 000 ₽ за каждого?
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => router.push("/join")}
+            >
+              Стать удалённым менеджером
+            </Button>
+          </div>
+        ) : null}
       </Card>
 
       <div className="absolute bottom-3 left-0 right-0">

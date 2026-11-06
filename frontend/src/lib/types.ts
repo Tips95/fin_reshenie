@@ -3,7 +3,8 @@ export type UserRole =
   | "manager"
   | "head_manager"
   | "call_center"
-  | "executor";
+  | "executor"
+  | "agent";
 
 export type OrganizationType = "bankruptcy";
 
@@ -75,6 +76,7 @@ export interface User {
   email: string | null;
   role: UserRole;
   is_active: boolean;
+  telegram?: string | null;
   created_at?: string;
 }
 
@@ -118,6 +120,8 @@ export interface Client {
   manager_first_commission_collected_at?: string | null;
   manager_first_commission_collected_by?: string | null;
   manager_first_commission_collected_by_name?: string | null;
+  source_agent_id?: string | null;
+  agent_commission_collected?: boolean;
   latest_manager_note?: string | null;
   manager_notes_count?: number;
 }
@@ -402,6 +406,8 @@ export interface ManagerFirstCommissionClientItem {
   amount: string;
   collected: boolean;
   collected_at?: string | null;
+  from_agent?: boolean;
+  first_payment_date?: string | null;
 }
 
 export interface ManagerFirstCommissionManagerRow {
@@ -655,6 +661,18 @@ export interface QuestionnaireBrief {
   appointment_note: string | null;
   assigned_manager_id: string | null;
   assigned_manager_name: string | null;
+  source_agent_id?: string | null;
+  source_agent_name?: string | null;
+  pd_consent_at?: string | null;
+}
+
+export interface QuestionnaireComment {
+  id: string;
+  body: string;
+  author_id: string | null;
+  author_name: string | null;
+  author_role: UserRole | string | null;
+  created_at: string;
 }
 
 export interface Questionnaire extends QuestionnaireBrief {
@@ -680,6 +698,100 @@ export interface Questionnaire extends QuestionnaireBrief {
   assets?: QuestionnaireAsset[];
   documents?: QuestionnaireDocumentItem[];
   calls: QuestionnaireCall[];
+  comments?: QuestionnaireComment[];
+}
+
+export interface AgentInfo {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  telegram: string | null;
+  inn: string | null;
+  is_active: boolean;
+  curator_id: string | null;
+  curator_name: string | null;
+  created_at: string;
+  terms_accepted_at: string | null;
+  terms_version: string | null;
+  leads_total: number;
+  contracts_total: number;
+  earned_total: string;
+  paid_total: string;
+}
+
+export type AgentLeadStage =
+  | "new"
+  | "appointment"
+  | "unqualified"
+  | "visited"
+  | "contract"
+  | "earned"
+  | "paid_out"
+  | "cancelled";
+
+export interface AgentLeadRow {
+  questionnaire_id: string;
+  full_name: string;
+  phone: string;
+  created_at: string;
+  lead_status: LeadStatus;
+  stage: AgentLeadStage;
+  appointment_at: string | null;
+  first_payment_date: string | null;
+  commission_amount: string | null;
+  commission_paid_at: string | null;
+}
+
+export interface AgentOverview {
+  curator: {
+    full_name: string;
+    phone: string | null;
+    email: string | null;
+    telegram: string | null;
+  } | null;
+  commission_per_client: string;
+  leads_total: number;
+  appointments_total: number;
+  contracts_total: number;
+  earned_total: string;
+  paid_total: string;
+  to_pay_total: string;
+  leads: AgentLeadRow[];
+}
+
+export interface AgentCommissionClientItem {
+  client_id: string;
+  client_name: string;
+  contract_date: string;
+  first_payment_date: string;
+  agent_id: string;
+  agent_name: string;
+  amount: string;
+  collected: boolean;
+  collected_at: string | null;
+}
+
+export interface AgentCommissionAgentRow {
+  agent_id: string;
+  agent_name: string;
+  inn: string | null;
+  clients_count: number;
+  total_amount: string;
+  to_pay_amount: string;
+  paid_amount: string;
+  clients: AgentCommissionClientItem[];
+}
+
+export interface AgentCommissionsOverview {
+  month: string;
+  commission_per_client: string;
+  clients_count: number;
+  total_amount: string;
+  to_pay_amount: string;
+  paid_amount: string;
+  outstanding_to_pay_amount: string;
+  agents: AgentCommissionAgentRow[];
 }
 
 export type CivilCaseStage = "intake" | "documents" | "submitted" | "completed";

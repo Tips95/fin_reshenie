@@ -23,6 +23,7 @@ import {
   canSuperviseLeads,
   canUseQuestionnaires,
   isCollectionStaff,
+  isRemoteAgent,
 } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -94,6 +95,7 @@ function QuestionnairesPageContent() {
   const hideAmounts = isCollectionStaff(user);
   const supervises = canSuperviseLeads(user);
   const showClientLinks = canOpenClientCards(user);
+  const agentMode = isRemoteAgent(user);
 
   const createdOn = searchParams.get("created_on") || "";
   const createdBy = searchParams.get("created_by") || "";
@@ -206,11 +208,13 @@ function QuestionnairesPageContent() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Лиды и анкеты"
+        title={agentMode ? "Мои клиенты" : "Лиды и анкеты"}
         subtitle={
-          hideAmounts
-            ? "Все лиды компании. Если клиент ещё не создан — можно начать сбор документов."
-            : "Заводите каждого, кому звоните. Анкета сохраняется в любой момент — обязателен только телефон."
+          agentMode
+            ? "Клиенты, которых вы привели. Статус и вознаграждение — в кабинете."
+            : hideAmounts
+              ? "Все лиды компании. Если клиент ещё не создан — можно начать сбор документов."
+              : "Заводите каждого, кому звоните. Анкета сохраняется в любой момент — обязателен только телефон."
         }
         action={
           <Button type="button" onClick={() => router.push("/questionnaires/new")}>

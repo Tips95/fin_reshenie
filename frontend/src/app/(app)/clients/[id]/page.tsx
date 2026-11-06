@@ -71,6 +71,10 @@ type ToastState = {
   tone: "success" | "error" | "info";
 };
 
+function managerCommissionLabel(client: ClientBrief | ClientDetail | null): string {
+  return client && "source_agent_id" in client && client.source_agent_id ? "5 000 ₽" : "10 000 ₽";
+}
+
 function useClientListReturnHref(): string {
   const [href, setHref] = useState("/clients/contracts");
   useEffect(() => {
@@ -637,7 +641,9 @@ export default function ClientDetailPage() {
       await clientsApi.setManagerFirstCommission(client.id, collected);
       await refreshClient();
       showToast(
-        collected ? "Менеджерские 10 000 ₽ отмечены как выданные" : "Отметка о выдаче снята",
+        collected
+          ? `Менеджерские ${managerCommissionLabel(client)} отмечены как выданные`
+          : "Отметка о выдаче снята",
         "success",
       );
     } catch (error) {
@@ -688,7 +694,7 @@ export default function ClientDetailPage() {
       isDetail(client) &&
       !client.manager_first_commission_collected
     ) {
-      showToast("Отметьте менеджерские 10 000 ₽, если менеджер уже забрал", "info");
+      showToast(`Отметьте менеджерские ${managerCommissionLabel(client)}, если менеджер уже забрал`, "info");
     }
   }
 
@@ -713,7 +719,7 @@ export default function ClientDetailPage() {
         isDetail(client) &&
         !client.manager_first_commission_collected
       ) {
-        showToast("Отметьте менеджерские 10 000 ₽, если менеджер уже забрал", "info");
+        showToast(`Отметьте менеджерские ${managerCommissionLabel(client)}, если менеджер уже забрал`, "info");
       }
     } finally {
       setPayingId(null);
@@ -1893,7 +1899,9 @@ export default function ClientDetailPage() {
               {showManagerCommission ? (
                 <Badge tone={managerCommissionCollected ? "success" : "warning"}>
                   Менеджерские:{" "}
-                  {managerCommissionCollected ? "выдано" : "10 000 ₽ не отмечено"}
+                  {managerCommissionCollected
+                    ? "выдано"
+                    : `${managerCommissionLabel(client)} не отмечено`}
                 </Badge>
               ) : null}
             </div>
@@ -3099,8 +3107,8 @@ export default function ClientDetailPage() {
                                           }
                                         >
                                           {managerCommissionCollected
-                                            ? "Отменить 10 000 ₽ менеджеру"
-                                            : "Отметить 10 000 ₽ менеджеру"}
+                                            ? `Отменить ${managerCommissionLabel(client)} менеджеру`
+                                            : `Отметить ${managerCommissionLabel(client)} менеджеру`}
                                         </ActionMenuItem>
                                       ) : null}
                                       {canEditSchedule &&
@@ -3310,8 +3318,8 @@ export default function ClientDetailPage() {
                                 }
                               >
                                 {managerCommissionCollected
-                                  ? "Отменить 10 000 ₽ менеджеру"
-                                  : "Отметить 10 000 ₽ менеджеру"}
+                                  ? `Отменить ${managerCommissionLabel(client)} менеджеру`
+                                  : `Отметить ${managerCommissionLabel(client)} менеджеру`}
                               </ActionMenuItem>
                             ) : null}
                             {canEditSchedule &&

@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -11,6 +11,10 @@ from app.models.enums import ClientStatus, EngagementStage, ProcedureStage
 MANAGER_FIRST_PAYMENT_COMMISSION = Decimal("10000.00")
 # Учёт менеджерских 10 000 ₽ только с октября 2026 и для новых договоров дальше
 MANAGER_FIRST_COMMISSION_SINCE = date(2026, 10, 1)
+# Клиент от удалённого менеджера: 5 000 ₽ ему и 5 000 ₽ офисному менеджеру,
+# обе выплаты — после первого платежа по договору.
+AGENT_COMMISSION = Decimal("5000.00")
+MANAGER_COMMISSION_FOR_AGENT_CLIENT = Decimal("5000.00")
 
 
 class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -72,6 +76,33 @@ class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    source_agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    agent_commission_collected: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+    agent_commission_collected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    agent_commission_collected_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    contact_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_note_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    contact_note_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     organization: Mapped["Organization"] = relationship(back_populates="clients")
     assigned_manager: Mapped["User | None"] = relationship(
@@ -81,6 +112,10 @@ class Client(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     manager_first_commission_collector: Mapped["User | None"] = relationship(
         foreign_keys=[manager_first_commission_collected_by],
     )
+    contact_note_author: Mapped["User | None"] = relationship(
+        foreign_keys=[contact_note_by],
+    )
+    source_agent: Mapped["User | None"] = relationship(foreign_keys=[source_agent_id])
     document_collection: Mapped["DocumentCollection | None"] = relationship(
         back_populates="client",
         uselist=False,

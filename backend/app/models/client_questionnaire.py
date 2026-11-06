@@ -43,6 +43,13 @@ class ClientQuestionnaire(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=True,
         index=True,
     )
+    # Кто привёл лида; переходит в клиента и определяет агентскую выплату.
+    source_agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    pd_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lead_status: Mapped[LeadStatus] = mapped_column(
         Enum(
             LeadStatus,
@@ -108,10 +115,16 @@ class ClientQuestionnaire(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     client: Mapped["Client | None"] = relationship(back_populates="questionnaires")
     created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_id])
     assigned_manager: Mapped["User | None"] = relationship(foreign_keys=[assigned_manager_id])
+    source_agent: Mapped["User | None"] = relationship(foreign_keys=[source_agent_id])
     calls: Mapped[list["QuestionnaireCall"]] = relationship(
         back_populates="questionnaire",
         cascade="all, delete-orphan",
         order_by="QuestionnaireCall.created_at.desc()",
+    )
+    comments: Mapped[list["QuestionnaireComment"]] = relationship(
+        back_populates="questionnaire",
+        cascade="all, delete-orphan",
+        order_by="QuestionnaireComment.created_at.asc()",
     )
 
 
@@ -148,3 +161,29 @@ class QuestionnaireCall(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
 
     questionnaire: Mapped["ClientQuestionnaire"] = relationship(back_populates="calls")
     created_by: Mapped["User | None"] = relationship()
+
+
+class QuestionnaireComment(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
+    """Переписка по лиду между удалённым менеджером, куратором и офисом.
+    Отдельно от звонков, чтобы не попадать в статистику дозвонов."""
+
+    __tablename__ = "questionnaire_comments"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    questionnaire_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("client_questionnaires.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    questionnaire: Mapped["ClientQuestionnaire"] = relationship(back_populates="comments")
+    author: Mapped["User | None"] = relationship()

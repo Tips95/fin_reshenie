@@ -17,6 +17,16 @@ export function isCivilExecutor(user: User | null | undefined): boolean {
   return user?.role === "executor";
 }
 
+/** Удалённый менеджер: только свои лиды и кабинет с выплатами. */
+export function isRemoteAgent(user: User | null | undefined): boolean {
+  return user?.role === "agent";
+}
+
+export function isAgentPath(pathname: string): boolean {
+  if (pathname.startsWith("/agent")) return true;
+  return pathname.startsWith("/questionnaires") && !pathname.startsWith("/questionnaires/stats");
+}
+
 /** Начальник отдела: все лиды + статистика, плюс сбор/договоры как у менеджера. */
 export function isLeadSupervisor(user: User | null | undefined): boolean {
   return user?.role === "head_manager";
@@ -38,13 +48,17 @@ export function canManageClients(user: User | null | undefined): boolean {
 }
 
 export function canOpenClientCards(user: User | null | undefined): boolean {
-  return !isCivilExecutor(user);
+  return !isCivilExecutor(user) && !isRemoteAgent(user);
 }
 
 export function canUseQuestionnaires(user: User | null | undefined): boolean {
   const role = user?.role?.toLowerCase();
   return (
-    role === "owner" || role === "manager" || role === "head_manager" || role === "call_center"
+    role === "owner" ||
+    role === "manager" ||
+    role === "head_manager" ||
+    role === "call_center" ||
+    role === "agent"
   );
 }
 
@@ -79,6 +93,7 @@ export function civilExecutorGroups(items: CivilCaseExecutorOption[]) {
 
 export function legalHomePath(user: User | null | undefined): string {
   if (isCivilExecutor(user)) return "/civil-cases";
+  if (isRemoteAgent(user)) return "/agent";
   if (isLeadSupervisor(user)) return "/questionnaires/stats";
   return isCollectionStaff(user) ? "/questionnaires" : "/";
 }

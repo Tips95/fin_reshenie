@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Enum, String
+from sqlalchemy import Boolean, Enum, String, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -28,6 +28,11 @@ class Organization(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     feature_expenses: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     feature_pricing: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     feature_analytics: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Кнопка «Стать удалённым менеджером» на сайте ведёт в эту организацию.
+    # Открыта может быть только у одной организации платформы.
+    agent_signup_open: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
     clients: Mapped[list["Client"]] = relationship(back_populates="organization")
