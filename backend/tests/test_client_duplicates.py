@@ -13,6 +13,15 @@ from app.services.client_duplicates import (
 ORG_ID = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
 
+def _db_with(*clients: SimpleNamespace) -> MagicMock:
+    """Сессия, где в базе только эти клиенты: лёгкая выборка + db.get по id."""
+    db = MagicMock()
+    db.execute.return_value = [(item.id, item.phone, item.full_name) for item in clients]
+    by_id = {item.id: item for item in clients}
+    db.get.side_effect = lambda _model, client_id: by_id.get(client_id)
+    return db
+
+
 class TestPhonesEquivalent:
     def test_same_formatted_phone(self):
         assert phones_equivalent("+7 928 000-00-01", "+7 928 000-00-01") is True
@@ -42,8 +51,7 @@ class TestFindExistingClient:
             phone="+7 999 111-22-33",
             full_name="Петров Петр",
         )
-        db = MagicMock()
-        db.scalars.return_value = [existing]
+        db = _db_with(existing)
 
         found = find_existing_client(
             db,
@@ -60,8 +68,7 @@ class TestFindExistingClient:
             phone="8 (928) 000-00-01",
             full_name="Сидоров",
         )
-        db = MagicMock()
-        db.scalars.return_value = [existing]
+        db = _db_with(existing)
 
         found = find_existing_client(
             db,
@@ -71,6 +78,22 @@ class TestFindExistingClient:
         )
 
         assert found is existing
+
+    def test_loads_only_the_matching_client(self):
+        other = SimpleNamespace(id=uuid.uuid4(), phone="+7 999 000-00-09", full_name="Другой")
+        existing = SimpleNamespace(id=uuid.uuid4(), phone="+7 928 000-00-01", full_name="Сидоров")
+        db = _db_with(other, existing)
+
+        find_existing_client(
+            db,
+            organization_id=ORG_ID,
+            phone="+7 928 000-00-01",
+            full_name="Новый клиент",
+        )
+
+        db.scalars.assert_not_called()
+        db.get.assert_called_once()
+        assert db.get.call_args.args[1] == existing.id
 
     def test_skips_when_phone_incomplete(self):
         db = MagicMock()
@@ -90,7 +113,7 @@ class TestFindExistingClient:
         )
 
         assert found is None
-        db.scalars.assert_not_called()
+        db.execute.assert_not_called()
 
 
 class TestPhoneHasMinimumDigits:

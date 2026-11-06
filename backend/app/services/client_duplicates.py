@@ -66,16 +66,17 @@ def find_existing_client(
         return None
 
     normalized_name = norm_name(full_name)
-    stmt = select(Client).where(
+    # Сравниваем по лёгкой выборке и грузим целиком только совпавшего клиента.
+    stmt = select(Client.id, Client.phone, Client.full_name).where(
         Client.organization_id == organization_id,
         Client.is_deleted.is_(False),
     )
     if exclude_client_id is not None:
         stmt = stmt.where(Client.id != exclude_client_id)
 
-    for client in db.scalars(stmt):
-        if phones_equivalent(client.phone, phone):
-            return client
-        if normalized_name and norm_name(client.full_name) == normalized_name:
-            return client
+    for client_id, client_phone, client_name in db.execute(stmt):
+        if phones_equivalent(client_phone, phone) or (
+            normalized_name and norm_name(client_name) == normalized_name
+        ):
+            return db.get(Client, client_id)
     return None
