@@ -295,8 +295,21 @@ def find_existing_questionnaire_by_phone(
     return None
 
 
-def duplicate_questionnaire_payload(item: ClientQuestionnaire) -> dict[str, str]:
+def duplicate_questionnaire_payload(item: ClientQuestionnaire, user: User) -> dict[str, str]:
     title = (item.full_name or "").strip() or item.phone
+    if not manager_can_access_questionnaire(item, user):
+        # Без questionnaire_id: иначе форма уходит на чужую карточку, а там 404.
+        owner = item.assigned_manager or item.created_by
+        owner_hint = f" Он закреплён за менеджером {owner.full_name}." if owner else ""
+        return {
+            "code": "duplicate_questionnaire",
+            "message": (
+                f"Лид с этим телефоном уже есть: {title}.{owner_hint} "
+                "Повторно создавать не нужно — обратитесь к руководителю."
+            ),
+            "full_name": item.full_name or "",
+            "phone": item.phone,
+        }
     return {
         "code": "duplicate_questionnaire",
         "message": (
@@ -334,7 +347,7 @@ def create_questionnaire(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             # Агенту не раскрываем, чей это лид и как зовут клиента.
-            detail=AGENT_DUPLICATE_MESSAGE if is_agent else duplicate_questionnaire_payload(existing),
+            detail=AGENT_DUPLICATE_MESSAGE if is_agent else duplicate_questionnaire_payload(existing, user),
         )
     if is_agent and find_existing_client(
         db,

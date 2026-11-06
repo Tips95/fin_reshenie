@@ -369,6 +369,17 @@ class TestLeadPipeline:
         assert detail["code"] == "duplicate_questionnaire"
         assert detail["questionnaire_id"] == str(first.id)
 
+    def test_duplicate_of_other_manager_lead_does_not_link_to_it(self, db):
+        owner = _org_user(db, email="owner-lead@test.local")
+        other = _org_user(db, email="other-lead@test.local", organization=owner.organization)
+        create_questionnaire(db, owner, _minimal_payload(phone="+7 928 111-22-33"))
+        with pytest.raises(HTTPException) as error:
+            create_questionnaire(db, other, _minimal_payload(phone="+79281112233"))
+        assert error.value.status_code == 409
+        detail = error.value.detail
+        assert "questionnaire_id" not in detail
+        assert owner.full_name in detail["message"]
+
     def test_lead_without_phone_is_rejected(self):
         with pytest.raises(ValidationError):
             QuestionnaireCreate(full_name="Иванов Иван", phone="   ")
