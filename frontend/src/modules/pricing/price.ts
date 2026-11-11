@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/format";
+import { formatMoney, pluralRu } from "@/lib/format";
 import type { PriceList, PricingTier } from "@/lib/types";
 
 export type PriceMatch =
@@ -33,11 +33,7 @@ export function tierRangeLabel(tier: PricingTier): string {
 }
 
 export function monthsLabel(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} месяц`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} месяца`;
-  return `${count} месяцев`;
+  return pluralRu(count, ["месяц", "месяца", "месяцев"]);
 }
 
 /** Текст, который удалённый менеджер отправляет клиенту в мессенджер. */

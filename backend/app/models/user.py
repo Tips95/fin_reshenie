@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, TypeDecorator, false
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, TypeDecorator, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -55,6 +55,9 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Заметка куратора об удалённом менеджере — видна только офису.
     agent_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Последнее место агента в рейтинге месяца — чтобы сообщать «вы поднялись» / «вас обогнали».
+    rank_month: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    rank_place: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
     curator: Mapped["User | None"] = relationship(remote_side="User.id", foreign_keys=[curator_id])

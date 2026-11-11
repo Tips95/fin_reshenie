@@ -46,6 +46,7 @@ from app.schemas.questionnaire import (
     QuestionnaireUpdate,
 )
 from app.services.access import ensure_client_read_access, ensure_client_write_access
+from app.services.agent_ranking import sync_agent_ranking_for_client
 from app.services.agents import active_curator_id
 from app.services.audit import log_audit
 from app.services.client_duplicates import (
@@ -627,6 +628,7 @@ def create_client_from_questionnaire(
         title=f"{lead_title(item)} пришёл в офис",
         body="Клиент собирает документы, следующий шаг — договор",
     )
+    sync_agent_ranking_for_client(db, client)
     db.commit()
     db.refresh(client)
     try_ensure_first_payment_task_for_manager_client(db, client=client, actor=user)

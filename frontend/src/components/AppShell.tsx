@@ -30,7 +30,10 @@ const navItems = [
     icon: "▤",
     shortLabel: "Лиды",
   },
+  { href: "/agent/rating", label: "Рейтинг", icon: "★", shortLabel: "Рейтинг", roles: ["agent"] },
   { href: "/agent/price", label: "Прайс", icon: "₽", shortLabel: "Прайс", roles: ["agent"] },
+  { href: "/agent/guide", label: "Регламент", icon: "▧", shortLabel: "Регламент", roles: ["agent"] },
+  { href: "/agent/learn", label: "Обучение", icon: "✎", shortLabel: "Обучение", roles: ["agent"] },
   {
     href: "/questionnaires/stats",
     label: "Статистика лидов",
@@ -112,6 +115,9 @@ function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
   if (pathname.startsWith("/agents")) return "Удалённые менеджеры";
   if (pathname.startsWith("/agent/price")) return "Прайс";
+  if (pathname.startsWith("/agent/rating")) return "Рейтинг";
+  if (pathname.startsWith("/agent/guide")) return "Регламент";
+  if (pathname.startsWith("/agent/learn")) return "Обучение";
   if (pathname.startsWith("/agent")) return "Мой кабинет";
   if (pathname.startsWith("/questionnaires/stats")) return "Статистика лидов";
   if (pathname.startsWith("/questionnaires")) return "Лиды и анкеты";

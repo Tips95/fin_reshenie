@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { Button } from "@/components/ui";
+import { CopyButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/format";
 import type { PriceList } from "@/lib/types";
@@ -13,29 +11,6 @@ import {
   paymentSchedule,
   tierRangeLabel,
 } from "@/modules/pricing/price";
-
-function CopyForClientButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 2000);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
-
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => setCopied(true));
-      }}
-    >
-      {copied ? "Скопировано ✓" : "Скопировать для клиента"}
-    </Button>
-  );
-}
 
 /** Расчёт по прайсу для конкретной суммы долга: стоимость и помесячный график. */
 export function PriceQuote({
@@ -87,7 +62,10 @@ export function PriceQuote({
             {formatMoney(list.document_collection_total)}
           </p>
         </div>
-        <CopyForClientButton text={clientPriceMessage(tier, list.document_collection_total)} />
+        <CopyButton
+          text={clientPriceMessage(tier, list.document_collection_total)}
+          label="Скопировать для клиента"
+        />
       </div>
 
       <ol className="flex gap-1.5 overflow-x-auto pb-1" aria-label="График платежей">

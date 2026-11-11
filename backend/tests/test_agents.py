@@ -14,7 +14,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.main import app
 from app.models import Base, Client, Payment
+from app.core.time import local_today
 from app.models.enums import EngagementStage
+from app.services import agent_ranking
 from app.services.agents import AGENT_TERMS_VERSION
 
 API = settings.API_PREFIX
@@ -516,7 +518,7 @@ class TestNotifications:
         )
         api.post(f"{API}/questionnaires/{lead['id']}/create-client", headers=curator, json={})
 
-        items = _notifications(api, agent)
+        items = [item for item in _notifications(api, agent) if not item["kind"].startswith("rank_")]
         assert [item["kind"] for item in items] == ["lead_visited", "lead_appointment", "lead_reply"]
         assert items[1]["body"] == "Приём 20.11.2026"
 
@@ -524,6 +526,106 @@ class TestNotifications:
         curator = _auth(api, "manager@co.ru", "secret123")
         api.post(f"{API}/questionnaires", headers=curator, json={"phone": LEAD_PHONE})
         assert _notifications(api, curator) == []
+
+
+class TestRanking:
+    def _agent(self, api, *, phone: str, name: str, inn: str) -> dict[str, str]:
+        response = _register_agent(
+            api, phone=phone, full_name=name, inn=inn, telegram=f"@{inn}"
+        )
+        assert response.status_code == 201, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    def _visit(self, api, agent, *, phone: str, client: str = "Клиентов Клиент") -> str:
+        lead = api.post(
+            f"{API}/questionnaires",
+            headers=agent,
+            json={"phone": phone, "full_name": client, "pd_consent": True},
+        ).json()
+        manager = _auth(api, "manager@co.ru", "secret123")
+        converted = api.post(
+            f"{API}/questionnaires/{lead['id']}/create-client", headers=manager, json={}
+        )
+        assert converted.status_code == 200, converted.text
+        return converted.json()["client_id"]
+
+    def _first_payment(self, api, office, session_factory, client_id: str, day: date) -> None:
+        db = session_factory()
+        client = db.get(Client, uuid.UUID(client_id))
+        client.engagement_stage = EngagementStage.BANKRUPTCY
+        client.contract_date = day
+        db.commit()
+        db.close()
+        response = api.post(
+            f"{API}/payments",
+            headers=office["owner"],
+            json={"client_id": client_id, "amount": "15000.00", "payment_date": day.isoformat()},
+        )
+        assert response.status_code == 201, response.text
+
+    def test_points_places_and_overtake_notifications(self, api, office, session_factory):
+        first = self._agent(api, phone="+79281110001", name="Алиев Ахмед", inn="123456789001")
+        second = self._agent(api, phone="+79281110002", name="Борзов Борис", inn="123456789002")
+
+        def by_kind(headers, kind):
+            return [item for item in _notifications(api, headers) if item["kind"] == kind]
+
+        self._visit(api, first, phone="+79285550001")
+        assert by_kind(first, "rank_up")[0]["title"] == "Вы лидер рейтинга месяца!"
+
+        client_id = self._visit(api, second, phone="+79285550002", client="Другов Клиент")
+        assert by_kind(second, "rank_up")[0]["title"] == "Вы поднялись на 2 место в рейтинге"
+        self._first_payment(api, office, session_factory, client_id, local_today())
+
+        assert by_kind(second, "rank_up")[0]["title"] == "Вы лидер рейтинга месяца!"
+        overtaken = by_kind(first, "rank_down")[0]
+        assert overtaken["title"] == "Вас обогнали — теперь вы на 2 месте"
+        assert "Борис Б." in overtaken["body"] and "Борзов" not in overtaken["body"]
+
+        ranking = api.get(f"{API}/agents/ranking", headers=first).json()
+        assert [(row["name"], row["points"]) for row in ranking["entries"]] == [
+            ("Борис Б.", 6),
+            ("Ахмед А.", 1),
+        ]
+        assert ranking["me"] == {"place": 2, "points": 1, "gap_to_next": 6}
+
+    def test_best_of_month_gets_badge_and_bonus_in_payouts(
+        self, api, office, session_factory, monkeypatch
+    ):
+        agent = self._agent(api, phone="+79281110003", name="Алиев Ахмед", inn="123456789003")
+        client_id = self._visit(api, agent, phone="+79285550003")
+        self._first_payment(api, office, session_factory, client_id, date(2026, 11, 5))
+
+        monkeypatch.setattr(agent_ranking, "local_today", lambda: date(2026, 12, 3))
+        payouts = api.get(f"{API}/agents/commissions?month=2026-11", headers=office["owner"]).json()
+        assert [Decimal(award["amount"]) for award in payouts["awards"]] == [Decimal("30000")]
+        assert Decimal(payouts["to_pay_amount"]) == Decimal("35000")
+        assert any(item["kind"] == "agent_award" for item in _notifications(api, agent))
+
+        overview = api.get(f"{API}/agents/me/overview", headers=agent).json()
+        assert Decimal(overview["to_pay_total"]) == Decimal("35000")
+        ranking = api.get(f"{API}/agents/ranking?period=all", headers=agent).json()
+        assert ranking["winners"][0]["month"] == "2026-11" and ranking["winners"][0]["is_me"]
+        assert ranking["entries"][0]["wins"] == 1
+
+        award_id = payouts["awards"][0]["id"]
+        assert api.patch(
+            f"{API}/agents/awards/{award_id}", headers=agent, json={"paid": True}
+        ).status_code == 403
+        paid = api.patch(
+            f"{API}/agents/awards/{award_id}", headers=office["owner"], json={"paid": True}
+        )
+        assert paid.json()["paid"] is True
+        overview = api.get(f"{API}/agents/me/overview", headers=agent).json()
+        assert Decimal(overview["to_pay_total"]) == Decimal("5000")
+
+    def test_no_bonus_without_a_contract(self, api, office, monkeypatch):
+        agent = self._agent(api, phone="+79281110004", name="Алиев Ахмед", inn="123456789004")
+        self._visit(api, agent, phone="+79285550004")
+
+        monkeypatch.setattr(agent_ranking, "local_today", lambda: date(2026, 12, 3))
+        payouts = api.get(f"{API}/agents/commissions?month=2026-11", headers=office["owner"]).json()
+        assert payouts["awards"] == []
 
 
 class TestAgentPayouts:

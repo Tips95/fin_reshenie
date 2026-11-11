@@ -101,6 +101,19 @@ export function effectiveDueDate(item: {
   return item.deferred_until || item.due_date;
 }
 
+/** pluralRu(5, ["балл", "балла", "баллов"]) → «5 баллов». */
+export function pluralRu(count: number, [one, few, many]: [string, string, string]): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? one
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? few
+        : many;
+  return `${count} ${word}`;
+}
+
 export function formatMonthLabel(value: string): string {
   const date = new Date(value.length === 7 ? `${value}-01` : value);
   return new Intl.DateTimeFormat("ru-RU", {

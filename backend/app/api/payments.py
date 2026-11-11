@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_owner
 from app.core.database import get_db
+from app.models.client import Client
 from app.models.enums import AuditAction, UserRole
 from app.models.payment import Payment
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentUpdate
 from app.services.access import ensure_client_read_access, ensure_client_write_access
+from app.services.agent_ranking import sync_agent_ranking_for_client
 from app.services.audit import log_audit
 from app.services.payment_sync import sync_client_payment_schedules
 
@@ -33,16 +35,12 @@ def list_payments(
         ensure_client_read_access(db, current_user, client_id)
         stmt = stmt.where(Payment.client_id == client_id)
     elif current_user.role == UserRole.MANAGER:
-        from app.models.client import Client
-
         stmt = stmt.join(Client, Client.id == Payment.client_id).where(
             Client.organization_id == current_user.organization_id,
             Client.assigned_manager_id == current_user.id,
             Client.is_deleted.is_(False),
         )
     else:
-        from app.models.client import Client
-
         stmt = stmt.join(Client, Client.id == Payment.client_id).where(
             Client.organization_id == current_user.organization_id,
             Client.is_deleted.is_(False),
@@ -97,6 +95,9 @@ def create_payment(
             payload.client_id,
             completed_by=current_user.id,
         )
+    client = db.get(Client, payload.client_id)
+    if client is not None:
+        sync_agent_ranking_for_client(db, client)
 
     log_audit(
         db,

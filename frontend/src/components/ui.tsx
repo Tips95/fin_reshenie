@@ -91,6 +91,37 @@ export function Button({
   );
 }
 
+export function CopyButton({
+  text,
+  label = "Скопировать",
+  size = "sm",
+}: {
+  text: string;
+  label?: string;
+  size?: "sm" | "md";
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size={size}
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => setCopied(true));
+      }}
+    >
+      {copied ? "Скопировано ✓" : label}
+    </Button>
+  );
+}
+
 export function ActionMenu({
   label = "Действия",
   children,

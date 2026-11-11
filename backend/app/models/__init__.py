@@ -1,3 +1,4 @@
+from app.models.agent_award import AgentAward
 from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.cash_balance import CashBalance
@@ -25,6 +26,7 @@ from app.models.user import User
 from app.models.installment_plan import InstallmentPlan
 
 __all__ = [
+    "AgentAward",
     "AuditLog",
     "Base",
     "CashBalance",

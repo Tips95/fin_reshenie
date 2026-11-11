@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -101,12 +102,30 @@ export default function AgentCabinetPage() {
         </Card>
 
         <Card>
-          <SectionTitle title="Как это работает" />
+          <SectionTitle
+            title="Как это работает"
+            action={
+              <Link href="/agent/guide" className="link-brand text-sm">
+                Регламент →
+              </Link>
+            }
+          />
           <ol className="list-decimal space-y-1.5 pl-5 text-sm text-foreground">
             {STEPS.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
+          <p className="mt-2 text-xs text-muted">
+            Где искать клиентов, готовые тексты для WhatsApp и Авито, ответы на возражения — в{" "}
+            <Link href="/agent/guide" className="link-brand">
+              регламенте
+            </Link>
+            . Как устроено банкротство простыми словами — в{" "}
+            <Link href="/agent/learn" className="link-brand">
+              обучении
+            </Link>
+            .
+          </p>
         </Card>
       </div>
 

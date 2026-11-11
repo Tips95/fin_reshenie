@@ -198,6 +198,20 @@ class AgentCommissionAgentRow(BaseModel):
     clients: list[AgentCommissionClientItem]
 
 
+class AgentAwardItem(BaseModel):
+    """Премия «Лучший месяца» в выплатах агентам."""
+
+    id: UUID
+    month: str
+    agent_id: UUID
+    agent_name: str
+    inn: str | None
+    points: int
+    amount: Decimal
+    paid: bool
+    paid_at: datetime | None = None
+
+
 class AgentCommissionsOverview(BaseModel):
     month: str
     commission_per_client: Decimal
@@ -207,6 +221,49 @@ class AgentCommissionsOverview(BaseModel):
     paid_amount: Decimal
     outstanding_to_pay_amount: Decimal
     agents: list[AgentCommissionAgentRow]
+    awards: list[AgentAwardItem] = []
+
+
+class AgentAwardPaidUpdate(BaseModel):
+    paid: bool
+
+
+RankingPeriod = Literal["month", "all"]
+
+
+class AgentRankingEntry(BaseModel):
+    place: int
+    name: str
+    points: int
+    visits: int
+    contracts: int
+    wins: int
+    is_me: bool
+
+
+class AgentRankingMe(BaseModel):
+    place: int | None
+    points: int
+    gap_to_next: int | None
+
+
+class AgentAwardWinner(BaseModel):
+    month: str
+    name: str
+    points: int
+    is_me: bool
+
+
+class AgentRanking(BaseModel):
+    period: RankingPeriod
+    month: str
+    points_visit: int
+    points_contract: int
+    bonus_amount: Decimal
+    bonus_min_contracts: int
+    entries: list[AgentRankingEntry]
+    me: AgentRankingMe | None
+    winners: list[AgentAwardWinner]
 
 
 class AgentCommissionBulkUpdate(BaseModel):

@@ -40,12 +40,24 @@ export function AgentPayouts({ month }: { month: string }) {
     }
   }
 
+  async function markAward(id: string, paid: boolean) {
+    setBusyKey(id);
+    try {
+      await agentsApi.setAwardPaid(id, paid);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось отметить премию");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   return (
     <Panel
       id="agent-payouts"
       dot="brand"
       title={`Удалённые менеджеры · ${formatMonthLabel(month)}`}
-      description="5 000 ₽ за клиента, который заключил договор и внёс первый платёж в этом месяце. Выплата по ИНН самозанятого."
+      description="5 000 ₽ за клиента, который заключил договор и внёс первый платёж в этом месяце, и премия лучшему по рейтингу. Выплата по ИНН самозанятого."
     >
       {error ? <p className="alert-danger mb-2">{error}</p> : null}
       {data ? (
@@ -60,6 +72,33 @@ export function AgentPayouts({ month }: { month: string }) {
             <Metric label="Выплачено" value={formatMoney(data.paid_amount)} tone="success" />
             <Metric label="Начислено за месяц" value={formatMoney(data.total_amount)} />
           </MetricStrip>
+          {data.awards.map((award) => (
+            <div
+              key={award.id}
+              className="mb-2 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-muted px-3.5 py-2.5"
+            >
+              <span aria-hidden className="text-2xl">🏆</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">
+                  Лучший месяца: {award.agent_name} · {formatMoney(award.amount)}
+                </p>
+                <p className="text-xs text-muted">
+                  Премия за 1-е место в рейтинге ({award.points} б.) · ИНН {award.inn || "не указан"}
+                  {award.paid && award.paid_at ? ` · выплачено ${formatDate(award.paid_at)}` : ""}
+                </p>
+              </div>
+              <Badge tone={award.paid ? "success" : "warning"}>{award.paid ? "Выплачено" : "К выдаче"}</Badge>
+              <Button
+                type="button"
+                size="sm"
+                variant={award.paid ? "ghost" : "secondary"}
+                disabled={busyKey === award.id}
+                onClick={() => void markAward(award.id, !award.paid)}
+              >
+                {busyKey === award.id ? "…" : award.paid ? "Снять" : "Выплатить"}
+              </Button>
+            </div>
+          ))}
           {data.agents.length === 0 ? (
             <EmptyState>В этом месяце клиенты от удалённых менеджеров не вносили первый платёж</EmptyState>
           ) : (

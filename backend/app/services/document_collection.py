@@ -23,6 +23,7 @@ from app.schemas.document_collection import (
     ManagerCommissionItem,
     ManagerCommissionsOverview,
 )
+from app.services.agent_ranking import sync_agent_ranking_for_client
 from app.services.mandatory_payments import create_default_mandatory_payments
 from app.services.notifications import notify
 
@@ -193,6 +194,7 @@ def convert_client_to_bankruptcy(
 
     db.add_all(create_default_mandatory_payments(client.id))
     _notify_agent_about_contract(db, client)
+    sync_agent_ranking_for_client(db, client)
     return client
 
 

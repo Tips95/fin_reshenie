@@ -827,6 +827,43 @@ export interface AgentCommissionsOverview {
   paid_amount: string;
   outstanding_to_pay_amount: string;
   agents: AgentCommissionAgentRow[];
+  awards: AgentAwardItem[];
+}
+
+export interface AgentAwardItem {
+  id: string;
+  month: string;
+  agent_id: string;
+  agent_name: string;
+  inn: string | null;
+  points: number;
+  amount: string;
+  paid: boolean;
+  paid_at: string | null;
+}
+
+export type RankingPeriod = "month" | "all";
+
+export interface AgentRankingEntry {
+  place: number;
+  name: string;
+  points: number;
+  visits: number;
+  contracts: number;
+  wins: number;
+  is_me: boolean;
+}
+
+export interface AgentRanking {
+  period: RankingPeriod;
+  month: string;
+  points_visit: number;
+  points_contract: number;
+  bonus_amount: string;
+  bonus_min_contracts: number;
+  entries: AgentRankingEntry[];
+  me: { place: number | null; points: number; gap_to_next: number | null } | null;
+  winners: { month: string; name: string; points: number; is_me: boolean }[];
 }
 
 export type CivilCaseStage = "intake" | "documents" | "submitted" | "completed";

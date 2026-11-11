@@ -40,6 +40,12 @@ from app.schemas.agent import (
     AgentResponse,
 )
 from app.services.accounts import assert_contacts_available, parse_login
+from app.services.agent_ranking import (
+    award_totals,
+    earned_clients_stmt,
+    month_award_items,
+    unpaid_awards_total,
+)
 from app.services.audit import log_audit
 from app.services.manager_first_commissions import (
     contract_client_filters,
@@ -297,20 +303,6 @@ def active_curator_id(agent: User) -> UUID | None:
 # --- Списки и кабинет ---------------------------------------------------------
 
 
-def _earned_clients_stmt(organization_id: UUID):
-    """Клиенты агентов с первым платежом: за них выплата уже заработана."""
-    first_paid = first_payment_dates_subquery()
-    return first_paid, (
-        select(Client, first_paid.c.first_payment_date)
-        .join(first_paid, first_paid.c.client_id == Client.id)
-        .where(
-            *contract_client_filters(organization_id),
-            Client.source_agent_id.is_not(None),
-            first_paid.c.first_payment_date >= MANAGER_FIRST_COMMISSION_SINCE,
-        )
-    )
-
-
 def list_agents(db: Session, owner: User, *, agent_id: UUID | None = None) -> list[AgentResponse]:
     stmt = (
         select(User)
@@ -349,13 +341,18 @@ def list_agents(db: Session, owner: User, *, agent_id: UUID | None = None) -> li
     )
     earned: dict[UUID, Decimal] = defaultdict(lambda: Decimal("0.00"))
     paid: dict[UUID, Decimal] = defaultdict(lambda: Decimal("0.00"))
-    _, earned_stmt = _earned_clients_stmt(owner.organization_id)
+    _, earned_stmt = earned_clients_stmt(owner.organization_id)
     for client, _first_payment_date in db.execute(
         earned_stmt.where(Client.source_agent_id.in_(agent_ids))
     ):
         earned[client.source_agent_id] += AGENT_COMMISSION
         if client.agent_commission_collected:
             paid[client.source_agent_id] += AGENT_COMMISSION
+    for agent_id, (award_earned, award_paid) in award_totals(
+        db, owner.organization_id, agent_ids
+    ).items():
+        earned[agent_id] += award_earned
+        paid[agent_id] += award_paid
 
     return [
         AgentResponse(
@@ -462,6 +459,12 @@ def get_agent_overview(db: Session, agent: User) -> AgentOverview:
             )
         )
 
+    award_earned, award_paid = award_totals(db, agent.organization_id, [agent.id]).get(
+        agent.id, (Decimal("0.00"), Decimal("0.00"))
+    )
+    earned_total += award_earned
+    paid_total += award_paid
+
     return AgentOverview(
         curator=(
             AgentCuratorContact(
@@ -489,7 +492,8 @@ def get_agent_overview(db: Session, agent: User) -> AgentOverview:
 
 def get_agent_commissions_overview(db: Session, owner: User, *, month: str) -> AgentCommissionsOverview:
     start, end = month_bounds(month)
-    first_paid, stmt = _earned_clients_stmt(owner.organization_id)
+    awards = month_award_items(db, owner.organization_id, month)
+    first_paid, stmt = earned_clients_stmt(owner.organization_id)
     rows = list(
         db.execute(
             stmt.options(joinedload(Client.source_agent))
@@ -553,6 +557,12 @@ def get_agent_commissions_overview(db: Session, owner: User, *, month: str) -> A
             )
         )
     result_rows.sort(key=lambda row: (-float(row.to_pay_amount), row.agent_name.casefold()))
+    for award in awards:
+        total += award.amount
+        if award.paid:
+            paid += award.amount
+        else:
+            to_pay += award.amount
 
     return AgentCommissionsOverview(
         month=month,
@@ -561,8 +571,10 @@ def get_agent_commissions_overview(db: Session, owner: User, *, month: str) -> A
         total_amount=total,
         to_pay_amount=to_pay,
         paid_amount=paid,
-        outstanding_to_pay_amount=AGENT_COMMISSION * outstanding_count,
+        outstanding_to_pay_amount=AGENT_COMMISSION * outstanding_count
+        + unpaid_awards_total(db, owner.organization_id),
         agents=result_rows,
+        awards=awards,
     )
 
 

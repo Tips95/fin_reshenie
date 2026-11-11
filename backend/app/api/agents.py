@@ -10,6 +10,8 @@ from app.models.document_collection import DOCUMENT_COLLECTION_TOTAL
 from app.models.user import User
 from app.schemas.agent import (
     AgentActiveUpdate,
+    AgentAwardItem,
+    AgentAwardPaidUpdate,
     AgentCommissionBulkResult,
     AgentCommissionBulkUpdate,
     AgentCommissionsOverview,
@@ -18,11 +20,14 @@ from app.schemas.agent import (
     AgentDetail,
     AgentNoteUpdate,
     AgentOverview,
+    AgentRanking,
     AgentResponse,
     AgentSignupSettings,
+    RankingPeriod,
 )
 from app.schemas.pricing_tier import PriceListResponse
 from app.services.access import list_current_pricing_tiers
+from app.services.agent_ranking import get_agent_ranking, month_award_items, set_award_paid
 from app.services.agents import (
     get_agent_commissions_overview,
     get_agent_overview,
@@ -64,6 +69,30 @@ def get_price_list(
         tiers=list_current_pricing_tiers(
             db, organization_id=current_user.organization_id, today=local_today()
         ),
+    )
+
+
+@router.get("/ranking", response_model=AgentRanking)
+def get_ranking(
+    period: RankingPeriod = Query(default="month"),
+    current_user: User = Depends(require_lead_user),
+    db: Session = Depends(get_db),
+) -> AgentRanking:
+    return get_agent_ranking(db, current_user, period)
+
+
+@router.patch("/awards/{award_id}", response_model=AgentAwardItem)
+def patch_award(
+    award_id: UUID,
+    payload: AgentAwardPaidUpdate,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> AgentAwardItem:
+    award = set_award_paid(db, current_user, award_id, payload.paid)
+    return next(
+        item
+        for item in month_award_items(db, current_user.organization_id, award.month)
+        if item.id == award.id
     )
 
 
