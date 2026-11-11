@@ -42,6 +42,7 @@ def _user_response(user: User) -> UserResponse:
         email=user.email,
         role=user.role,
         is_active=user.is_active,
+        is_agent_curator=user.is_agent_curator,
     )
 
 

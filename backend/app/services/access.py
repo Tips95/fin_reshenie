@@ -115,6 +115,25 @@ def _pricing_tier_lookup_stmt(
     )
 
 
+def list_current_pricing_tiers(db: Session, *, organization_id: UUID, today: date) -> list[PricingTier]:
+    """Прайс на сегодня: по каждому диапазону — последняя вступившая в силу версия."""
+    _ensure_default_pricing_tiers(db, organization_id)
+    tiers = db.scalars(
+        select(PricingTier)
+        .where(
+            PricingTier.organization_id == organization_id,
+            PricingTier.is_active.is_(True),
+            PricingTier.min_amount >= MIN_DEBT_AMOUNT,
+            PricingTier.effective_from <= today,
+        )
+        .order_by(PricingTier.min_amount, PricingTier.max_amount, PricingTier.effective_from.desc())
+    )
+    current: dict[tuple[Decimal, Decimal], PricingTier] = {}
+    for tier in tiers:
+        current.setdefault((tier.min_amount, tier.max_amount), tier)
+    return list(current.values())
+
+
 def _ensure_default_pricing_tiers(db: Session, organization_id: UUID) -> None:
     active_count = db.scalar(
         select(func.count())

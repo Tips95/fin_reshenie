@@ -76,6 +76,7 @@ export interface User {
   email: string | null;
   role: UserRole;
   is_active: boolean;
+  is_agent_curator?: boolean;
   telegram?: string | null;
   created_at?: string;
 }
@@ -170,6 +171,12 @@ export interface PricingTier {
   total_months: number;
   is_active: boolean;
   effective_from: string;
+}
+
+export interface PriceList {
+  min_debt_amount: string;
+  document_collection_total: string;
+  tiers: PricingTier[];
 }
 
 export interface InstallmentPlan {
@@ -714,10 +721,38 @@ export interface AgentInfo {
   created_at: string;
   terms_accepted_at: string | null;
   terms_version: string | null;
+  agent_note: string | null;
   leads_total: number;
   contracts_total: number;
   earned_total: string;
   paid_total: string;
+}
+
+export interface AgentCuratorOption {
+  id: string;
+  full_name: string;
+  role: UserRole;
+}
+
+export interface AgentDetail {
+  agent: AgentInfo;
+  overview: AgentOverview;
+}
+
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  actor_name: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface AppNotificationList {
+  items: AppNotification[];
+  unread_count: number;
 }
 
 export type AgentLeadStage =

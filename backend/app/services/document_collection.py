@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.client import Client
+from app.models.client_questionnaire import ClientQuestionnaire
 from app.models.document_collection import (
     DOCUMENT_COLLECTION_FEE,
     DOCUMENT_COLLECTION_MANAGER_COMMISSION,
@@ -23,6 +24,7 @@ from app.schemas.document_collection import (
     ManagerCommissionsOverview,
 )
 from app.services.mandatory_payments import create_default_mandatory_payments
+from app.services.notifications import notify
 
 
 def create_document_collection(db: Session, client_id: UUID) -> DocumentCollection:
@@ -190,7 +192,26 @@ def convert_client_to_bankruptcy(
     client.procedure_stage = ProcedureStage.CONTRACT_SIGNED
 
     db.add_all(create_default_mandatory_payments(client.id))
+    _notify_agent_about_contract(db, client)
     return client
+
+
+def _notify_agent_about_contract(db: Session, client: Client) -> None:
+    if client.source_agent_id is None:
+        return
+    questionnaire_id = db.scalar(
+        select(ClientQuestionnaire.id).where(ClientQuestionnaire.client_id == client.id).limit(1)
+    )
+    notify(
+        db,
+        recipient_ids=(client.source_agent_id,),
+        organization_id=client.organization_id,
+        kind="lead_contract",
+        title=f"Договор с клиентом {client.full_name}",
+        body="Вознаграждение начислится после первого платежа клиента",
+        link=f"/questionnaires/{questionnaire_id}" if questionnaire_id else "/agent",
+        questionnaire_id=questionnaire_id,
+    )
 
 
 def revert_client_to_document_collection(db: Session, client: Client) -> Client:

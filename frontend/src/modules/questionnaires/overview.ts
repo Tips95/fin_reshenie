@@ -43,6 +43,7 @@ export function buildLeadOverview(form: QuestionnaireFormValue) {
 
   return {
     creditorsCount: activeDebts.length,
+    debtTotal,
     debtTotalLabel: debtTotal > 0 ? formatMoney(debtTotal) : activeDebts.length ? "—" : "Не указано",
     incomeLabel: incomeAmount != null ? formatMoney(incomeAmount) : displayOrUnset(form.income_debtor),
     dependentsLabel: displayOrUnset(form.dependents),

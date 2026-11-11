@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -15,30 +13,16 @@ import {
   StatCard,
 } from "@/components/ui";
 import { ApiRequestError, agentsApi } from "@/lib/api-client";
-import { formatDate, formatMoney } from "@/lib/format";
-import { formatPhoneDisplay, phoneToTelHref } from "@/lib/phone";
-import type { AgentLeadStage, AgentOverview } from "@/lib/types";
-
-const STAGES: Record<AgentLeadStage, { label: string; tone: "default" | "success" | "warning" | "danger" }> = {
-  new: { label: "В работе у офиса", tone: "default" },
-  appointment: { label: "Записан в офис", tone: "warning" },
-  unqualified: { label: "Не подошёл", tone: "danger" },
-  visited: { label: "Пришёл, собирает документы", tone: "warning" },
-  contract: { label: "Договор, ждём первый платёж", tone: "warning" },
-  earned: { label: "Платёж внесён — к выплате", tone: "success" },
-  paid_out: { label: "Выплачено", tone: "success" },
-  cancelled: { label: "Договор расторгнут", tone: "danger" },
-};
+import { formatMoney } from "@/lib/format";
+import { formatPhoneDisplay, phoneToTelHref, telegramHref } from "@/lib/phone";
+import type { AgentOverview } from "@/lib/types";
+import { AgentLeadsTable } from "@/modules/agents/AgentLeadsTable";
 
 const STEPS = [
   "Заведите клиента и заполните анкету — с его согласия на передачу данных.",
   "Запишите на приём в офис: куратор увидит лида и подготовится к встрече.",
   "Офис заключает договор. После первого платежа клиента вам начисляется вознаграждение.",
 ];
-
-function telegramHref(value: string): string {
-  return `https://t.me/${value.replace(/^@/, "")}`;
-}
 
 export default function AgentCabinetPage() {
   const router = useRouter();
@@ -66,9 +50,14 @@ export default function AgentCabinetPage() {
         title="Мой кабинет"
         subtitle={`Вознаграждение — ${formatMoney(data.commission_per_client)} за клиента, который заключил договор и внёс первый платёж`}
         action={
-          <Button type="button" onClick={() => router.push("/questionnaires/new")}>
-            Новый клиент
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => router.push("/agent/price")}>
+              Прайс и расчёт
+            </Button>
+            <Button type="button" onClick={() => router.push("/questionnaires/new")}>
+              Новый клиент
+            </Button>
+          </div>
         }
       />
 
@@ -143,46 +132,7 @@ export default function AgentCabinetPage() {
             Вы ещё не привели ни одного клиента
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table table-cards">
-              <thead>
-                <tr>
-                  <th>Клиент</th>
-                  <th>Этап</th>
-                  <th>Приём</th>
-                  <th>Первый платёж</th>
-                  <th>Вознаграждение</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.leads.map((row) => {
-                  const stage = STAGES[row.stage];
-                  return (
-                    <tr key={row.questionnaire_id}>
-                      <td data-label="Клиент">
-                        <Link href={`/questionnaires/${row.questionnaire_id}`} className="font-medium text-brand-700">
-                          {row.full_name.trim() || formatPhoneDisplay(row.phone)}
-                        </Link>
-                        <p className="text-xs text-muted">{formatPhoneDisplay(row.phone)}</p>
-                      </td>
-                      <td data-label="Этап">
-                        <Badge tone={stage.tone}>{stage.label}</Badge>
-                      </td>
-                      <td data-label="Приём" className="text-muted">
-                        {row.appointment_at ? formatDate(row.appointment_at) : "—"}
-                      </td>
-                      <td data-label="Первый платёж" className="text-muted">
-                        {row.first_payment_date ? formatDate(row.first_payment_date) : "—"}
-                      </td>
-                      <td data-label="Вознаграждение" className="font-semibold tabular-nums">
-                        {row.commission_amount ? formatMoney(row.commission_amount) : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <AgentLeadsTable leads={data.leads} />
         )}
       </Card>
     </div>

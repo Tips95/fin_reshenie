@@ -16,6 +16,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=6, max_length=128)
     role: UserRole
     is_active: bool = True
+    is_agent_curator: bool = False
 
     @field_validator("full_name")
     @classmethod
@@ -41,6 +42,7 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=6, max_length=128)
     role: UserRole | None = None
     is_active: bool | None = None
+    is_agent_curator: bool | None = None
 
     @field_validator("telegram")
     @classmethod
@@ -72,4 +74,5 @@ class UserResponse(BaseModel):
     telegram: str | None = None
     role: UserRole
     is_active: bool
+    is_agent_curator: bool = False
     created_at: datetime

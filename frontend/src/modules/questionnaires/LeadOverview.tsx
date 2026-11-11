@@ -1,5 +1,11 @@
 "use client";
 
+import Link from "next/link";
+
+import { isRemoteAgent } from "@/lib/organization-features";
+import { useAuth } from "@/modules/auth/AuthProvider";
+import { PriceQuote } from "@/modules/pricing/PriceQuote";
+import { usePriceList } from "@/modules/pricing/usePriceList";
 import { MetricTile, SectionCard } from "@/modules/questionnaires/form-ui";
 import { buildLeadOverview } from "@/modules/questionnaires/overview";
 import type { QuestionnaireFormValue } from "@/modules/questionnaires/defaults";
@@ -15,6 +21,8 @@ export function LeadOverview({
   form: QuestionnaireFormValue;
 }) {
   const metrics = buildLeadOverview(form);
+  const { user } = useAuth();
+  const { data: priceList } = usePriceList();
 
   return (
     <SectionCard
@@ -49,6 +57,20 @@ export function LeadOverview({
           hint="Зарегистрированный брак"
         />
       </div>
+
+      {priceList && metrics.debtTotal > 0 ? (
+        <div className="mt-4 rounded-xl border border-border px-4 py-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-foreground">По прайсу</p>
+            {isRemoteAgent(user) ? (
+              <Link href={`/agent/price?debt=${Math.round(metrics.debtTotal)}`} className="link-brand text-xs">
+                Открыть прайс
+              </Link>
+            ) : null}
+          </div>
+          <PriceQuote list={priceList} debt={metrics.debtTotal} compact />
+        </div>
+      ) : null}
     </SectionCard>
   );
 }

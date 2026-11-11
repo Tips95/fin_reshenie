@@ -66,3 +66,11 @@ class PricingTierResponse(BaseModel):
     total_months: int
     is_active: bool
     effective_from: date
+
+
+class PriceListResponse(BaseModel):
+    """Прайс для удалённых менеджеров и офиса: только то, что можно назвать клиенту."""
+
+    min_debt_amount: Decimal
+    document_collection_total: Decimal
+    tiers: list[PricingTierResponse]

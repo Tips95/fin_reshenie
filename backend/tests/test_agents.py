@@ -1,6 +1,8 @@
+import importlib.util
 import uuid
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -73,6 +75,7 @@ def office(api):
             "telegram": "petrov_office",
             "password": "secret123",
             "role": "manager",
+            "is_agent_curator": True,
         },
     ).json()
     opened = api.put(f"{API}/agents/signup", headers=owner, json={"open": True})
@@ -149,7 +152,7 @@ class TestRegistration:
         assert agent["terms_version"] == AGENT_TERMS_VERSION
         assert agent["terms_accepted_at"] is not None
 
-    def test_curator_is_least_loaded_manager(self, api, office):
+    def test_curator_is_least_loaded_of_marked_curators(self, api, office):
         second = api.post(
             f"{API}/users",
             headers=office["owner"],
@@ -158,12 +161,43 @@ class TestRegistration:
                 "email": "manager2@co.ru",
                 "password": "secret123",
                 "role": "manager",
+                "is_agent_curator": True,
             },
         ).json()
+        _second_manager(api, office, email="plain@co.ru")
         _register_agent(api)
         _register_agent(api, phone="+79281112234")
-        curators = {item["curator_id"] for item in api.get(f"{API}/agents", headers=office["owner"]).json()}
-        assert curators == {office["manager_id"], second["id"]}
+        _register_agent(api, phone="+79281112235")
+        curators = [item["curator_id"] for item in api.get(f"{API}/agents", headers=office["owner"]).json()]
+        assert set(curators) == {office["manager_id"], second["id"]}
+
+    def test_only_marked_staff_can_be_curator(self, api, office):
+        agent_id, _ = _approved_agent(api, office)
+        plain = api.post(
+            f"{API}/users",
+            headers=office["owner"],
+            json={"full_name": "Простов Прост", "email": "p@co.ru", "password": "secret123", "role": "manager"},
+        ).json()
+        response = api.patch(
+            f"{API}/agents/{agent_id}/curator", headers=office["owner"], json={"curator_id": plain["id"]}
+        )
+        assert response.status_code == 422
+        names = [item["full_name"] for item in api.get(f"{API}/agents/curators", headers=office["owner"]).json()]
+        assert names == ["Петров Пётр"]
+
+    def test_curator_flag_needs_office_role(self, api, office):
+        response = api.post(
+            f"{API}/users",
+            headers=office["owner"],
+            json={
+                "full_name": "Сборов Сбор",
+                "email": "c@co.ru",
+                "password": "secret123",
+                "role": "call_center",
+                "is_agent_curator": True,
+            },
+        )
+        assert response.status_code == 422
 
     def test_disabled_agent_gets_clear_login_message(self, api, office):
         _register_agent(api)
@@ -194,6 +228,40 @@ class TestAgentAccess:
         _, agent = _approved_agent(api, office)
         for path in ("/clients", "/dashboard/summary", "/payments", "/users"):
             assert api.get(f"{API}{path}", headers=agent).status_code == 403, path
+
+    def test_agent_reads_price_list_but_cannot_edit_tiers(self, api, office):
+        _, agent = _approved_agent(api, office)
+        price = api.get(f"{API}/agents/price-list", headers=agent).json()
+        assert price["document_collection_total"] == "13000.00"
+        mins = [Decimal(tier["min_amount"]) for tier in price["tiers"]]
+        assert mins and mins == sorted(mins) and mins[0] == Decimal("300000")
+
+        assert api.get(f"{API}/pricing-tiers", headers=agent).status_code == 403
+        tier = price["tiers"][0]
+        response = api.post(f"{API}/pricing-tiers", headers=agent, json=tier)
+        assert response.status_code == 403
+
+    def test_price_list_shows_only_current_tier_version(self, api, office):
+        _, agent = _approved_agent(api, office)
+        old = api.get(f"{API}/agents/price-list", headers=agent).json()["tiers"]
+        first = old[0]
+        api.post(
+            f"{API}/pricing-tiers",
+            headers=office["owner"],
+            json={
+                **{key: first[key] for key in (
+                    "min_amount", "max_amount", "first_month_payment",
+                    "second_month_payment", "remaining_months_count", "total_months",
+                )},
+                "total_cost": "155000.00",
+                "remaining_month_payment": "19000.00",
+                "effective_from": date.today().isoformat(),
+            },
+        ).raise_for_status()
+
+        tiers = api.get(f"{API}/agents/price-list", headers=agent).json()["tiers"]
+        assert len(tiers) == len(old)
+        assert tiers[0]["total_cost"] == "155000.00"
 
     def test_lead_requires_personal_data_consent(self, api, office):
         _, agent = _approved_agent(api, office)
@@ -275,6 +343,187 @@ class TestAgentAccess:
             json={"body": "Приводите, разберём в офисе"},
         ).json()
         assert [c["author_role"] for c in updated["comments"]] == ["agent", "manager"]
+
+
+def _second_manager(
+    api: TestClient, office: dict, *, email: str = "manager2@co.ru", curator: bool = False
+) -> dict[str, str]:
+    api.post(
+        f"{API}/users",
+        headers=office["owner"],
+        json={
+            "full_name": "Сидоров Сидор",
+            "email": email,
+            "password": "secret123",
+            "role": "manager",
+            "is_agent_curator": curator,
+        },
+    )
+    return _auth(api, email, "secret123")
+
+
+def _notifications(api: TestClient, headers: dict[str, str]) -> list[dict]:
+    return api.get(f"{API}/notifications", headers=headers).json()["items"]
+
+
+def test_migration_marks_the_three_approved_curators():
+    path = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "r9i0j1k2l56_add_notifications.py"
+    spec = importlib.util.spec_from_file_location("curators_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for name in ("Ииев Ризван", "Юнусов Магомед Русланович", "ДЕРБИШЕВ РУСТАМ", "Рустам Дербишев"):
+        assert module._is_listed_curator(name), name
+    for name in ("Ииев Ахмед", "Магомедов Магомед", "Петров Пётр"):
+        assert not module._is_listed_curator(name), name
+
+
+class TestAgentSection:
+    def test_regular_manager_sees_no_agents(self, api, office):
+        agent_id, _ = _approved_agent(api, office)
+        curator = _auth(api, "manager@co.ru", "secret123")
+        other = _second_manager(api, office)
+
+        assert [item["id"] for item in api.get(f"{API}/agents", headers=curator).json()] == [agent_id]
+        assert api.get(f"{API}/agents", headers=other).json() == []
+        assert api.get(f"{API}/agents/{agent_id}", headers=other).status_code == 404
+
+    def test_every_curator_sees_every_agent_and_their_leads(self, api, office):
+        agent_id, agent = _approved_agent(api, office)
+        lead = api.post(
+            f"{API}/questionnaires",
+            headers=agent,
+            json={"phone": LEAD_PHONE, "pd_consent": True},
+        ).json()
+        other_curator = _second_manager(api, office, curator=True)
+
+        assert [item["id"] for item in api.get(f"{API}/agents", headers=other_curator).json()] == [agent_id]
+        assert api.get(f"{API}/agents/{agent_id}", headers=other_curator).status_code == 200
+        assert api.get(f"{API}/questionnaires/{lead['id']}", headers=other_curator).status_code == 200
+        listed = api.get(f"{API}/questionnaires", headers=other_curator).json()
+        assert [item["id"] for item in listed] == [lead["id"]]
+
+    def test_agent_card_has_stats_leads_and_note(self, api, office):
+        agent_id, agent = _approved_agent(api, office)
+        api.post(
+            f"{API}/questionnaires",
+            headers=agent,
+            json={"phone": LEAD_PHONE, "full_name": "Клиентов Клиент", "pd_consent": True},
+        )
+        curator = _auth(api, "manager@co.ru", "secret123")
+        noted = api.patch(
+            f"{API}/agents/{agent_id}/note", headers=curator, json={"note": "  Работает по Грозному "}
+        )
+        assert noted.json()["agent_note"] == "Работает по Грозному"
+
+        card = api.get(f"{API}/agents/{agent_id}", headers=curator).json()
+        assert card["agent"]["leads_total"] == 1
+        assert card["agent"]["agent_note"] == "Работает по Грозному"
+        assert [row["full_name"] for row in card["overview"]["leads"]] == ["Клиентов Клиент"]
+
+    def test_only_admins_change_curator_or_disable(self, api, office):
+        agent_id, _ = _approved_agent(api, office)
+        curator = _auth(api, "manager@co.ru", "secret123")
+        assert api.patch(
+            f"{API}/agents/{agent_id}/active", headers=curator, json={"is_active": False}
+        ).status_code == 403
+        assert api.patch(
+            f"{API}/agents/{agent_id}/curator", headers=curator, json={"curator_id": None}
+        ).status_code == 403
+
+        disabled = api.patch(
+            f"{API}/agents/{agent_id}/active", headers=office["owner"], json={"is_active": False}
+        )
+        assert disabled.json()["is_active"] is False
+
+    def test_agent_cannot_open_section(self, api, office):
+        _, agent = _approved_agent(api, office)
+        assert api.get(f"{API}/agents", headers=agent).status_code == 403
+        assert api.get(f"{API}/agents/curators", headers=agent).status_code == 403
+
+
+class TestNotifications:
+    def test_curator_is_notified_about_new_agent(self, api, office):
+        agent_id, _ = _approved_agent(api, office)
+        curator = _auth(api, "manager@co.ru", "secret123")
+        items = _notifications(api, curator)
+        assert [item["kind"] for item in items] == ["agent_assigned"]
+        assert items[0]["link"] == f"/agents/{agent_id}"
+
+    def test_reassigning_notifies_new_curator(self, api, office):
+        agent_id, _ = _approved_agent(api, office)
+        other = _second_manager(api, office, curator=True)
+        other_id = next(
+            item["id"]
+            for item in api.get(f"{API}/agents/curators", headers=office["owner"]).json()
+            if item["full_name"] == "Сидоров Сидор"
+        )
+        api.patch(f"{API}/agents/{agent_id}/curator", headers=office["owner"], json={"curator_id": other_id})
+        assert [item["kind"] for item in _notifications(api, other)] == ["agent_assigned"]
+
+    def test_curator_gets_lead_edits_and_questions(self, api, office):
+        _, agent = _approved_agent(api, office)
+        curator = _auth(api, "manager@co.ru", "secret123")
+        api.post(f"{API}/notifications/read", headers=curator, json={})
+        lead = api.post(
+            f"{API}/questionnaires",
+            headers=agent,
+            json={"phone": LEAD_PHONE, "full_name": "Клиентов Клиент", "pd_consent": True},
+        ).json()
+        for notes in ("первая правка", "вторая правка"):
+            api.patch(
+                f"{API}/questionnaires/{lead['id']}",
+                headers=agent,
+                json={"phone": LEAD_PHONE, "full_name": "Клиентов Клиент", "notes": notes},
+            )
+        api.post(
+            f"{API}/questionnaires/{lead['id']}/comments",
+            headers=agent,
+            json={"body": "Когда можно привести?"},
+        )
+
+        items = _notifications(api, curator)[:3]
+        assert [item["kind"] for item in items] == [
+            "agent_comment",
+            "agent_lead_updated",
+            "agent_lead_created",
+        ]
+        assert "Когда можно привести?" in items[0]["body"]
+        assert all(item["link"] == f"/questionnaires/{lead['id']}" for item in items)
+        assert api.get(f"{API}/notifications/unread-count", headers=curator).json() == {"count": 3}
+
+        left = api.post(f"{API}/notifications/read", headers=curator, json={"ids": [items[0]["id"]]})
+        assert left.json() == {"count": 2}
+        assert api.post(f"{API}/notifications/read", headers=curator, json={}).json() == {"count": 0}
+
+    def test_agent_hears_back_from_office(self, api, office):
+        _, agent = _approved_agent(api, office)
+        lead = api.post(
+            f"{API}/questionnaires",
+            headers=agent,
+            json={"phone": LEAD_PHONE, "full_name": "Клиентов Клиент", "pd_consent": True},
+        ).json()
+        curator = _auth(api, "manager@co.ru", "secret123")
+        api.post(
+            f"{API}/questionnaires/{lead['id']}/comments",
+            headers=curator,
+            json={"body": "Приводите в четверг"},
+        )
+        api.post(
+            f"{API}/questionnaires/{lead['id']}/appointment",
+            headers=curator,
+            json={"appointment_at": "2026-11-20"},
+        )
+        api.post(f"{API}/questionnaires/{lead['id']}/create-client", headers=curator, json={})
+
+        items = _notifications(api, agent)
+        assert [item["kind"] for item in items] == ["lead_visited", "lead_appointment", "lead_reply"]
+        assert items[1]["body"] == "Приём 20.11.2026"
+
+    def test_own_actions_do_not_notify(self, api, office):
+        curator = _auth(api, "manager@co.ru", "secret123")
+        api.post(f"{API}/questionnaires", headers=curator, json={"phone": LEAD_PHONE})
+        assert _notifications(api, curator) == []
 
 
 class TestAgentPayouts:

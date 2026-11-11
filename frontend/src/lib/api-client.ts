@@ -20,6 +20,7 @@ import type {
   OneTimeExpense,
   Payment,
   PaymentScheduleItem,
+  PriceList,
   PricingTier,
   TokenResponse,
   AuditLogEntry,
@@ -40,8 +41,11 @@ import type {
   CivilSharesOverview,
   MandatoryOutflowsOverview,
   AgentCommissionsOverview,
+  AgentCuratorOption,
+  AgentDetail,
   AgentInfo,
   AgentOverview,
+  AppNotificationList,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -343,6 +347,9 @@ export interface AgentRegisterPayload {
 export const agentsApi = {
   myOverview: () => apiFetch<AgentOverview>("/agents/me/overview"),
   list: () => apiFetch<AgentInfo[]>(`/agents?_=${Date.now()}`),
+  get: (id: string) => apiFetch<AgentDetail>(`/agents/${id}`),
+  curators: () => apiFetch<AgentCuratorOption[]>("/agents/curators"),
+  priceList: () => apiFetch<PriceList>("/agents/price-list"),
   signup: () => apiFetch<{ open: boolean }>("/agents/signup"),
   setSignup: (open: boolean) =>
     apiFetch<{ open: boolean }>("/agents/signup", { method: "PUT", body: JSON.stringify({ open }) }),
@@ -351,12 +358,32 @@ export const agentsApi = {
       method: "PATCH",
       body: JSON.stringify({ curator_id: curatorId }),
     }),
+  setActive: (id: string, isActive: boolean) =>
+    apiFetch<AgentInfo>(`/agents/${id}/active`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: isActive }),
+    }),
+  setNote: (id: string, note: string) =>
+    apiFetch<AgentInfo>(`/agents/${id}/note`, {
+      method: "PATCH",
+      body: JSON.stringify({ note }),
+    }),
   commissions: (month: string) =>
     apiFetch<AgentCommissionsOverview>(`/agents/commissions?month=${encodeURIComponent(month)}`),
   markCommissions: (clientIds: string[], collected: boolean) =>
     apiFetch<{ updated_count: number }>("/agents/commissions/mark", {
       method: "POST",
       body: JSON.stringify({ client_ids: clientIds, collected }),
+    }),
+};
+
+export const notificationsApi = {
+  list: () => apiFetch<AppNotificationList>(`/notifications?_=${Date.now()}`),
+  unreadCount: () => apiFetch<{ count: number }>(`/notifications/unread-count?_=${Date.now()}`),
+  markRead: (ids?: string[]) =>
+    apiFetch<{ count: number }>("/notifications/read", {
+      method: "POST",
+      body: JSON.stringify(ids ? { ids } : {}),
     }),
 };
 

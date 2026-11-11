@@ -1,55 +1,109 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import {
   Badge,
   Button,
   Card,
   EmptyState,
+  Input,
   LoadingState,
-  SectionTitle,
+  PageHeader,
   Select,
+  StatCard,
 } from "@/components/ui";
-import { ApiRequestError, agentsApi, usersApi } from "@/lib/api-client";
-import { formatDate, formatMoney, statusLabel } from "@/lib/format";
+import { ApiRequestError, agentsApi } from "@/lib/api-client";
+import { formatDate, formatMoney } from "@/lib/format";
+import { seesAllAgents } from "@/lib/organization-features";
 import { formatPhoneDisplay } from "@/lib/phone";
-import type { AgentInfo, User } from "@/lib/types";
+import type { AgentInfo } from "@/lib/types";
+import { useAuth } from "@/modules/auth/AuthProvider";
 
-const CURATOR_ROLES = new Set(["owner", "head_manager", "manager"]);
+type StatusFilter = "all" | "active" | "disabled";
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof ApiRequestError ? error.message : fallback;
 }
 
-function Contacts({ agent }: { agent: AgentInfo }) {
+function matchesSearch(agent: AgentInfo, query: string): boolean {
+  if (!query) return true;
+  const digits = query.replace(/\D/g, "");
+  const haystack = [agent.full_name, agent.email, agent.telegram, agent.inn]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (haystack.includes(query)) return true;
+  return digits.length >= 3 && (agent.phone ?? "").replace(/\D/g, "").includes(digits);
+}
+
+function SignupToggle() {
+  const [open, setOpen] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    agentsApi
+      .signup()
+      .then((data) => setOpen(data.open))
+      .catch((err) => setError(errorText(err, "Не удалось узнать статус регистрации")));
+  }, []);
+
+  async function toggle() {
+    if (open === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setOpen((await agentsApi.setSignup(!open)).open);
+    } catch (err) {
+      setError(errorText(err, open ? "Не удалось закрыть регистрацию" : "Не удалось открыть регистрацию"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="space-y-0.5 text-xs text-muted">
-      {agent.phone ? <p>{formatPhoneDisplay(agent.phone)}</p> : null}
-      {agent.email ? <p>{agent.email}</p> : null}
-      {agent.telegram ? <p>{agent.telegram}</p> : null}
-      <p>ИНН: {agent.inn || "не указан"}</p>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-muted p-3">
+      <div className="space-y-0.5">
+        <p className="text-xs font-semibold text-foreground">
+          Регистрация на сайте{" "}
+          {open ? <Badge tone="success">открыта</Badge> : <Badge>закрыта</Badge>}
+        </p>
+        <p className="text-xs text-muted">
+          {open
+            ? "На странице входа видна кнопка «Стать удалённым менеджером»."
+            : "Откройте, чтобы на странице входа появилась кнопка «Стать удалённым менеджером»."}
+        </p>
+        {error ? <p className="text-xs text-status-danger-text">{error}</p> : null}
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant={open ? "ghost" : "primary"}
+        disabled={busy || open === null}
+        onClick={() => void toggle()}
+      >
+        {open ? "Закрыть регистрацию" : "Открыть регистрацию"}
+      </Button>
     </div>
   );
 }
 
-export function AgentsSection({ staff }: { staff: User[] }) {
+export function AgentsSection() {
+  const { user } = useAuth();
+  const isOwner = user?.role === "owner";
+  const seesAll = seesAllAgents(user);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [signupOpen, setSignupOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const curators = useMemo(
-    () => staff.filter((item) => item.is_active && CURATOR_ROLES.has(item.role)),
-    [staff],
-  );
+  const [search, setSearch] = useState("");
+  const [curatorId, setCuratorId] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("active");
 
   const load = useCallback(async () => {
     try {
-      const [items, signup] = await Promise.all([agentsApi.list(), agentsApi.signup()]);
-      setAgents(items);
-      setSignupOpen(signup.open);
+      setAgents(await agentsApi.list());
     } catch (err) {
       setError(errorText(err, "Не удалось загрузить удалённых менеджеров"));
     } finally {
@@ -61,185 +115,137 @@ export function AgentsSection({ staff }: { staff: User[] }) {
     void load();
   }, [load]);
 
-  async function run(id: string, action: () => Promise<unknown>, fallback: string) {
-    setBusyId(id);
-    setError(null);
-    try {
-      await action();
-      await load();
-    } catch (err) {
-      setError(errorText(err, fallback));
-    } finally {
-      setBusyId(null);
+  const curators = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const agent of agents) {
+      if (agent.curator_id) byId.set(agent.curator_id, agent.curator_name ?? "—");
     }
-  }
+    return Array.from(byId.entries()).sort((a, b) => a[1].localeCompare(b[1], "ru"));
+  }, [agents]);
 
-  function curatorSelect(agent: AgentInfo, value: string, onChange: (value: string) => void) {
-    return (
-      <Select
-        value={value}
-        disabled={busyId === agent.id}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">Без куратора</option>
-        {curators.map((curator) => (
-          <option key={curator.id} value={curator.id}>
-            {curator.full_name} · {statusLabel(curator.role)}
-          </option>
-        ))}
-      </Select>
-    );
-  }
+  const visible = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return agents.filter((agent) => {
+      if (status === "active" && !agent.is_active) return false;
+      if (status === "disabled" && agent.is_active) return false;
+      if (curatorId === "none" && agent.curator_id) return false;
+      if (curatorId && curatorId !== "none" && agent.curator_id !== curatorId) return false;
+      return matchesSearch(agent, query);
+    });
+  }, [agents, search, curatorId, status]);
+
+  const activeCount = agents.filter((agent) => agent.is_active).length;
+  const leadsTotal = agents.reduce((sum, agent) => sum + agent.leads_total, 0);
+  const contractsTotal = agents.reduce((sum, agent) => sum + agent.contracts_total, 0);
+  const toPay = agents.reduce(
+    (sum, agent) => sum + Number(agent.earned_total) - Number(agent.paid_total),
+    0,
+  );
 
   return (
-    <Card>
-      <SectionTitle
+    <div className="page-stack">
+      <PageHeader
         title="Удалённые менеджеры"
-        description="Регистрируются сами кнопкой на сайте, принимая пользовательское соглашение, и сразу могут заводить клиентов. Куратор назначается автоматически — наименее загруженный менеджер, его можно сменить. 5 000 ₽ агенту и 5 000 ₽ менеджеру — после первого платежа клиента."
+        subtitle={
+          seesAll
+            ? "Регистрируются сами на сайте и сразу заводят клиентов. 5 000 ₽ агенту и 5 000 ₽ менеджеру — после первого платежа клиента."
+            : "Ваши подопечные: их клиенты, вопросы и выплаты"
+        }
       />
 
-      {error ? <p className="alert-danger mb-3">{error}</p> : null}
+      {isOwner ? <SignupToggle /> : null}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-muted p-3">
-        <div className="space-y-0.5">
-          <p className="text-xs font-semibold text-foreground">
-            Регистрация на сайте{" "}
-            {signupOpen ? <Badge tone="success">открыта</Badge> : <Badge>закрыта</Badge>}
-          </p>
-          <p className="text-xs text-muted">
-            {signupOpen
-              ? "На странице входа видна кнопка «Стать удалённым менеджером»."
-              : "Откройте, чтобы на странице входа появилась кнопка «Стать удалённым менеджером»."}
-          </p>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant={signupOpen ? "ghost" : "primary"}
-          disabled={busyId === "signup"}
-          onClick={() =>
-            void run(
-              "signup",
-              () => agentsApi.setSignup(!signupOpen),
-              signupOpen ? "Не удалось закрыть регистрацию" : "Не удалось открыть регистрацию",
-            )
-          }
-        >
-          {signupOpen ? "Закрыть регистрацию" : "Открыть регистрацию"}
-        </Button>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Работают" value={`${activeCount} из ${agents.length}`} tone="brand" />
+        <StatCard label="Клиентов привели" value={leadsTotal} />
+        <StatCard label="Договоров" value={contractsTotal} />
+        <StatCard label="К выплате агентам" value={formatMoney(toPay)} tone="warning" />
       </div>
 
-      {loading ? (
-        <LoadingState text="Загрузка..." />
-      ) : (
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Работают · {agents.filter((item) => item.is_active).length}
-          </p>
-          {agents.length === 0 ? (
-            <EmptyState>
-              Пока никто не зарегистрировался. Регистрация — кнопкой «Стать удалённым менеджером» на
-              странице входа.
-            </EmptyState>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table table-cards">
-                <thead>
-                  <tr>
-                    <th>Удалённый менеджер</th>
-                    <th>Куратор</th>
-                    <th>Клиентов / договоров</th>
-                    <th>Заработано / выплачено</th>
-                    <th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agents.map((agent) => (
-                    <tr key={agent.id} className={!agent.is_active ? "opacity-70" : undefined}>
-                      <td data-label="Удалённый менеджер">
-                        <p className="font-semibold text-foreground">{agent.full_name}</p>
-                        <Contacts agent={agent} />
-                        <p className="mt-0.5 text-[11px] text-muted">
-                          {agent.terms_accepted_at
-                            ? `Соглашение принято ${formatDate(agent.terms_accepted_at)}${agent.terms_version ? ` · ред. ${formatDate(agent.terms_version)}` : ""}`
-                            : "Соглашение не принято"}
-                        </p>
-                      </td>
-                      <td data-label="Куратор" className="min-w-[12rem]">
-                        {curatorSelect(
-                          agent,
-                          agent.curator_id ?? "",
-                          (value) =>
-                            void run(
-                              agent.id,
-                              () => agentsApi.setCurator(agent.id, value || null),
-                              "Не удалось сменить куратора",
-                            ),
-                        )}
-                      </td>
-                      <td data-label="Клиентов / договоров" className="tabular-nums">
-                        {agent.leads_total} / {agent.contracts_total}
-                      </td>
-                      <td data-label="Заработано / выплачено" className="tabular-nums">
-                        {formatMoney(agent.earned_total)} / {formatMoney(agent.paid_total)}
-                      </td>
-                      <td data-label="Статус">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {agent.is_active ? (
-                            <>
-                              <Badge tone="success">Работает</Badge>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                disabled={busyId === agent.id}
-                                onClick={() => {
-                                  if (
-                                    !window.confirm(
-                                      `Отключить «${agent.full_name}»? Войти он больше не сможет.`,
-                                    )
-                                  )
-                                    return;
-                                  void run(
-                                    agent.id,
-                                    () => usersApi.deactivate(agent.id),
-                                    "Не удалось отключить",
-                                  );
-                                }}
-                              >
-                                Отключить
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Badge>Отключён</Badge>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="secondary"
-                                disabled={busyId === agent.id}
-                                onClick={() =>
-                                  void run(
-                                    agent.id,
-                                    () => usersApi.update(agent.id, { is_active: true }),
-                                    "Не удалось включить",
-                                  )
-                                }
-                              >
-                                Включить
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      <Card>
+        <div className="mb-3 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <Input
+            value={search}
+            placeholder="Поиск: имя, телефон, Telegram, ИНН"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {seesAll ? (
+            <Select value={curatorId} onChange={(event) => setCuratorId(event.target.value)}>
+              <option value="">Все кураторы</option>
+              <option value="none">Без куратора</option>
+              {curators.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+          <Select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)}>
+            <option value="active">Работают</option>
+            <option value="disabled">Отключены</option>
+            <option value="all">Все</option>
+          </Select>
         </div>
-      )}
-    </Card>
+
+        {error ? <p className="alert-danger mb-3">{error}</p> : null}
+
+        {loading ? (
+          <LoadingState text="Загрузка..." />
+        ) : agents.length === 0 ? (
+          <EmptyState>
+            {seesAll
+              ? "Пока никто не зарегистрировался. Регистрация — кнопкой «Стать удалённым менеджером» на странице входа."
+              : "За вами пока не закреплён ни один удалённый менеджер."}
+          </EmptyState>
+        ) : visible.length === 0 ? (
+          <EmptyState>Никого не нашли — измените поиск или фильтры</EmptyState>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table table-cards">
+              <thead>
+                <tr>
+                  <th>Удалённый менеджер</th>
+                  {seesAll ? <th>Куратор</th> : null}
+                  <th>Клиентов / договоров</th>
+                  <th>Заработано / выплачено</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((agent) => (
+                  <tr key={agent.id} className={!agent.is_active ? "opacity-70" : undefined}>
+                    <td data-label="Удалённый менеджер">
+                      <Link href={`/agents/${agent.id}`} className="font-semibold text-brand-700">
+                        {agent.full_name}
+                      </Link>
+                      <p className="text-xs text-muted">
+                        {[agent.phone ? formatPhoneDisplay(agent.phone) : null, agent.telegram]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      <p className="text-[11px] text-muted">с {formatDate(agent.created_at)}</p>
+                    </td>
+                    {seesAll ? (
+                      <td data-label="Куратор">
+                        {agent.curator_name ?? <span className="text-muted">не назначен</span>}
+                      </td>
+                    ) : null}
+                    <td data-label="Клиентов / договоров" className="tabular-nums">
+                      {agent.leads_total} / {agent.contracts_total}
+                    </td>
+                    <td data-label="Заработано / выплачено" className="tabular-nums">
+                      {formatMoney(agent.earned_total)} / {formatMoney(agent.paid_total)}
+                    </td>
+                    <td data-label="Статус">
+                      {agent.is_active ? <Badge tone="success">Работает</Badge> : <Badge>Отключён</Badge>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

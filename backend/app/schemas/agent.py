@@ -90,6 +90,20 @@ class AgentCuratorUpdate(BaseModel):
     curator_id: UUID | None = None
 
 
+class AgentActiveUpdate(BaseModel):
+    is_active: bool
+
+
+class AgentNoteUpdate(BaseModel):
+    note: str | None = Field(default=None, max_length=4000)
+
+
+class AgentCuratorOption(BaseModel):
+    id: UUID
+    full_name: str
+    role: str
+
+
 class AgentResponse(BaseModel):
     id: UUID
     full_name: str
@@ -103,6 +117,7 @@ class AgentResponse(BaseModel):
     created_at: datetime
     terms_accepted_at: datetime | None
     terms_version: str | None
+    agent_note: str | None = None
     leads_total: int = 0
     contracts_total: int = 0
     earned_total: Decimal = Decimal("0.00")
@@ -151,6 +166,13 @@ class AgentOverview(BaseModel):
     paid_total: Decimal
     to_pay_total: Decimal
     leads: list[AgentLeadRow]
+
+
+class AgentDetail(BaseModel):
+    """Карточка удалённого менеджера в разделе офиса."""
+
+    agent: AgentResponse
+    overview: AgentOverview
 
 
 class AgentCommissionClientItem(BaseModel):

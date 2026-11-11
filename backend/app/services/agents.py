@@ -45,11 +45,12 @@ from app.services.manager_first_commissions import (
     contract_client_filters,
     first_payment_dates_subquery,
 )
+from app.services.notifications import notify_curator_about_new_agent
 from app.services.phone import month_bounds
 
 CURATOR_ROLES = {UserRole.OWNER, UserRole.HEAD_MANAGER, UserRole.MANAGER}
-# Новых агентов сначала распределяем на менеджеров, руководитель — запасной вариант.
-AUTO_CURATOR_ROLES = (UserRole.MANAGER, UserRole.HEAD_MANAGER)
+# Сменить куратора и отключить агента могут руководитель и начальник отдела.
+AGENT_ADMIN_ROLES = {UserRole.OWNER, UserRole.HEAD_MANAGER}
 # Меняется вместе с текстом соглашения на фронтенде (/agent-terms).
 AGENT_TERMS_VERSION = "2026-11-06"
 SIGNUP_CLOSED = "Регистрация удалённых менеджеров сейчас закрыта."
@@ -107,21 +108,22 @@ def set_agent_signup_open(db: Session, owner: User, is_open: bool) -> bool:
 
 
 def _pick_curator_id(db: Session, organization_id: UUID) -> UUID | None:
-    """Наименее загруженный менеджер; если менеджеров нет — руководитель."""
+    """Наименее загруженный из отмеченных кураторов; если их нет — руководитель."""
     curated = (
         select(User.curator_id, func.count().label("agents"))
         .where(User.organization_id == organization_id, User.role == UserRole.AGENT)
         .group_by(User.curator_id)
         .subquery()
     )
-    for roles in (AUTO_CURATOR_ROLES, (UserRole.OWNER,)):
+    for condition in (User.is_agent_curator.is_(True), User.role == UserRole.OWNER):
         curator_id = db.scalar(
             select(User.id)
             .outerjoin(curated, curated.c.curator_id == User.id)
             .where(
                 User.organization_id == organization_id,
                 User.is_active.is_(True),
-                User.role.in_(roles),
+                User.role.in_(CURATOR_ROLES),
+                condition,
             )
             .order_by(func.coalesce(curated.c.agents, 0), User.created_at)
             .limit(1)
@@ -129,6 +131,10 @@ def _pick_curator_id(db: Session, organization_id: UUID) -> UUID | None:
         if curator_id is not None:
             return curator_id
     return None
+
+
+def sees_all_agents(user: User) -> bool:
+    return user.role in AGENT_ADMIN_ROLES or user.is_agent_curator
 
 
 def register_agent(db: Session, payload: AgentRegisterRequest) -> User:
@@ -168,6 +174,8 @@ def register_agent(db: Session, payload: AgentRegisterRequest) -> User:
         terms_version=AGENT_TERMS_VERSION,
     )
     db.add(agent)
+    db.flush()
+    notify_curator_about_new_agent(db, agent, curator_id=agent.curator_id)
     db.commit()
     db.refresh(agent)
     return agent
@@ -179,11 +187,39 @@ def inactive_agent_login_message(user: User | None) -> str | None:
     return DISABLED_LOGIN_MESSAGE
 
 
-def get_organization_agent(db: Session, *, agent_id: UUID, organization_id: UUID) -> User:
+def get_organization_agent(db: Session, *, agent_id: UUID, user: User) -> User:
     agent = db.get(User, agent_id)
-    if agent is None or agent.organization_id != organization_id or agent.role != UserRole.AGENT:
+    if (
+        agent is None
+        or agent.organization_id != user.organization_id
+        or agent.role != UserRole.AGENT
+        or (not sees_all_agents(user) and agent.curator_id != user.id)
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Удалённый менеджер не найден")
     return agent
+
+
+def ensure_agent_admin(user: User) -> None:
+    if user.role not in AGENT_ADMIN_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Это может руководитель или начальник отдела",
+        )
+
+
+def list_curators(db: Session, user: User) -> list[User]:
+    return list(
+        db.scalars(
+            select(User)
+            .where(
+                User.organization_id == user.organization_id,
+                User.is_active.is_(True),
+                User.role.in_(CURATOR_ROLES),
+                User.is_agent_curator.is_(True),
+            )
+            .order_by(User.full_name)
+        )
+    )
 
 
 def resolve_curator(db: Session, *, curator_id: UUID, organization_id: UUID) -> User:
@@ -193,10 +229,11 @@ def resolve_curator(db: Session, *, curator_id: UUID, organization_id: UUID) -> 
         or curator.organization_id != organization_id
         or not curator.is_active
         or curator.role not in CURATOR_ROLES
+        or not curator.is_agent_curator
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Куратором может быть активный менеджер, начальник отдела или руководитель",
+            detail="Куратором может быть только сотрудник, отмеченный в «Команде» как куратор удалённых менеджеров",
         )
     return curator
 
@@ -215,7 +252,8 @@ def _audit(db: Session, owner: User, agent: User, field: str, old, new) -> None:
 
 
 def set_agent_curator(db: Session, owner: User, agent_id: UUID, curator_id: UUID | None) -> User:
-    agent = get_organization_agent(db, agent_id=agent_id, organization_id=owner.organization_id)
+    ensure_agent_admin(owner)
+    agent = get_organization_agent(db, agent_id=agent_id, user=owner)
     new_curator_id = None
     if curator_id is not None:
         new_curator_id = resolve_curator(
@@ -224,8 +262,28 @@ def set_agent_curator(db: Session, owner: User, agent_id: UUID, curator_id: UUID
     if agent.curator_id != new_curator_id:
         _audit(db, owner, agent, "curator_id", agent.curator_id, new_curator_id)
         agent.curator_id = new_curator_id
+        notify_curator_about_new_agent(db, agent, curator_id=new_curator_id, actor=owner)
         db.commit()
         db.refresh(agent)
+    return agent
+
+
+def set_agent_active(db: Session, user: User, agent_id: UUID, is_active: bool) -> User:
+    ensure_agent_admin(user)
+    agent = get_organization_agent(db, agent_id=agent_id, user=user)
+    if agent.is_active != is_active:
+        _audit(db, user, agent, "is_active", agent.is_active, is_active)
+        agent.is_active = is_active
+        db.commit()
+    return agent
+
+
+def set_agent_note(db: Session, user: User, agent_id: UUID, note: str | None) -> User:
+    agent = get_organization_agent(db, agent_id=agent_id, user=user)
+    note = (note or "").strip() or None
+    if agent.agent_note != note:
+        agent.agent_note = note
+        db.commit()
     return agent
 
 
@@ -253,24 +311,28 @@ def _earned_clients_stmt(organization_id: UUID):
     )
 
 
-def list_agents(db: Session, owner: User) -> list[AgentResponse]:
-    agents = list(
-        db.scalars(
-            select(User)
-            .options(joinedload(User.curator))
-            .where(User.organization_id == owner.organization_id, User.role == UserRole.AGENT)
-            .order_by(User.created_at.desc())
-        ).unique()
+def list_agents(db: Session, owner: User, *, agent_id: UUID | None = None) -> list[AgentResponse]:
+    stmt = (
+        select(User)
+        .options(joinedload(User.curator))
+        .where(User.organization_id == owner.organization_id, User.role == UserRole.AGENT)
+        .order_by(User.created_at.desc())
     )
+    if not sees_all_agents(owner):
+        stmt = stmt.where(User.curator_id == owner.id)
+    if agent_id is not None:
+        stmt = stmt.where(User.id == agent_id)
+    agents = list(db.scalars(stmt).unique())
     if not agents:
         return []
+    agent_ids = [agent.id for agent in agents]
 
     leads_by_agent = dict(
         db.execute(
             select(ClientQuestionnaire.source_agent_id, func.count())
             .where(
                 ClientQuestionnaire.organization_id == owner.organization_id,
-                ClientQuestionnaire.source_agent_id.is_not(None),
+                ClientQuestionnaire.source_agent_id.in_(agent_ids),
             )
             .group_by(ClientQuestionnaire.source_agent_id)
         ).all()
@@ -280,15 +342,17 @@ def list_agents(db: Session, owner: User) -> list[AgentResponse]:
             select(Client.source_agent_id, func.count())
             .where(
                 *contract_client_filters(owner.organization_id),
-                Client.source_agent_id.is_not(None),
+                Client.source_agent_id.in_(agent_ids),
             )
             .group_by(Client.source_agent_id)
         ).all()
     )
     earned: dict[UUID, Decimal] = defaultdict(lambda: Decimal("0.00"))
     paid: dict[UUID, Decimal] = defaultdict(lambda: Decimal("0.00"))
-    _, stmt = _earned_clients_stmt(owner.organization_id)
-    for client, _first_payment_date in db.execute(stmt):
+    _, earned_stmt = _earned_clients_stmt(owner.organization_id)
+    for client, _first_payment_date in db.execute(
+        earned_stmt.where(Client.source_agent_id.in_(agent_ids))
+    ):
         earned[client.source_agent_id] += AGENT_COMMISSION
         if client.agent_commission_collected:
             paid[client.source_agent_id] += AGENT_COMMISSION
@@ -307,6 +371,7 @@ def list_agents(db: Session, owner: User) -> list[AgentResponse]:
             created_at=agent.created_at,
             terms_accepted_at=agent.terms_accepted_at,
             terms_version=agent.terms_version,
+            agent_note=agent.agent_note,
             leads_total=leads_by_agent.get(agent.id, 0),
             contracts_total=contracts_by_agent.get(agent.id, 0),
             earned_total=earned[agent.id],

@@ -57,6 +57,12 @@ from app.services.client_duplicates import (
 )
 from app.services.document_collection import create_document_collection
 from app.services.funnel import try_ensure_first_payment_task_for_manager_client
+from app.services.notifications import (
+    lead_title,
+    notify_agent_about_lead,
+    notify_office_about_agent_lead,
+    preview,
+)
 from app.services.questionnaire_defaults import empty_assets, empty_debts, empty_documents
 from app.services.validation import validate_full_name, validate_phone_required
 
@@ -115,13 +121,15 @@ AGENT_DUPLICATE_MESSAGE = (
 
 def manager_can_access_questionnaire(item: ClientQuestionnaire, user: User) -> bool:
     """Менеджер видит свои лиды, анкеты закреплённых за ним клиентов и лиды своих
-    удалённых менеджеров. Агент — только тех, кого привёл сам. Руководитель,
+    удалённых менеджеров (куратор удалённых менеджеров — лиды всех агентов). Агент — только тех, кого привёл сам. Руководитель,
     начальник отдела и сотрудник сбора документов видят все анкеты организации."""
     if user.role == UserRole.AGENT:
         return item.source_agent_id == user.id
     if user.role != UserRole.MANAGER:
         return True
     if item.created_by_id == user.id or item.assigned_manager_id == user.id:
+        return True
+    if user.is_agent_curator and item.source_agent_id is not None:
         return True
     agent = item.source_agent
     if agent is not None and agent.curator_id == user.id:
@@ -141,10 +149,14 @@ def _apply_questionnaire_visibility_filter(stmt, user: User):
             Client.assigned_manager_id == user.id,
         )
     )
-    curated_agent = exists(
-        select(User.id).where(
-            User.id == ClientQuestionnaire.source_agent_id,
-            User.curator_id == user.id,
+    curated_agent = (
+        ClientQuestionnaire.source_agent_id.is_not(None)
+        if user.is_agent_curator
+        else exists(
+            select(User.id).where(
+                User.id == ClientQuestionnaire.source_agent_id,
+                User.curator_id == user.id,
+            )
         )
     )
     return stmt.where(
@@ -417,6 +429,15 @@ def create_questionnaire(
         field_name="full_name",
         new_value=item.full_name,
     )
+    if is_agent:
+        notify_office_about_agent_lead(
+            db,
+            item,
+            agent=user,
+            curator_id=assigned_manager_id,
+            kind="agent_lead_created",
+            title="Новый клиент от удалённого менеджера",
+        )
     db.commit()
     db.refresh(item)
     return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
@@ -441,6 +462,7 @@ def update_questionnaire(
                 detail="Телефон клиента меняет офис — напишите куратору в комментариях",
             )
     old_name = item.full_name
+    old_appointment = item.appointment_at
     if user.role != UserRole.AGENT:
         item.client_id = _maybe_bind_client(db, user, payload.client_id)
     item.full_name = payload.full_name
@@ -483,9 +505,32 @@ def update_questionnaire(
             old_value=old_name,
             new_value=item.full_name,
         )
+    if user.role == UserRole.AGENT:
+        notify_office_about_agent_lead(
+            db,
+            item,
+            agent=user,
+            curator_id=active_curator_id(user),
+            kind="agent_lead_updated",
+            title="Удалённый менеджер обновил анкету",
+            collapse=True,
+        )
+    elif item.appointment_at is not None and item.appointment_at != old_appointment:
+        _notify_agent_appointment(db, item, user)
     db.commit()
     db.refresh(item)
     return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
+
+
+def _notify_agent_appointment(db: Session, item: ClientQuestionnaire, user: User) -> None:
+    notify_agent_about_lead(
+        db,
+        item,
+        actor=user,
+        kind="lead_appointment",
+        title=f"{lead_title(item)} записан в офис",
+        body=f"Приём {item.appointment_at:%d.%m.%Y}",
+    )
 
 
 def delete_questionnaire(db: Session, user: User, questionnaire_id: UUID) -> None:
@@ -574,6 +619,14 @@ def create_client_from_questionnaire(
         field_name="from_questionnaire",
         new_value=str(item.id),
     )
+    notify_agent_about_lead(
+        db,
+        item,
+        actor=user,
+        kind="lead_visited",
+        title=f"{lead_title(item)} пришёл в офис",
+        body="Клиент собирает документы, следующий шаг — договор",
+    )
     db.commit()
     db.refresh(client)
     try_ensure_first_payment_task_for_manager_client(db, client=client, actor=user)
@@ -638,6 +691,25 @@ def add_questionnaire_comment(
             body=payload.body,
         )
     )
+    if user.role == UserRole.AGENT:
+        notify_office_about_agent_lead(
+            db,
+            item,
+            agent=user,
+            curator_id=active_curator_id(user),
+            kind="agent_comment",
+            title=f"Вопрос от {user.full_name}",
+            body=f"{lead_title(item)}: {preview(payload.body)}",
+        )
+    else:
+        notify_agent_about_lead(
+            db,
+            item,
+            actor=user,
+            kind="lead_reply",
+            title=f"Ответ офиса · {lead_title(item)}",
+            body=preview(payload.body),
+        )
     db.commit()
     return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
 
@@ -684,10 +756,24 @@ def set_questionnaire_appointment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Сначала верните лид в работу",
         )
+    old_appointment = item.appointment_at
     item.appointment_at = payload.appointment_at
     item.appointment_note = payload.appointment_note
     if item.appointment_at and item.lead_status == LeadStatus.NEW:
         item.lead_status = LeadStatus.IN_PROGRESS
+    if item.appointment_at is not None and item.appointment_at != old_appointment:
+        if user.role == UserRole.AGENT:
+            notify_office_about_agent_lead(
+                db,
+                item,
+                agent=user,
+                curator_id=active_curator_id(user),
+                kind="agent_appointment",
+                title="Удалённый менеджер записал клиента на приём",
+                body=f"{user.full_name} · {lead_title(item)} · {item.appointment_at:%d.%m.%Y}",
+            )
+        else:
+            _notify_agent_appointment(db, item, user)
     db.commit()
     return get_organization_questionnaire(db, questionnaire_id=item.id, user=user)
 

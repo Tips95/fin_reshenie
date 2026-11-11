@@ -13,6 +13,7 @@ from app.api import (
     funnel,
     installment_plans,
     mandatory_payments,
+    notifications,
     operating_expenses,
     organizations,
     payment_schedules,
@@ -25,11 +26,12 @@ from app.api import (
 from app.api.deps import forbid_agents
 
 api_router = APIRouter()
-# Удалённым менеджерам открыты только auth, лиды и свой кабинет (/agents).
+# Удалённым менеджерам открыты только auth, лиды, уведомления и свой кабинет (/agents).
 office_router = APIRouter(dependencies=[Depends(forbid_agents)])
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(agents.router, prefix="/agents", tags=["agents"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(
     questionnaires.router,
     prefix="/questionnaires",

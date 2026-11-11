@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui";
 import { ApiRequestError, usersApi } from "@/lib/api-client";
 import { statusLabel } from "@/lib/format";
-import { PHONE_PREFIX } from "@/lib/phone";
+import { PHONE_PREFIX, formatPhoneDisplay } from "@/lib/phone";
 import {
   collectErrors,
   filterPersonName,
@@ -29,8 +30,8 @@ import {
   validatePassword,
   validatePhoneOptional,
 } from "@/lib/validation";
+import { AGENT_CURATOR_ROLES } from "@/lib/organization-features";
 import type { User, UserRole } from "@/lib/types";
-import { AgentsSection } from "@/modules/agents/AgentsSection";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
 const emptyForm = {
@@ -41,6 +42,7 @@ const emptyForm = {
   password: "",
   role: "manager" as UserRole,
   is_active: true,
+  is_agent_curator: false,
 };
 
 type EditForm = {
@@ -51,6 +53,7 @@ type EditForm = {
   password: string;
   role: UserRole;
   is_active: boolean;
+  is_agent_curator: boolean;
 };
 
 function toEditForm(user: User): EditForm {
@@ -62,7 +65,30 @@ function toEditForm(user: User): EditForm {
     password: "",
     role: user.role,
     is_active: user.is_active,
+    is_agent_curator: Boolean(user.is_agent_curator),
   };
+}
+
+function curatorFlag(role: UserRole, checked: boolean): boolean {
+  return checked && AGENT_CURATOR_ROLES.includes(role);
+}
+
+function CuratorCheckbox({
+  role,
+  checked,
+  onChange,
+}: {
+  role: UserRole;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  if (!AGENT_CURATOR_ROLES.includes(role)) return null;
+  return (
+    <label className="flex items-center gap-2 text-sm text-foreground">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      Куратор удалённых менеджеров: получает новых и видит кабинеты всех
+    </label>
+  );
 }
 
 function roleTone(role: UserRole): "default" | "success" | "warning" | "danger" {
@@ -139,6 +165,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
         password: form.password,
         role: form.role,
         is_active: form.is_active,
+        is_agent_curator: curatorFlag(form.role, form.is_agent_curator),
       });
       setForm(emptyForm);
       setShowForm(false);
@@ -190,6 +217,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
         telegram: editForm.telegram.trim() || null,
         role: editForm.role,
         is_active: editForm.is_active,
+        is_agent_curator: curatorFlag(editForm.role, editForm.is_agent_curator),
       };
       if (editForm.password.trim()) {
         payload.password = editForm.password;
@@ -239,6 +267,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
   }
 
   const staffUsers = users.filter((item) => item.role !== "agent");
+  const agentUsers = users.filter((item) => item.role === "agent");
   const activeCount = staffUsers.filter((item) => item.is_active).length;
 
   return (
@@ -330,6 +359,11 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
               />
               Активен сразу после создания
             </label>
+            <CuratorCheckbox
+              role={form.role}
+              checked={form.is_agent_curator}
+              onChange={(is_agent_curator) => setForm({ ...form, is_agent_curator })}
+            />
             <Button type="submit" className="md:col-span-2">
               Создать сотрудника
             </Button>
@@ -453,6 +487,15 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
                                 <option value="inactive">Деактивирован</option>
                               </Select>
                             </FormField>
+                            <div className="md:col-span-2 xl:col-span-3">
+                              <CuratorCheckbox
+                                role={editForm.role}
+                                checked={editForm.is_agent_curator}
+                                onChange={(is_agent_curator) =>
+                                  setEditForm({ ...editForm, is_agent_curator })
+                                }
+                              />
+                            </div>
                             <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
                               <Button
                                 onClick={() => handleSaveEdit(item.id)}
@@ -481,7 +524,10 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
                       <td data-label="Email" className="text-muted">{item.email || "—"}</td>
                       <td data-label="Телефон" className="text-muted">{item.phone || "—"}</td>
                       <td data-label="Роль">
-                        <Badge tone={roleTone(item.role)}>{statusLabel(item.role)}</Badge>
+                        <div className="flex flex-wrap justify-end gap-1 lg:justify-start">
+                          <Badge tone={roleTone(item.role)}>{statusLabel(item.role)}</Badge>
+                          {item.is_agent_curator ? <Badge>Куратор удалённых</Badge> : null}
+                        </div>
                       </td>
                       <td data-label="Статус">
                         <Badge tone={item.is_active ? "success" : "default"}>
@@ -518,7 +564,51 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
         )}
       </Card>
 
-      <AgentsSection staff={staffUsers} />
+      {agentUsers.length > 0 ? (
+        <Card>
+          <SectionTitle
+            title={`Удалённые менеджеры · ${agentUsers.length}`}
+            description="Не входят в штат. Куратор, заметки, выплаты и отключение — в разделе «Удалённые менеджеры»."
+            action={
+              <Link href="/agents" className="link-brand text-xs font-medium">
+                Открыть раздел
+              </Link>
+            }
+          />
+          <div className="overflow-x-auto">
+            <table className="data-table table-cards">
+              <thead>
+                <tr>
+                  <th>ФИО</th>
+                  <th>Email</th>
+                  <th>Телефон</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agentUsers.map((item) => (
+                  <tr key={item.id} className={!item.is_active ? "opacity-70" : undefined}>
+                    <td data-label="ФИО">
+                      <Link href={`/agents/${item.id}`} className="font-semibold text-brand-700">
+                        {item.full_name}
+                      </Link>
+                    </td>
+                    <td data-label="Email" className="text-muted">{item.email || "—"}</td>
+                    <td data-label="Телефон" className="text-muted">
+                      {item.phone ? formatPhoneDisplay(item.phone) : "—"}
+                    </td>
+                    <td data-label="Статус">
+                      <Badge tone={item.is_active ? "success" : "default"}>
+                        {item.is_active ? "Работает" : "Отключён"}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }

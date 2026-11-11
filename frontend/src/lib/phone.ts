@@ -98,3 +98,7 @@ export function phoneToTelHref(phone: string): string | null {
   const digits = phoneToWhatsAppDigits(phone);
   return digits ? `tel:+${digits}` : null;
 }
+
+export function telegramHref(nick: string): string {
+  return `https://t.me/${nick.replace(/^@/, "")}`;
+}

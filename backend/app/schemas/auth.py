@@ -44,3 +44,4 @@ class UserResponse(BaseModel):
     email: str | None
     role: UserRole
     is_active: bool
+    is_agent_curator: bool = False

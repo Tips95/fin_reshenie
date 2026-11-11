@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.access import get_organization_user
 from app.services.accounts import assert_contacts_available
+from app.services.agents import CURATOR_ROLES
 from app.services.audit import log_audit
 from app.services.client_duplicates import phones_equivalent
 
@@ -31,6 +32,14 @@ def _assert_team_role(role: UserRole) -> None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Недопустимая роль для команды",
+        )
+
+
+def _assert_curator_role(role: UserRole, is_agent_curator: bool) -> None:
+    if is_agent_curator and role not in CURATOR_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Куратором может быть менеджер, начальник отдела или руководитель",
         )
 
 
@@ -62,6 +71,7 @@ def create_user(
         phone=payload.phone,
     )
     _assert_team_role(payload.role)
+    _assert_curator_role(payload.role, payload.is_agent_curator)
 
     user = User(
         organization_id=current_user.organization_id,
@@ -72,6 +82,7 @@ def create_user(
         password_hash=get_password_hash(payload.password),
         role=payload.role,
         is_active=payload.is_active,
+        is_agent_curator=payload.is_agent_curator,
     )
     db.add(user)
     db.flush()
@@ -127,6 +138,11 @@ def update_user(
 
     if "role" in updates:
         _assert_team_role(updates["role"])
+    if "role" in updates or "is_agent_curator" in updates:
+        _assert_curator_role(
+            updates.get("role", user.role),
+            updates.get("is_agent_curator", user.is_agent_curator),
+        )
 
     if "password" in updates:
         updates["password_hash"] = get_password_hash(updates.pop("password"))

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, TypeDecorator
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, TypeDecorator, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -40,6 +40,10 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     role: Mapped[UserRole] = mapped_column(UserRoleType(), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     telegram: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Куратор удалённых менеджеров: получает новых агентов и видит кабинеты всех.
+    is_agent_curator: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     # Поля удалённого менеджера (role=agent); у штатных сотрудников пустые.
     curator_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -49,6 +53,8 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     inn: Mapped[str | None] = mapped_column(String(12), nullable=True)
     terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Заметка куратора об удалённом менеджере — видна только офису.
+    agent_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
     curator: Mapped["User | None"] = relationship(remote_side="User.id", foreign_keys=[curator_id])

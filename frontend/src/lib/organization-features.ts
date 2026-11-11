@@ -23,7 +23,7 @@ export function isRemoteAgent(user: User | null | undefined): boolean {
 }
 
 export function isAgentPath(pathname: string): boolean {
-  if (pathname.startsWith("/agent")) return true;
+  if (pathname === "/agent" || pathname.startsWith("/agent/")) return true;
   return pathname.startsWith("/questionnaires") && !pathname.startsWith("/questionnaires/stats");
 }
 
@@ -40,6 +40,13 @@ export function isContractStaffRole(role: string | null | undefined): boolean {
 export function canSuperviseLeads(user: User | null | undefined): boolean {
   return user?.role === "owner" || isLeadSupervisor(user);
 }
+
+/** Руководитель, начальник отдела и кураторы видят всех удалённых менеджеров. */
+export function seesAllAgents(user: User | null | undefined): boolean {
+  return canSuperviseLeads(user) || Boolean(user?.is_agent_curator);
+}
+
+export const AGENT_CURATOR_ROLES: ReadonlyArray<string> = ["owner", "head_manager", "manager"];
 
 /** Создание/редактирование клиентов, сбор → банкротство, графики (без орг.финансов владельца). */
 export function canManageClients(user: User | null | undefined): boolean {

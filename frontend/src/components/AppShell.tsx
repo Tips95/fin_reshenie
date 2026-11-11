@@ -17,6 +17,7 @@ import {
   isCollectionStaff,
   isRemoteAgent,
 } from "@/lib/organization-features";
+import { NotificationBell } from "@/modules/notifications/NotificationBell";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -29,11 +30,19 @@ const navItems = [
     icon: "▤",
     shortLabel: "Лиды",
   },
+  { href: "/agent/price", label: "Прайс", icon: "₽", shortLabel: "Прайс", roles: ["agent"] },
   {
     href: "/questionnaires/stats",
     label: "Статистика лидов",
     icon: "◍",
     shortLabel: "Статист.",
+    roles: ["owner", "manager", "head_manager"],
+  },
+  {
+    href: "/agents",
+    label: "Удалённые менеджеры",
+    icon: "◬",
+    shortLabel: "Удалённые",
     roles: ["owner", "manager", "head_manager"],
   },
   {
@@ -101,6 +110,8 @@ const navItems = [
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
+  if (pathname.startsWith("/agents")) return "Удалённые менеджеры";
+  if (pathname.startsWith("/agent/price")) return "Прайс";
   if (pathname.startsWith("/agent")) return "Мой кабинет";
   if (pathname.startsWith("/questionnaires/stats")) return "Статистика лидов";
   if (pathname.startsWith("/questionnaires")) return "Лиды и анкеты";
@@ -121,6 +132,7 @@ function pageTitle(pathname: string): string {
 
 function isNavActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
+  if (href === "/agent") return pathname === "/agent";
   if (href === "/questionnaires") {
     return pathname.startsWith("/questionnaires") && !pathname.startsWith("/questionnaires/stats");
   }
@@ -163,7 +175,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     isCivilExecutor(user)
       ? ["/civil-cases"]
       : isRemoteAgent(user)
-        ? ["/agent", "/questionnaires"]
+        ? ["/agent", "/questionnaires", "/agent/price"]
         : isCollectionStaff(user)
           ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
           : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
@@ -236,16 +248,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
               {user && (
-                <div className="shrink-0 text-right">
-                  <p className="max-w-[140px] truncate text-xs font-semibold tracking-tight text-chrome-text sm:max-w-none">
-                    {user.full_name}
-                  </p>
-                  <button
-                    onClick={logout}
-                    className="interactive text-[11px] font-medium text-chrome-muted hover:text-chrome-text lg:hidden"
-                  >
-                    Выйти
-                  </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <NotificationBell />
+                  <div className="text-right">
+                    <p className="max-w-[140px] truncate text-xs font-semibold tracking-tight text-chrome-text sm:max-w-none">
+                      {user.full_name}
+                    </p>
+                    <button
+                      onClick={logout}
+                      className="interactive text-[11px] font-medium text-chrome-muted hover:text-chrome-text lg:hidden"
+                    >
+                      Выйти
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
