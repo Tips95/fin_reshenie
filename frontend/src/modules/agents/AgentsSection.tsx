@@ -151,6 +151,15 @@ export function AgentsSection() {
             ? "Регистрируются сами на сайте и сразу заводят клиентов. 5 000 ₽ агенту и 5 000 ₽ менеджеру — после первого платежа клиента."
             : "Ваши подопечные: их клиенты, вопросы и выплаты"
         }
+        action={
+          seesAll ? (
+            <Link href="/agents/rating">
+              <Button type="button" variant="secondary">
+                🏆 Рейтинг
+              </Button>
+            </Link>
+          ) : null
+        }
       />
 
       {isOwner ? <SignupToggle /> : null}

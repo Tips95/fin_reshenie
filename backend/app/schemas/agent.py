@@ -233,6 +233,8 @@ RankingPeriod = Literal["month", "all"]
 
 class AgentRankingEntry(BaseModel):
     place: int
+    # Только для офиса — ссылка на карточку; агентам чужие id не отдаём.
+    agent_id: UUID | None = None
     name: str
     points: int
     visits: int

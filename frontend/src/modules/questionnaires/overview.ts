@@ -51,6 +51,7 @@ export function buildLeadOverview(form: QuestionnaireFormValue) {
     weaponLabel: hasWeapon,
     zagsLabel,
     regionLabel: displayOrUnset(form.registration_region),
+    serviceCost: parseAmount(form.service_cost ?? ""),
     serviceCostLabel: form.service_cost?.trim()
       ? formatMoney(form.service_cost)
       : "Не указано",

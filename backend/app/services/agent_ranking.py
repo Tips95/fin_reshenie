@@ -269,6 +269,11 @@ def sync_agent_ranking_for_client(db: Session, client: Client) -> None:
 
 
 def get_agent_ranking(db: Session, user: User, period: RankingPeriod) -> AgentRanking:
+    from app.services.agents import sees_all_agents
+
+    is_agent = user.role == UserRole.AGENT
+    if not is_agent and not sees_all_agents(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     sync_agent_ranking(db, user.organization_id)
     db.commit()
 
@@ -288,13 +293,14 @@ def get_agent_ranking(db: Session, user: User, period: RankingPeriod) -> AgentRa
         wins[award.agent_id] = wins.get(award.agent_id, 0) + 1
     agent_ids = {score.agent_id for score in scores} | {award.agent_id for award in awards}
     names = {
-        agent.id: rating_name(agent.full_name)
+        agent.id: rating_name(agent.full_name) if is_agent else agent.full_name
         for agent in db.scalars(select(User).where(User.id.in_(agent_ids)))
     } if agent_ids else {}
 
     entries = [
         AgentRankingEntry(
             place=index + 1,
+            agent_id=None if is_agent else score.agent_id,
             name=names.get(score.agent_id, "—"),
             points=score.points,
             visits=score.visits,
@@ -306,7 +312,7 @@ def get_agent_ranking(db: Session, user: User, period: RankingPeriod) -> AgentRa
     ]
 
     me = None
-    if user.role == UserRole.AGENT:
+    if is_agent:
         mine = next((entry for entry in entries if entry.is_me), None)
         if mine is None:
             me = AgentRankingMe(place=None, points=0, gap_to_next=None)

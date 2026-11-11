@@ -9,7 +9,8 @@ import { usePriceList } from "@/modules/pricing/usePriceList";
 import { MetricTile, SectionCard } from "@/modules/questionnaires/form-ui";
 import { buildLeadOverview } from "@/modules/questionnaires/overview";
 import type { QuestionnaireFormValue } from "@/modules/questionnaires/defaults";
-import { formatDate, leadStatusLabel } from "@/lib/format";
+import { formatDate, formatMoney, leadStatusLabel } from "@/lib/format";
+import { matchPriceTier } from "@/modules/pricing/price";
 import { formatPhoneDisplay } from "@/lib/phone";
 import type { Questionnaire } from "@/lib/types";
 
@@ -23,6 +24,10 @@ export function LeadOverview({
   const metrics = buildLeadOverview(form);
   const { user } = useAuth();
   const { data: priceList } = usePriceList();
+  const match = priceList ? matchPriceTier(priceList, metrics.debtTotal) : null;
+  const tierCost = match?.kind === "tier" ? Number(match.tier.total_cost) : null;
+  const costMismatch =
+    tierCost != null && metrics.serviceCost != null && Math.round(metrics.serviceCost) !== Math.round(tierCost);
 
   return (
     <SectionCard
@@ -30,7 +35,7 @@ export function LeadOverview({
       title="Обзор"
       description="Краткая сводка по анкете — всё считается из уже заполненных полей."
     >
-      <div className="mb-4 rounded-xl bg-surface-muted/70 px-4 py-3">
+      <div className="mb-4 rounded-xl bg-surface-muted px-4 py-3">
         <p className="text-sm font-semibold text-foreground">
           {form.full_name.trim() || formatPhoneDisplay(form.phone) || "Без имени"}
         </p>
@@ -61,13 +66,22 @@ export function LeadOverview({
       {priceList && metrics.debtTotal > 0 ? (
         <div className="mt-4 rounded-xl border border-border px-4 py-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-foreground">По прайсу</p>
+            <p className="text-sm font-semibold text-foreground">
+              По прайсу · общий долг {metrics.debtTotalLabel}
+            </p>
             {isRemoteAgent(user) ? (
               <Link href={`/agent/price?debt=${Math.round(metrics.debtTotal)}`} className="link-brand text-xs">
                 Открыть прайс
               </Link>
             ) : null}
           </div>
+          {costMismatch ? (
+            <p className="alert-warning mb-3 text-sm">
+              В анкете стоимость услуги {metrics.serviceCostLabel}, а по прайсу для общего долга{" "}
+              {metrics.debtTotalLabel} — {formatMoney(tierCost)}. Проверьте суммы долгов в анкете или
+              стоимость: рассрочка ниже посчитана по прайсу.
+            </p>
+          ) : null}
           <PriceQuote list={priceList} debt={metrics.debtTotal} compact />
         </div>
       ) : null}

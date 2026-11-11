@@ -588,6 +588,13 @@ class TestRanking:
             ("Ахмед А.", 1),
         ]
         assert ranking["me"] == {"place": 2, "points": 1, "gap_to_next": 6}
+        assert all(row["agent_id"] is None for row in ranking["entries"])
+
+        office_view = api.get(f"{API}/agents/ranking", headers=office["owner"]).json()
+        assert [row["name"] for row in office_view["entries"]] == ["Борзов Борис", "Алиев Ахмед"]
+        assert office_view["entries"][0]["agent_id"] and office_view["me"] is None
+        regular = _second_manager(api, office)
+        assert api.get(f"{API}/agents/ranking", headers=regular).status_code == 403
 
     def test_best_of_month_gets_badge_and_bonus_in_payouts(
         self, api, office, session_factory, monkeypatch

@@ -846,6 +846,7 @@ export type RankingPeriod = "month" | "all";
 
 export interface AgentRankingEntry {
   place: number;
+  agent_id: string | null;
   name: string;
   points: number;
   visits: number;
