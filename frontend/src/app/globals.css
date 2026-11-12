@@ -118,11 +118,13 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* iOS приближает страницу при фокусе на поле мельче 16px и сам не отдаляет;
+   !important нужен, чтобы перебить text-sm/text-xs у компонентов. */
 @media (max-width: 1023px) {
   input,
   select,
   textarea {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 
@@ -685,8 +687,9 @@ body {
     @apply interactive shrink-0 rounded-full border border-border bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-foreground transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-700;
   }
 
+  /* Запас под фиксированную нижнюю навигацию: последняя кнопка страницы не должна уходить под неё. */
   .mobile-shell-main {
-    @apply pb-[calc(var(--mobile-nav-height)+var(--safe-area-bottom))] lg:pb-0;
+    @apply pb-[calc(var(--mobile-nav-height)+var(--safe-area-bottom)+1.5rem)];
   }
 
   /* Липкая кнопка внесения платежа над нижней навигацией */

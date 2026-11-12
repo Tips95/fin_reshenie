@@ -3350,7 +3350,7 @@ export default function ClientDetailPage() {
                         ) : null}
                       </div>
 
-                      <div className="row-card-grid">
+                      <div className="row-card-grid grid-cols-3">
                         <div>
                           <p className="row-card-label">План</p>
                           <p className="row-card-value">{formatMoney(item.planned_amount)}</p>

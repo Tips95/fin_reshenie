@@ -68,16 +68,21 @@ export function PriceQuote({
         />
       </div>
 
-      <ol className="flex gap-1.5 overflow-x-auto pb-1" aria-label="График платежей">
+      <ol
+        className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-1.5"
+        aria-label="График платежей"
+      >
         {schedule.map((item) => (
           <li
             key={item.month}
-            className="flex min-w-[68px] flex-1 flex-col justify-end rounded-lg border border-border bg-surface-muted px-2 pb-1.5 pt-2 text-center"
+            className="flex flex-col justify-end rounded-lg border border-border bg-surface-muted px-1.5 pb-1.5 pt-2 text-center"
           >
-            <div
-              className="mx-auto mb-1.5 w-full max-w-[36px] rounded-sm bg-brand-600"
-              style={{ height: `${Math.max(12, Math.round((item.amount / peak) * (compact ? 32 : 56)))}px` }}
-            />
+            {compact ? null : (
+              <div
+                className="mx-auto mb-1.5 w-3 rounded-sm bg-brand-600"
+                style={{ height: `${Math.max(8, Math.round((item.amount / peak) * 56))}px` }}
+              />
+            )}
             <p className="text-xs font-semibold tabular-nums text-foreground">{formatMoney(item.amount)}</p>
             <p className="text-[11px] text-muted">{item.month}-й мес.</p>
           </li>

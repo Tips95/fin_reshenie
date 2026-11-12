@@ -272,7 +272,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <main className="mobile-shell-main min-w-0 flex-1 px-page-x py-page-y lg:px-4 lg:py-3">
+          <main className="mobile-shell-main min-w-0 flex-1 px-page-x pt-page-y lg:px-4 lg:py-3">
             {children}
           </main>
 

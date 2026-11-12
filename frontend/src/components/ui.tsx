@@ -522,15 +522,17 @@ export function Card({
   variant?: "default" | "accent";
 }) {
   const variants = {
-    default: "surface-card-hover p-card",
+    default: "surface-card-hover",
     // Выделенная зона действия: нейтральная подложка, чтобы красный остался
     // только у кнопок, активного меню и просрочки.
     accent:
-      "interactive rounded-xl border border-border-strong bg-surface-muted p-card shadow-soft hover:shadow-card",
+      "interactive rounded-xl border border-border-strong bg-surface-muted shadow-soft hover:shadow-card",
   };
+  // cn не сливает конфликтующие классы: p-card победил бы переданный p-0 по порядку в CSS.
+  const ownPadding = /(^|\s)p-/.test(className ?? "");
 
   return (
-    <div id={id} className={cn(variants[variant], className)}>
+    <div id={id} className={cn(variants[variant], !ownPadding && "p-card", className)}>
       {children}
     </div>
   );
