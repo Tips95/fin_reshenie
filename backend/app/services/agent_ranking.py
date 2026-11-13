@@ -134,7 +134,12 @@ def _events(db: Session, organization_id: UUID) -> list[_Event]:
         _Event(client.source_agent_id, POINTS_CONTRACT, True, first_payment_date)
         for client, first_payment_date in db.execute(stmt)
     )
-    return events
+    deleted = set(
+        db.scalars(
+            select(User.id).where(User.organization_id == organization_id, User.deleted_at.is_not(None))
+        )
+    )
+    return [event for event in events if event.agent_id not in deleted]
 
 
 def _rank(events: list[_Event], month: str | None) -> list[_Score]:

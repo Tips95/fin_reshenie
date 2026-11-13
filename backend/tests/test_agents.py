@@ -219,6 +219,44 @@ class TestRegistration:
         assert response.status_code == 401
 
 
+class TestUserRemoval:
+    def test_removed_user_disappears_and_frees_login(self, api, office):
+        owner = office["owner"]
+        manager_id = office["manager_id"]
+        _approved_agent(api, office)
+        assert api.get(f"{API}/agents", headers=owner).json()[0]["curator_id"] == manager_id
+
+        response = api.delete(f"{API}/users/{manager_id}?permanent=true", headers=owner)
+        assert response.status_code == 204
+
+        assert manager_id not in [item["id"] for item in api.get(f"{API}/users", headers=owner).json()]
+        assert api.get(f"{API}/users/{manager_id}", headers=owner).status_code == 404
+        assert api.get(f"{API}/agents", headers=owner).json()[0]["curator_id"] is None
+        assert api.post(
+            f"{API}/auth/login", json={"login": "manager@co.ru", "password": "secret123"}
+        ).status_code == 401
+
+        again = api.post(
+            f"{API}/users",
+            headers=owner,
+            json={"full_name": "Петров Пётр", "email": "manager@co.ru", "password": "secret123", "role": "manager"},
+        )
+        assert again.status_code == 201, again.text
+
+    def test_removed_agent_leaves_agents_section(self, api, office):
+        agent_id, _ = _approved_agent(api, office)
+        api.delete(f"{API}/users/{agent_id}?permanent=true", headers=office["owner"])
+        assert api.get(f"{API}/agents", headers=office["owner"]).json() == []
+        assert api.post(
+            f"{API}/auth/login", json={"login": AGENT_PHONE, "password": "secret123"}
+        ).status_code == 401
+
+    def test_cannot_remove_self(self, api, office):
+        me = api.get(f"{API}/auth/me", headers=office["owner"]).json()
+        response = api.delete(f"{API}/users/{me['id']}?permanent=true", headers=office["owner"])
+        assert response.status_code == 400
+
+
 class TestAgentAccess:
     def test_agent_sees_curator_contacts(self, api, office):
         _, agent = _approved_agent(api, office)

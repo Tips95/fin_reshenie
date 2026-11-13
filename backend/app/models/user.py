@@ -58,6 +58,9 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     # Последнее место агента в рейтинге месяца — чтобы сообщать «вы поднялись» / «вас обогнали».
     rank_month: Mapped[str | None] = mapped_column(String(7), nullable=True)
     rank_place: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Удалённый сотрудник скрыт из списков и не может войти; запись остаётся ради истории
+    # (платежи, журнал, клиенты ссылаются на него).
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
     curator: Mapped["User | None"] = relationship(remote_side="User.id", foreign_keys=[curator_id])

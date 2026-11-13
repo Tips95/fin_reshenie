@@ -467,6 +467,7 @@ export const usersApi = {
   update: (id: string, data: Record<string, unknown>) =>
     apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}`, { method: "DELETE" }),
+  remove: (id: string) => apiFetch<void>(`/users/${id}?permanent=true`, { method: "DELETE" }),
 };
 
 export const clientsApi = {

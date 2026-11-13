@@ -99,6 +99,13 @@ function roleTone(role: UserRole): "default" | "success" | "warning" | "danger" 
   return "default";
 }
 
+export function confirmRemoveUser(fullName: string): boolean {
+  return window.confirm(
+    `Удалить «${fullName}»?\n\nСотрудник пропадёт из списков и больше не сможет войти, его логин освободится. ` +
+      "Клиенты, платежи и история действий сохранятся под его именем. Отменить удаление нельзя.",
+  );
+}
+
 export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
   const { user: currentUser, refreshUser } = useAuth();
   const router = useRouter();
@@ -246,6 +253,21 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
       await loadUsers();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось деактивировать пользователя");
+    }
+  }
+
+  async function handleRemove(target: User) {
+    if (!confirmRemoveUser(target.full_name)) return;
+    setSavingId(target.id);
+    setError(null);
+    try {
+      await usersApi.remove(target.id);
+      if (editingId === target.id) cancelEdit();
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Не удалось удалить пользователя");
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -551,6 +573,15 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
                               onClick={() => handleActivate(item.id)}
                             >
                               {savingId === item.id ? "..." : "Активировать"}
+                            </Button>
+                          )}
+                          {!isSelf && (
+                            <Button
+                              variant="ghost"
+                              disabled={savingId === item.id}
+                              onClick={() => handleRemove(item)}
+                            >
+                              Удалить
                             </Button>
                           )}
                         </div>

@@ -307,7 +307,11 @@ def list_agents(db: Session, owner: User, *, agent_id: UUID | None = None) -> li
     stmt = (
         select(User)
         .options(joinedload(User.curator))
-        .where(User.organization_id == owner.organization_id, User.role == UserRole.AGENT)
+        .where(
+            User.organization_id == owner.organization_id,
+            User.role == UserRole.AGENT,
+            User.deleted_at.is_(None),
+        )
         .order_by(User.created_at.desc())
     )
     if not sees_all_agents(owner):

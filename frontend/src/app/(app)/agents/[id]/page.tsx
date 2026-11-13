@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import {
   BackLink,
@@ -15,7 +15,7 @@ import {
   Select,
   StatCard,
 } from "@/components/ui";
-import { ApiRequestError, agentsApi } from "@/lib/api-client";
+import { ApiRequestError, agentsApi, usersApi } from "@/lib/api-client";
 import { formatDate, formatMoney, statusLabel } from "@/lib/format";
 import { canSuperviseLeads } from "@/lib/organization-features";
 import { formatPhoneDisplay, phoneToTelHref, telegramHref } from "@/lib/phone";
@@ -23,6 +23,7 @@ import type { AgentCuratorOption, AgentDetail } from "@/lib/types";
 import { AgentLeadsTable } from "@/modules/agents/AgentLeadsTable";
 import { useAuth } from "@/modules/auth/AuthProvider";
 import { textareaClass } from "@/modules/questionnaires/form-ui";
+import { confirmRemoveUser } from "@/modules/users/UsersPageContent";
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof ApiRequestError ? error.message : fallback;
@@ -31,6 +32,7 @@ function errorText(error: unknown, fallback: string): string {
 export default function AgentCardPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const router = useRouter();
   const isAdmin = canSuperviseLeads(user);
   const [data, setData] = useState<AgentDetail | null>(null);
   const [curators, setCurators] = useState<AgentCuratorOption[]>([]);
@@ -121,6 +123,28 @@ export default function AgentCardPage() {
                 }}
               >
                 {agent.is_active ? "Отключить" : "Включить"}
+              </Button>
+            ) : null}
+            {user?.role === "owner" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={async () => {
+                  if (!confirmRemoveUser(agent.full_name)) return;
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    await usersApi.remove(agent.id);
+                    router.replace("/agents");
+                  } catch (err) {
+                    setError(errorText(err, "Не удалось удалить"));
+                    setBusy(false);
+                  }
+                }}
+              >
+                Удалить
               </Button>
             ) : null}
           </div>

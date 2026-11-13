@@ -1,3 +1,5 @@
+import secrets
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -48,8 +50,19 @@ def list_users(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> list[User]:
-    stmt = select(User).where(User.organization_id == current_user.organization_id).order_by(User.full_name)
+    stmt = (
+        select(User)
+        .where(User.organization_id == current_user.organization_id, User.deleted_at.is_(None))
+        .order_by(User.full_name)
+    )
     return list(db.scalars(stmt))
+
+
+def _get_live_user(db: Session, user_id: UUID, current_user: User) -> User:
+    user = get_organization_user(db, user_id=user_id, organization_id=current_user.organization_id)
+    if user.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь удалён")
+    return user
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -105,7 +118,7 @@ def get_user(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> User:
-    return get_organization_user(db, user_id=user_id, organization_id=current_user.organization_id)
+    return _get_live_user(db, user_id, current_user)
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
@@ -115,7 +128,7 @@ def update_user(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> User:
-    user = get_organization_user(db, user_id=user_id, organization_id=current_user.organization_id)
+    user = _get_live_user(db, user_id, current_user)
     updates = payload.model_dump(exclude_unset=True)
 
     if "email" in updates or "phone" in updates:
@@ -167,15 +180,44 @@ def update_user(
     return user
 
 
+def _remove_user(db: Session, user: User, current_user: User) -> None:
+    """Удаление без потери истории: платежи и журнал ссылаются на сотрудника,
+    поэтому запись остаётся, но скрыта, без входа и с освобождённым логином."""
+    log_audit(
+        db,
+        user=current_user,
+        entity_type="user",
+        entity_id=user.id,
+        action=AuditAction.DELETE,
+        old_value=" · ".join(filter(None, [user.full_name, user.email, user.phone])),
+    )
+    for agent in db.scalars(select(User).where(User.curator_id == user.id)):
+        agent.curator_id = None
+    user.deleted_at = datetime.now(timezone.utc)
+    user.is_active = False
+    user.is_agent_curator = False
+    user.email = None
+    user.phone = None
+    user.telegram = None
+    user.password_hash = get_password_hash(secrets.token_urlsafe(32))
+
+
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deactivate_user(
     user_id: UUID,
+    permanent: bool = False,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> None:
-    user = get_organization_user(db, user_id=user_id, organization_id=current_user.organization_id)
+    user = _get_live_user(db, user_id, current_user)
     if user.id == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя деактивировать себя")
+        detail = "Нельзя удалить себя" if permanent else "Нельзя деактивировать себя"
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    if permanent:
+        _remove_user(db, user, current_user)
+        db.commit()
+        return
 
     user.is_active = False
     log_audit(
