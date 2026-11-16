@@ -354,6 +354,7 @@ export const agentsApi = {
   curators: () => apiFetch<AgentCuratorOption[]>("/agents/curators"),
   priceList: () => apiFetch<PriceList>("/agents/price-list"),
   ranking: (period: RankingPeriod) => apiFetch<AgentRanking>(`/agents/ranking?period=${period}`),
+  rebalance: () => apiFetch<{ moved: number }>("/agents/rebalance", { method: "POST" }),
   setAwardPaid: (id: string, paid: boolean) =>
     apiFetch<AgentAwardItem>(`/agents/awards/${id}`, {
       method: "PATCH",

@@ -15,7 +15,7 @@ import {
   StatCard,
 } from "@/components/ui";
 import { ApiRequestError, agentsApi } from "@/lib/api-client";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, pluralRu } from "@/lib/format";
 import { seesAllAgents } from "@/lib/organization-features";
 import { formatPhoneDisplay } from "@/lib/phone";
 import type { AgentInfo } from "@/lib/types";
@@ -100,6 +100,8 @@ export function AgentsSection() {
   const [search, setSearch] = useState("");
   const [curatorId, setCuratorId] = useState("");
   const [status, setStatus] = useState<StatusFilter>("active");
+  const [rebalancing, setRebalancing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -114,6 +116,29 @@ export function AgentsSection() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function rebalance() {
+    if (
+      !window.confirm(
+        "Раскидать работающих удалённых менеджеров поровну между руководителями? Переставим как можно меньше людей.",
+      )
+    )
+      return;
+    setRebalancing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { moved } = await agentsApi.rebalance();
+      setNotice(
+        moved ? `Готово: ${pluralRu(moved, ["менеджер передан", "менеджера переданы", "менеджеров передано"])} другим руководителям.` : "Уже распределены поровну.",
+      );
+      await load();
+    } catch (err) {
+      setError(errorText(err, "Не удалось распределить"));
+    } finally {
+      setRebalancing(false);
+    }
+  }
 
   const curators = useMemo(() => {
     const byId = new Map<string, string>();
@@ -153,14 +178,23 @@ export function AgentsSection() {
         }
         action={
           seesAll ? (
-            <Link href="/agents/rating">
-              <Button type="button" variant="secondary">
-                🏆 Рейтинг
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              {isOwner ? (
+                <Button type="button" variant="secondary" disabled={rebalancing} onClick={rebalance}>
+                  {rebalancing ? "Распределяю…" : "Распределить поровну"}
+                </Button>
+              ) : null}
+              <Link href="/agents/rating">
+                <Button type="button" variant="secondary">
+                  🏆 Рейтинг
+                </Button>
+              </Link>
+            </div>
           ) : null
         }
       />
+
+      {notice ? <p className="alert-success text-sm">{notice}</p> : null}
 
       {isOwner ? <SignupToggle /> : null}
 

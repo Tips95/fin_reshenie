@@ -12,7 +12,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import get_password_hash
@@ -40,6 +40,7 @@ from app.schemas.agent import (
     AgentResponse,
 )
 from app.services.accounts import assert_contacts_available, parse_login
+from app.services.agent_balance import plan_even_split
 from app.services.agent_ranking import (
     award_totals,
     earned_clients_stmt,
@@ -113,30 +114,69 @@ def set_agent_signup_open(db: Session, owner: User, is_open: bool) -> bool:
 # --- Регистрация и куратор ----------------------------------------------------
 
 
-def _pick_curator_id(db: Session, organization_id: UUID) -> UUID | None:
-    """Наименее загруженный из отмеченных кураторов; если их нет — руководитель."""
-    curated = (
-        select(User.curator_id, func.count().label("agents"))
-        .where(User.organization_id == organization_id, User.role == UserRole.AGENT)
-        .group_by(User.curator_id)
-        .subquery()
+def _live_agents_filter(organization_id: UUID):
+    return (
+        User.organization_id == organization_id,
+        User.role == UserRole.AGENT,
+        User.is_active.is_(True),
+        User.deleted_at.is_(None),
     )
-    for condition in (User.is_agent_curator.is_(True), User.role == UserRole.OWNER):
-        curator_id = db.scalar(
+
+
+def _leader_ids(db: Session, organization_id: UUID) -> list[UUID]:
+    """Руководители делят удалённых менеджеров поровну: у каждого ровно один аккаунт-руководитель,
+    а дополнительные аккаунты менеджера не должны давать двойную долю."""
+    return list(
+        db.scalars(
             select(User.id)
-            .outerjoin(curated, curated.c.curator_id == User.id)
             .where(
                 User.organization_id == organization_id,
+                User.role == UserRole.OWNER,
                 User.is_active.is_(True),
-                User.role.in_(CURATOR_ROLES),
-                condition,
+                User.deleted_at.is_(None),
             )
-            .order_by(func.coalesce(curated.c.agents, 0), User.created_at)
-            .limit(1)
+            .order_by(User.created_at)
         )
-        if curator_id is not None:
-            return curator_id
-    return None
+    )
+
+
+def _pick_curator_id(db: Session, organization_id: UUID) -> UUID | None:
+    """Наименее загруженный руководитель."""
+    leaders = _leader_ids(db, organization_id)
+    if not leaders:
+        return None
+    loads = dict(
+        db.execute(
+            select(User.curator_id, func.count())
+            .where(*_live_agents_filter(organization_id), User.curator_id.in_(leaders))
+            .group_by(User.curator_id)
+        ).all()
+    )
+    return min(leaders, key=lambda leader_id: loads.get(leader_id, 0))
+
+
+def rebalance_agents(db: Session, owner: User) -> int:
+    """Поровну раскидывает активных удалённых менеджеров между руководителями; возвращает число переставленных."""
+    if owner.role != UserRole.OWNER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это может только руководитель")
+    agents = list(
+        db.scalars(
+            select(User).where(*_live_agents_filter(owner.organization_id)).order_by(User.created_at)
+        )
+    )
+    changes = plan_even_split(
+        [(agent.id, agent.curator_id) for agent in agents],
+        _leader_ids(db, owner.organization_id),
+    )
+    for agent in agents:
+        new_curator_id = changes.get(agent.id)
+        if new_curator_id is None:
+            continue
+        _audit(db, owner, agent, "curator_id", agent.curator_id, new_curator_id)
+        agent.curator_id = new_curator_id
+        notify_curator_about_new_agent(db, agent, curator_id=new_curator_id, actor=owner)
+    db.commit()
+    return len(changes)
 
 
 def sees_all_agents(user: User) -> bool:
@@ -220,8 +260,9 @@ def list_curators(db: Session, user: User) -> list[User]:
             .where(
                 User.organization_id == user.organization_id,
                 User.is_active.is_(True),
+                User.deleted_at.is_(None),
                 User.role.in_(CURATOR_ROLES),
-                User.is_agent_curator.is_(True),
+                or_(User.is_agent_curator.is_(True), User.role == UserRole.OWNER),
             )
             .order_by(User.full_name)
         )
@@ -235,7 +276,7 @@ def resolve_curator(db: Session, *, curator_id: UUID, organization_id: UUID) -> 
         or curator.organization_id != organization_id
         or not curator.is_active
         or curator.role not in CURATOR_ROLES
-        or not curator.is_agent_curator
+        or not (curator.is_agent_curator or curator.role == UserRole.OWNER)
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

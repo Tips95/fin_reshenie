@@ -17,6 +17,7 @@ from app.models import Base, Client, Payment
 from app.core.time import local_today
 from app.models.enums import EngagementStage
 from app.services import agent_ranking
+from app.services.agent_balance import plan_even_split
 from app.services.agents import AGENT_TERMS_VERSION
 
 API = settings.API_PREFIX
@@ -100,10 +101,25 @@ def _register_agent(api: TestClient, **overrides) -> dict:
 
 
 def _approved_agent(api: TestClient, office: dict) -> tuple[str, dict[str, str]]:
+    """Агент, переданный офисом штатному менеджеру-куратору."""
     response = _register_agent(api)
     assert response.status_code == 201, response.text
     agent_id = api.get(f"{API}/agents", headers=office["owner"]).json()[0]["id"]
+    assigned = api.patch(
+        f"{API}/agents/{agent_id}/curator",
+        headers=office["owner"],
+        json={"curator_id": office["manager_id"]},
+    )
+    assert assigned.status_code == 200, assigned.text
     return agent_id, {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def _second_owner(api: TestClient, office: dict, email: str) -> str:
+    return api.post(
+        f"{API}/users",
+        headers=office["owner"],
+        json={"full_name": "Ииев Иса", "email": email, "password": "secret123", "role": "owner"},
+    ).json()["id"]
 
 
 class TestRegistration:
@@ -154,24 +170,35 @@ class TestRegistration:
         assert agent["terms_version"] == AGENT_TERMS_VERSION
         assert agent["terms_accepted_at"] is not None
 
-    def test_curator_is_least_loaded_of_marked_curators(self, api, office):
-        second = api.post(
-            f"{API}/users",
-            headers=office["owner"],
-            json={
-                "full_name": "Сидоров Сидор",
-                "email": "manager2@co.ru",
-                "password": "secret123",
-                "role": "manager",
-                "is_agent_curator": True,
-            },
-        ).json()
-        _second_manager(api, office, email="plain@co.ru")
-        _register_agent(api)
-        _register_agent(api, phone="+79281112234")
-        _register_agent(api, phone="+79281112235")
+    def test_new_agents_are_split_evenly_between_owners_only(self, api, office):
+        owner_id = api.get(f"{API}/auth/me", headers=office["owner"]).json()["id"]
+        second_owner = _second_owner(api, office, "owner2@co.ru")
+        for index in range(4):
+            assert _register_agent(api, phone=f"+7928111223{index}").status_code == 201
         curators = [item["curator_id"] for item in api.get(f"{API}/agents", headers=office["owner"]).json()]
-        assert set(curators) == {office["manager_id"], second["id"]}
+        assert sorted(curators) == sorted([owner_id, owner_id, second_owner, second_owner])
+        assert office["manager_id"] not in curators
+
+    def test_rebalance_splits_existing_agents_evenly(self, api, office):
+        owner = office["owner"]
+        for index in range(5):
+            agent = _register_agent(api, phone=f"+7928111224{index}")
+            assert agent.status_code == 201
+        for item in api.get(f"{API}/agents", headers=owner).json():
+            api.patch(f"{API}/agents/{item['id']}/curator", headers=owner, json={"curator_id": office["manager_id"]})
+        second_owner = _second_owner(api, office, "owner2@co.ru")
+        third_owner = _second_owner(api, office, "owner3@co.ru")
+
+        assert api.post(f"{API}/agents/rebalance", headers=owner).json() == {"moved": 5}
+        curators = [item["curator_id"] for item in api.get(f"{API}/agents", headers=owner).json()]
+        counts = sorted(curators.count(curator_id) for curator_id in set(curators))
+        assert counts == [1, 2, 2]
+        assert {second_owner, third_owner} <= set(curators)
+        assert api.post(f"{API}/agents/rebalance", headers=owner).json() == {"moved": 0}
+
+    def test_only_owner_can_rebalance(self, api, office):
+        manager = _auth(api, "manager@co.ru", "secret123")
+        assert api.post(f"{API}/agents/rebalance", headers=manager).status_code == 403
 
     def test_only_marked_staff_can_be_curator(self, api, office):
         agent_id, _ = _approved_agent(api, office)
@@ -185,7 +212,7 @@ class TestRegistration:
         )
         assert response.status_code == 422
         names = [item["full_name"] for item in api.get(f"{API}/agents/curators", headers=office["owner"]).json()]
-        assert names == ["Петров Пётр"]
+        assert "Петров Пётр" in names and "Простов Прост" not in names
 
     def test_curator_flag_needs_office_role(self, api, office):
         response = api.post(
@@ -406,6 +433,21 @@ def _notifications(api: TestClient, headers: dict[str, str]) -> list[dict]:
     return api.get(f"{API}/notifications", headers=headers).json()["items"]
 
 
+def test_even_split_moves_as_few_agents_as_possible():
+    # Агенты сидели на менеджерских аккаунтах двух руководителей, у третьего — ни одного.
+    assignments = [(f"a{index}", "iiev_manager" if index < 4 else "derbishev_manager") for index in range(7)]
+    assignments[0] = ("a0", "iiev_owner")
+    changes = plan_even_split(assignments, ["iiev_owner", "derbishev_owner", "yunusov_owner"])
+    final = {agent: changes.get(agent, curator) for agent, curator in assignments}
+    counts = sorted(list(final.values()).count(owner) for owner in ("iiev_owner", "derbishev_owner", "yunusov_owner"))
+    assert counts == [2, 2, 3]
+    assert "a0" not in changes
+    assert set(final.values()) == {"iiev_owner", "derbishev_owner", "yunusov_owner"}
+
+    assert plan_even_split([("a", "x"), ("b", "y")], ["x", "y"]) == {}
+    assert plan_even_split([("a", "x")], []) == {}
+
+
 def test_migration_marks_the_three_approved_curators():
     path = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "r9i0j1k2l56_add_notifications.py"
     spec = importlib.util.spec_from_file_location("curators_migration", path)
@@ -483,10 +525,10 @@ class TestAgentSection:
 
 
 class TestNotifications:
-    def test_curator_is_notified_about_new_agent(self, api, office):
-        agent_id, _ = _approved_agent(api, office)
-        curator = _auth(api, "manager@co.ru", "secret123")
-        items = _notifications(api, curator)
+    def test_owner_is_notified_about_new_agent(self, api, office):
+        _register_agent(api)
+        agent_id = api.get(f"{API}/agents", headers=office["owner"]).json()[0]["id"]
+        items = _notifications(api, office["owner"])
         assert [item["kind"] for item in items] == ["agent_assigned"]
         assert items[0]["link"] == f"/agents/{agent_id}"
 

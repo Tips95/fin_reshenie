@@ -34,6 +34,7 @@ from app.services.agents import (
     get_organization_agent,
     list_agents,
     list_curators,
+    rebalance_agents,
     set_agent_active,
     set_agent_commission_collected,
     set_agent_curator,
@@ -129,6 +130,15 @@ def get_curators(
         AgentCuratorOption(id=item.id, full_name=item.full_name, role=item.role.value)
         for item in list_curators(db, current_user)
     ]
+
+
+@router.post("/rebalance")
+def post_rebalance(
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Поровну раскидать удалённых менеджеров между руководителями."""
+    return {"moved": rebalance_agents(db, current_user)}
 
 
 @router.get("/commissions", response_model=AgentCommissionsOverview)
