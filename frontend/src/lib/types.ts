@@ -728,6 +728,25 @@ export interface AgentInfo {
   paid_total: string;
 }
 
+export interface AgentChatMessage {
+  id: string;
+  author_name: string;
+  from_agent: boolean;
+  mine: boolean;
+  body: string;
+  created_at: string;
+}
+
+export interface AgentChatThread {
+  agent_id: string;
+  agent_name: string;
+  curator_name: string | null;
+  is_active: boolean;
+  last_body: string | null;
+  last_at: string | null;
+  last_from_agent: boolean;
+}
+
 export interface AgentCuratorOption {
   id: string;
   full_name: string;
@@ -784,6 +803,7 @@ export interface AgentOverview {
     phone: string | null;
     email: string | null;
     telegram: string | null;
+    whatsapp_group_url: string | null;
   } | null;
   commission_per_client: string;
   leads_total: number;

@@ -30,6 +30,7 @@ const navItems = [
     icon: "▤",
     shortLabel: "Лиды",
   },
+  { href: "/agent/chat", label: "Чат с куратором", icon: "✉", shortLabel: "Чат", roles: ["agent"] },
   { href: "/agent/rating", label: "Рейтинг", icon: "★", shortLabel: "Рейтинг", roles: ["agent"] },
   { href: "/agent/price", label: "Прайс", icon: "₽", shortLabel: "Прайс", roles: ["agent"] },
   { href: "/agent/guide", label: "Регламент", icon: "▧", shortLabel: "Регламент", roles: ["agent"] },
@@ -113,7 +114,9 @@ const navItems = [
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
+  if (pathname.startsWith("/agents/chat")) return "Чат с удалёнными менеджерами";
   if (pathname.startsWith("/agents")) return "Удалённые менеджеры";
+  if (pathname.startsWith("/agent/chat")) return "Чат с куратором";
   if (pathname.startsWith("/agent/price")) return "Прайс";
   if (pathname.startsWith("/agent/rating")) return "Рейтинг";
   if (pathname.startsWith("/agent/guide")) return "Регламент";
@@ -181,7 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     isCivilExecutor(user)
       ? ["/civil-cases"]
       : isRemoteAgent(user)
-        ? ["/agent", "/questionnaires", "/agent/price"]
+        ? ["/agent", "/questionnaires", "/agent/chat", "/agent/price"]
         : isCollectionStaff(user)
           ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
           : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]

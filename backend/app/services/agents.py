@@ -114,7 +114,7 @@ def set_agent_signup_open(db: Session, owner: User, is_open: bool) -> bool:
 # --- Регистрация и куратор ----------------------------------------------------
 
 
-def _live_agents_filter(organization_id: UUID):
+def live_agents_filter(organization_id: UUID):
     return (
         User.organization_id == organization_id,
         User.role == UserRole.AGENT,
@@ -123,7 +123,7 @@ def _live_agents_filter(organization_id: UUID):
     )
 
 
-def _leader_ids(db: Session, organization_id: UUID) -> list[UUID]:
+def leader_ids(db: Session, organization_id: UUID) -> list[UUID]:
     """Руководители делят удалённых менеджеров поровну: у каждого ровно один аккаунт-руководитель,
     а дополнительные аккаунты менеджера не должны давать двойную долю."""
     return list(
@@ -142,13 +142,13 @@ def _leader_ids(db: Session, organization_id: UUID) -> list[UUID]:
 
 def _pick_curator_id(db: Session, organization_id: UUID) -> UUID | None:
     """Наименее загруженный руководитель."""
-    leaders = _leader_ids(db, organization_id)
+    leaders = leader_ids(db, organization_id)
     if not leaders:
         return None
     loads = dict(
         db.execute(
             select(User.curator_id, func.count())
-            .where(*_live_agents_filter(organization_id), User.curator_id.in_(leaders))
+            .where(*live_agents_filter(organization_id), User.curator_id.in_(leaders))
             .group_by(User.curator_id)
         ).all()
     )
@@ -161,12 +161,12 @@ def rebalance_agents(db: Session, owner: User) -> int:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это может только руководитель")
     agents = list(
         db.scalars(
-            select(User).where(*_live_agents_filter(owner.organization_id)).order_by(User.created_at)
+            select(User).where(*live_agents_filter(owner.organization_id)).order_by(User.created_at)
         )
     )
     changes = plan_even_split(
         [(agent.id, agent.curator_id) for agent in agents],
-        _leader_ids(db, owner.organization_id),
+        leader_ids(db, owner.organization_id),
     )
     for agent in agents:
         new_curator_id = changes.get(agent.id)
@@ -517,6 +517,7 @@ def get_agent_overview(db: Session, agent: User) -> AgentOverview:
                 phone=curator.phone,
                 email=curator.email,
                 telegram=curator.telegram,
+                whatsapp_group_url=curator.whatsapp_group_url,
             )
             if curator is not None
             else None

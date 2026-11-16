@@ -17,6 +17,7 @@ import { ApiRequestError, agentsApi } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { formatPhoneDisplay, phoneToTelHref, telegramHref } from "@/lib/phone";
 import type { AgentOverview } from "@/lib/types";
+import { WhatsAppGroupLink } from "@/modules/agents/AgentChat";
 import { AgentLeadsTable } from "@/modules/agents/AgentLeadsTable";
 
 const STEPS = [
@@ -92,6 +93,14 @@ export default function AgentCabinetPage() {
                 </p>
               ) : null}
               {data.curator.email ? <p className="text-muted">{data.curator.email}</p> : null}
+              <div className="flex flex-wrap gap-2 pt-1.5">
+                {data.curator.whatsapp_group_url ? (
+                  <WhatsAppGroupLink url={data.curator.whatsapp_group_url} label="Группа в WhatsApp" />
+                ) : null}
+                <Button type="button" variant="secondary" onClick={() => router.push("/agent/chat")}>
+                  Написать в чат
+                </Button>
+              </div>
               <p className="pt-1 text-xs text-muted">
                 По конкретному клиенту удобнее писать в карточке лида — в блоке «Вопросы куратору».
               </p>

@@ -129,6 +129,60 @@ class AgentCuratorContact(BaseModel):
     phone: str | None
     email: str | None
     telegram: str | None
+    whatsapp_group_url: str | None = None
+
+
+WHATSAPP_GROUP_PREFIX = "https://chat.whatsapp.com/"
+
+
+class WhatsAppGroup(BaseModel):
+    url: str | None = Field(default=None, max_length=255)
+
+    @field_validator("url")
+    @classmethod
+    def _invite_link(cls, value: str | None) -> str | None:
+        value = (value or "").strip()
+        if not value:
+            return None
+        if not value.startswith("http"):
+            value = f"https://{value}"
+        if not value.startswith(WHATSAPP_GROUP_PREFIX) or len(value) <= len(WHATSAPP_GROUP_PREFIX):
+            raise ValueError(
+                "Нужна ссылка-приглашение в группу: WhatsApp → группа → «Пригласить по ссылке», "
+                "вида https://chat.whatsapp.com/…"
+            )
+        return value
+
+
+class AgentChatSend(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("body")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Пустое сообщение")
+        return value
+
+
+class AgentChatMessage(BaseModel):
+    id: UUID
+    author_name: str
+    from_agent: bool
+    mine: bool
+    body: str
+    created_at: datetime
+
+
+class AgentChatThread(BaseModel):
+    agent_id: UUID
+    agent_name: str
+    curator_name: str | None
+    is_active: bool
+    last_body: str | None
+    last_at: datetime | None
+    last_from_agent: bool
 
 
 AgentLeadStage = Literal[

@@ -524,6 +524,72 @@ class TestAgentSection:
         assert api.get(f"{API}/agents/curators", headers=agent).status_code == 403
 
 
+class TestAgentChat:
+    def test_personal_thread_between_agent_and_curator(self, api, office):
+        agent_id, agent = _approved_agent(api, office)
+        curator = _auth(api, "manager@co.ru", "secret123")
+
+        sent = api.post(f"{API}/agent-chat/personal", headers=agent, json={"body": "  Как оформить залог?  "})
+        assert sent.status_code == 201 and sent.json()["body"] == "Как оформить залог?"
+        notes = [item for item in _notifications(api, curator) if item["kind"] == "agent_chat"]
+        assert notes and notes[0]["link"] == f"/agents/chat?agent={agent_id}"
+
+        reply = api.post(
+            f"{API}/agent-chat/personal?agent_id={agent_id}", headers=curator, json={"body": "Позвоните мне"}
+        )
+        assert reply.status_code == 201
+        thread = api.get(f"{API}/agent-chat/personal", headers=agent).json()
+        assert [(item["body"], item["mine"], item["from_agent"]) for item in thread] == [
+            ("Как оформить залог?", True, True),
+            ("Позвоните мне", False, False),
+        ]
+        assert [item["kind"] for item in _notifications(api, agent)].count("agent_chat") == 1
+
+        threads = api.get(f"{API}/agent-chat/threads", headers=curator).json()
+        assert threads[0]["agent_id"] == agent_id and threads[0]["last_body"] == "Позвоните мне"
+        assert api.get(f"{API}/agent-chat/threads", headers=agent).status_code == 403
+
+    def test_thread_is_private(self, api, office):
+        agent_id, agent = _approved_agent(api, office)
+        api.post(f"{API}/agent-chat/personal", headers=agent, json={"body": "Секрет"})
+        other = _register_agent(api, phone="+79281119999")
+        other_headers = {"Authorization": f"Bearer {other.json()['access_token']}"}
+        peek = api.get(f"{API}/agent-chat/personal?agent_id={agent_id}", headers=other_headers).json()
+        assert peek == []
+        plain = _second_manager(api, office, email="plain@co.ru")
+        assert api.get(f"{API}/agent-chat/personal?agent_id={agent_id}", headers=plain).status_code == 404
+        assert api.post(f"{API}/agent-chat/personal", headers=agent, json={"body": "   "}).status_code == 422
+
+    def test_shared_feed(self, api, office):
+        _, agent = _approved_agent(api, office)
+        other = _register_agent(api, phone="+79281119999", full_name="Второв Иван")
+        other_headers = {"Authorization": f"Bearer {other.json()['access_token']}"}
+
+        api.post(f"{API}/agent-chat/shared", headers=agent, json={"body": "Берём ли ИП?"})
+        api.post(f"{API}/agent-chat/shared", headers=office["owner"], json={"body": "Да, берём"})
+        feed = api.get(f"{API}/agent-chat/shared", headers=other_headers).json()
+        assert [(item["author_name"], item["from_agent"]) for item in feed][0] == ("Агент У.", True)
+        assert feed[1]["body"] == "Да, берём" and feed[1]["from_agent"] is False
+        kinds = [item["kind"] for item in _notifications(api, other_headers)]
+        assert "agent_chat_shared" in kinds
+
+        plain = _second_manager(api, office, email="plain@co.ru")
+        assert api.get(f"{API}/agent-chat/shared", headers=plain).status_code == 403
+
+    def test_curator_publishes_whatsapp_group(self, api, office):
+        _, agent = _approved_agent(api, office)
+        curator = _auth(api, "manager@co.ru", "secret123")
+        bad = api.put(f"{API}/agent-chat/whatsapp-group", headers=curator, json={"url": "https://wa.me/79280000000"})
+        assert bad.status_code == 422
+        saved = api.put(
+            f"{API}/agent-chat/whatsapp-group", headers=curator, json={"url": "chat.whatsapp.com/AbC123"}
+        )
+        assert saved.json() == {"url": "https://chat.whatsapp.com/AbC123"}
+        overview = api.get(f"{API}/agents/me/overview", headers=agent).json()
+        assert overview["curator"]["whatsapp_group_url"] == "https://chat.whatsapp.com/AbC123"
+        assert api.put(f"{API}/agent-chat/whatsapp-group", headers=agent, json={"url": None}).status_code == 403
+
+
 class TestNotifications:
     def test_owner_is_notified_about_new_agent(self, api, office):
         _register_agent(api)

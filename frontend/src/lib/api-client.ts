@@ -44,6 +44,8 @@ import type {
   CivilSharesOverview,
   MandatoryOutflowsOverview,
   AgentCommissionsOverview,
+  AgentChatMessage,
+  AgentChatThread,
   AgentCuratorOption,
   AgentDetail,
   AgentInfo,
@@ -346,6 +348,29 @@ export interface AgentRegisterPayload {
   accept_terms: boolean;
   terms_version: string;
 }
+
+function chatPersonalPath(agentId?: string) {
+  return agentId ? `/agent-chat/personal?agent_id=${agentId}` : "/agent-chat/personal";
+}
+
+export const agentChatApi = {
+  threads: () => apiFetch<AgentChatThread[]>("/agent-chat/threads"),
+  personal: (agentId?: string) => apiFetch<AgentChatMessage[]>(chatPersonalPath(agentId)),
+  sendPersonal: (body: string, agentId?: string) =>
+    apiFetch<AgentChatMessage>(chatPersonalPath(agentId), {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  shared: () => apiFetch<AgentChatMessage[]>("/agent-chat/shared"),
+  sendShared: (body: string) =>
+    apiFetch<AgentChatMessage>("/agent-chat/shared", { method: "POST", body: JSON.stringify({ body }) }),
+  whatsappGroup: () => apiFetch<{ url: string | null }>("/agent-chat/whatsapp-group"),
+  setWhatsappGroup: (url: string | null) =>
+    apiFetch<{ url: string | null }>("/agent-chat/whatsapp-group", {
+      method: "PUT",
+      body: JSON.stringify({ url }),
+    }),
+};
 
 export const agentsApi = {
   myOverview: () => apiFetch<AgentOverview>("/agents/me/overview"),

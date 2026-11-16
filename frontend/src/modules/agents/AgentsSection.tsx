@@ -177,20 +177,23 @@ export function AgentsSection() {
             : "Ваши подопечные: их клиенты, вопросы и выплаты"
         }
         action={
-          seesAll ? (
-            <div className="flex flex-wrap gap-2">
-              {isOwner ? (
-                <Button type="button" variant="secondary" disabled={rebalancing} onClick={rebalance}>
-                  {rebalancing ? "Распределяю…" : "Распределить поровну"}
-                </Button>
-              ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Link href="/agents/chat">
+              <Button type="button">💬 Чат</Button>
+            </Link>
+            {isOwner ? (
+              <Button type="button" variant="secondary" disabled={rebalancing} onClick={rebalance}>
+                {rebalancing ? "Распределяю…" : "Распределить поровну"}
+              </Button>
+            ) : null}
+            {seesAll ? (
               <Link href="/agents/rating">
                 <Button type="button" variant="secondary">
                   🏆 Рейтинг
                 </Button>
               </Link>
-            </div>
-          ) : null
+            ) : null}
+          </div>
         }
       />
 

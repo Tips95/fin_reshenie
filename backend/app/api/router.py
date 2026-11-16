@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api import (
+    agent_chat,
     agents,
     analytics,
     audit_logs,
@@ -26,11 +27,12 @@ from app.api import (
 from app.api.deps import forbid_agents
 
 api_router = APIRouter()
-# Удалённым менеджерам открыты только auth, лиды, уведомления и свой кабинет (/agents).
+# Удалённым менеджерам открыты только auth, лиды, уведомления, чат и свой кабинет (/agents).
 office_router = APIRouter(dependencies=[Depends(forbid_agents)])
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(agents.router, prefix="/agents", tags=["agents"])
+api_router.include_router(agent_chat.router, prefix="/agent-chat", tags=["agent-chat"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(
     questionnaires.router,

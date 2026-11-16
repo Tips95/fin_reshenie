@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import {
@@ -102,8 +103,13 @@ export default function AgentCardPage() {
           agent.terms_accepted_at ? ` · соглашение принято ${formatDate(agent.terms_accepted_at)}` : ""
         }`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {agent.is_active ? <Badge tone="success">Работает</Badge> : <Badge>Отключён</Badge>}
+            <Link href={`/agents/chat?agent=${agent.id}`}>
+              <Button type="button" size="sm">
+                Написать
+              </Button>
+            </Link>
             {isAdmin ? (
               <Button
                 type="button"

@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 
 import Link from "next/link";
 
-import { BackLink, Card, EmptyState, LoadingState, PageHeader, SectionTitle } from "@/components/ui";
+import {
+  BackLink,
+  Card,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+  SectionTitle,
+  SegmentedControl,
+} from "@/components/ui";
 import { ApiRequestError, agentsApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatMoney, formatMonthLabel, pluralRu } from "@/lib/format";
@@ -96,26 +104,14 @@ export function AgentRatingView({ office = false }: { office?: boolean }) {
         </div>
       </Card>
 
-      <div className="inline-flex w-fit rounded-lg border border-border bg-surface-muted p-0.5">
-        {(
-          [
-            ["month", "Этот месяц"],
-            ["all", "За всё время"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setPeriod(value)}
-            className={cn(
-              "rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
-              period === value ? "bg-surface text-foreground shadow-soft" : "text-muted hover:text-foreground",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        options={[
+          ["month", "Этот месяц"],
+          ["all", "За всё время"],
+        ]}
+        value={period}
+        onChange={setPeriod}
+      />
 
       {error ? <p className="alert-danger">{error}</p> : null}
       {!data && !error ? <LoadingState text="Загрузка рейтинга..." /> : null}

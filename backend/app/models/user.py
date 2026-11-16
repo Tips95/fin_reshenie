@@ -61,6 +61,8 @@ class User(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     # Удалённый сотрудник скрыт из списков и не может войти; запись остаётся ради истории
     # (платежи, журнал, клиенты ссылаются на него).
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Ссылка-приглашение куратора в его группу WhatsApp — видят подопечные удалённые менеджеры.
+    whatsapp_group_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="users")
     curator: Mapped["User | None"] = relationship(remote_side="User.id", foreign_keys=[curator_id])

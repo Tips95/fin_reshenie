@@ -880,6 +880,34 @@ export function SectionNav({
   );
 }
 
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: ReadonlyArray<readonly [T, React.ReactNode]>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex w-fit rounded-lg border border-border bg-surface-muted p-0.5">
+      {options.map(([option, label]) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(option)}
+          className={cn(
+            "rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
+            value === option ? "bg-surface text-foreground shadow-soft" : "text-muted hover:text-foreground",
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function LoadingState({ text = "Загрузка..." }: { text?: string }) {
   return (
     <div className="interactive flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted shadow-soft">
