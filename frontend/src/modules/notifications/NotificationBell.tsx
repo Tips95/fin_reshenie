@@ -78,8 +78,9 @@ export function NotificationBell() {
   async function openItem(item: AppNotification) {
     setOpen(false);
     if (!item.read_at) {
-      setItems((prev) =>
-        prev?.map((row) => (row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row)) ?? null,
+      setItems(
+        (prev) =>
+          prev?.map((row) => (row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row)) ?? null,
       );
       try {
         setCount((await notificationsApi.markRead([item.id])).count);
@@ -101,7 +102,7 @@ export function NotificationBell() {
   }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative" data-tour="notifications">
       <button
         type="button"
         aria-label={count ? `Уведомления: ${count} новых` : "Уведомления"}
@@ -121,52 +122,82 @@ export function NotificationBell() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-40 mt-2 w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-card">
-          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-            <p className="text-sm font-semibold text-foreground">Уведомления</p>
-            {count > 0 ? (
-              <button type="button" onClick={() => void readAll()} className="text-xs font-medium text-brand-700 hover:underline">
-                Прочитать все
-              </button>
-            ) : null}
-          </div>
-          <div className="max-h-[60vh] overflow-y-auto">
-            {items === null ? (
-              <p className="px-3 py-6 text-center text-xs text-muted">Загрузка...</p>
-            ) : items.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs text-muted">Пока ничего нового</p>
-            ) : (
-              items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => void openItem(item)}
-                  className={cn(
-                    "block w-full border-b border-border px-3 py-2.5 text-left last:border-b-0 hover:bg-surface-muted",
-                    !item.read_at && "bg-brand-50/60",
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                        item.read_at ? "bg-transparent" : "bg-brand-600",
-                      )}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-medium leading-snug text-foreground">{item.title}</p>
-                      {item.body ? (
-                        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted">{item.body}</p>
-                      ) : null}
-                      <p className="mt-1 text-[11px] text-muted">{formatDateTime(item.created_at)}</p>
-                    </div>
-                  </div>
-                </button>
-              ))
+        <>
+          {/* На телефоне выпадашка не должна уезжать за край — фиксируем в пределах экрана. */}
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+            aria-label="Закрыть уведомления"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            className={cn(
+              "z-50 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-card",
+              "fixed inset-x-3 top-[4.25rem] max-h-[min(70dvh,calc(100dvh-var(--mobile-nav-height)-var(--safe-area-bottom)-5rem))]",
+              "lg:absolute lg:inset-x-auto lg:right-0 lg:top-full lg:mt-2 lg:w-[24rem] lg:max-h-[60vh]",
             )}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+              <p className="text-sm font-semibold text-foreground">Уведомления</p>
+              <div className="flex items-center gap-3">
+                {count > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => void readAll()}
+                    className="text-xs font-medium text-brand-700 hover:underline"
+                  >
+                    Прочитать все
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="text-xs font-medium text-muted hover:text-foreground lg:hidden"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {items === null ? (
+                <p className="px-3 py-6 text-center text-xs text-muted">Загрузка...</p>
+              ) : items.length === 0 ? (
+                <p className="px-3 py-6 text-center text-xs text-muted">Пока ничего нового</p>
+              ) : (
+                items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void openItem(item)}
+                    className={cn(
+                      "block w-full border-b border-border px-3 py-2.5 text-left last:border-b-0 hover:bg-surface-muted",
+                      !item.read_at && "bg-brand-50",
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                          item.read_at ? "bg-transparent" : "bg-brand-600",
+                        )}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-[13px] font-medium leading-snug text-foreground">
+                          {item.title}
+                        </p>
+                        {item.body ? (
+                          <p className="mt-0.5 break-words text-xs leading-snug text-muted">{item.body}</p>
+                        ) : null}
+                        <p className="mt-1 text-[11px] text-muted">{formatDateTime(item.created_at)}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        </>
       ) : null}
     </div>
   );

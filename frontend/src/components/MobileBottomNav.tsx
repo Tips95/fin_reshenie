@@ -30,12 +30,14 @@ export function MobileBottomNav({
   pathname,
   badges,
   extraLinks,
+  onExtraAction,
 }: {
   items: MobileNavItem[];
   primaryHrefs: string[];
   pathname: string;
   badges?: Record<string, number>;
-  extraLinks?: Array<{ href: string; label: string }>;
+  extraLinks?: Array<{ href: string; label: string; action?: string }>;
+  onExtraAction?: (id: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const primaryItems = primaryHrefs
@@ -97,16 +99,30 @@ export function MobileBottomNav({
                 </Link>
               );
             })}
-            {extraLinks?.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="interactive block rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-muted"
-                onClick={() => setMenuOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {extraLinks?.map((link) =>
+              link.action ? (
+                <button
+                  key={link.action}
+                  type="button"
+                  className="interactive block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-surface-muted"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onExtraAction?.(link.action!);
+                  }}
+                >
+                  {link.label}
+                </button>
+              ) : (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="interactive block rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-muted"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ),
+            )}
           </div>
         </div>
       )}
@@ -118,6 +134,7 @@ export function MobileBottomNav({
             <Link
               key={item.href}
               href={item.href}
+              data-tour={`nav-${item.href}`}
               className={cn(
                 "mobile-bottom-nav-item relative",
                 active && "mobile-bottom-nav-item-active",
@@ -132,6 +149,7 @@ export function MobileBottomNav({
         {showMore && (
           <button
             type="button"
+            data-tour="nav-more"
             className={cn("mobile-bottom-nav-item", menuOpen && "mobile-bottom-nav-item-active")}
             onClick={() => setMenuOpen((open) => !open)}
           >

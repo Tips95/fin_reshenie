@@ -17,6 +17,7 @@ import {
   isCollectionStaff,
   isRemoteAgent,
 } from "@/lib/organization-features";
+import { AgentOnboarding, startAgentTour } from "@/modules/agents/AgentOnboarding";
 import { NotificationBell } from "@/modules/notifications/NotificationBell";
 import { useOpenTasksCount } from "@/modules/tasks/useOpenTasksCount";
 import { useAuth } from "@/modules/auth/AuthProvider";
@@ -210,6 +211,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  data-tour={`nav-${item.href}`}
                   className={cn(active ? "nav-item-active" : "nav-item-inactive", "relative")}
                 >
                   <span className="w-4 text-center text-[11px] opacity-70">{item.icon}</span>
@@ -284,7 +286,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             primaryHrefs={mobilePrimary}
             pathname={pathname}
             badges={{ "/tasks": openTasksCount }}
+            extraLinks={
+              isRemoteAgent(user)
+                ? [{ href: "#", label: "Показать подсказки", action: "tour" }]
+                : undefined
+            }
+            onExtraAction={(id) => {
+              if (id === "tour") startAgentTour();
+            }}
           />
+          {isRemoteAgent(user) ? <AgentOnboarding /> : null}
         </div>
       </div>
     </div>

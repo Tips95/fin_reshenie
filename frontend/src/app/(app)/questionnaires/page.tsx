@@ -217,7 +217,7 @@ function QuestionnairesPageContent() {
               : "Заводите каждого, кому звоните. Анкета сохраняется в любой момент — обязателен только телефон."
         }
         action={
-          <Button type="button" onClick={() => router.push("/questionnaires/new")}>
+          <Button type="button" data-tour="new-lead" onClick={() => router.push("/questionnaires/new")}>
             Новый лид
           </Button>
         }

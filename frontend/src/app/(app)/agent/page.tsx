@@ -18,6 +18,7 @@ import { formatMoney } from "@/lib/format";
 import { formatPhoneDisplay, phoneToTelHref, telegramHref } from "@/lib/phone";
 import type { AgentOverview } from "@/lib/types";
 import { WhatsAppGroupLink } from "@/modules/agents/AgentChat";
+import { startAgentTour } from "@/modules/agents/AgentOnboarding";
 import { AgentLeadsTable } from "@/modules/agents/AgentLeadsTable";
 
 const STEPS = [
@@ -56,7 +57,7 @@ export default function AgentCabinetPage() {
             <Button type="button" variant="secondary" onClick={() => router.push("/agent/price")}>
               Прайс и расчёт
             </Button>
-            <Button type="button" onClick={() => router.push("/questionnaires/new")}>
+            <Button type="button" data-tour="new-lead" onClick={() => router.push("/questionnaires/new")}>
               Новый клиент
             </Button>
           </div>
@@ -135,6 +136,13 @@ export default function AgentCabinetPage() {
             </Link>
             .
           </p>
+          <button
+            type="button"
+            className="link-brand mt-3 text-sm font-medium"
+            onClick={() => startAgentTour()}
+          >
+            Показать подсказки по сайту
+          </button>
         </Card>
       </div>
 
