@@ -11,6 +11,7 @@ import type {
   ClientDetail,
   ClientListResponse,
   DashboardSummary,
+  CollectorDashboard,
   AnalyticsOverview,
   FunnelOverview,
   ManagerCommissionsOverview,
@@ -27,7 +28,9 @@ import type {
   PricingTier,
   TokenResponse,
   AuditLogEntry,
+  CollectionCallResult,
   Organization,
+  OverdueQueueResponse,
   User,
   Questionnaire,
   QuestionnaireBrief,
@@ -422,6 +425,10 @@ export const notificationsApi = {
     }),
 };
 
+export const overduesApi = {
+  list: () => apiFetch<OverdueQueueResponse>("/overdues"),
+};
+
 export const organizationsApi = {
   current: () => apiFetch<Organization>("/organizations/current"),
   update: (data: Record<string, unknown>) =>
@@ -434,6 +441,8 @@ export const organizationsApi = {
 export const dashboardApi = {
   summary: (month?: string) =>
     apiFetch<DashboardSummary>(`/dashboard/summary${month ? `?month=${month}` : ""}`),
+  collector: (month?: string) =>
+    apiFetch<CollectorDashboard>(`/dashboard/collector${month ? `?month=${month}` : ""}`),
   setCashBalance: (data: { month: string; opening_amount: string; comment?: string | null }) =>
     apiFetch<CashBalance>("/dashboard/cash-balance", {
       method: "PUT",
@@ -841,6 +850,20 @@ export const scheduleApi = {
     apiFetch<PaymentScheduleItem>(`/payment-schedule/${scheduleId}/note`, {
       method: "PATCH",
       body: JSON.stringify({ manager_note: managerNote }),
+    }),
+  collection: (
+    scheduleId: string,
+    data: {
+      manager_note?: string | null;
+      clear_manager_note?: boolean;
+      call_result?: CollectionCallResult | null;
+      promised_pay_date?: string | null;
+      clear_promised_pay_date?: boolean;
+    },
+  ) =>
+    apiFetch<PaymentScheduleItem>(`/payment-schedule/${scheduleId}/collection`, {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
   delete: (scheduleId: string) =>
     apiFetch<void>(`/payment-schedule/${scheduleId}`, { method: "DELETE" }),

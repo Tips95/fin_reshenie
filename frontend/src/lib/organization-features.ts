@@ -13,6 +13,16 @@ export function isCollectionStaff(user: User | null | undefined): boolean {
   return user?.role === "call_center";
 }
 
+/** Коллектор: просрочки, заметки и результат звонка — без внесения платежей. */
+export function isCollector(user: User | null | undefined): boolean {
+  return user?.role === "collector";
+}
+
+export function canWorkOverdues(user: User | null | undefined): boolean {
+  const role = user?.role;
+  return role === "owner" || role === "manager" || role === "head_manager" || role === "collector";
+}
+
 export function isCivilExecutor(user: User | null | undefined): boolean {
   return user?.role === "executor";
 }
@@ -58,6 +68,15 @@ export function canOpenClientCards(user: User | null | undefined): boolean {
   return !isCivilExecutor(user) && !isRemoteAgent(user);
 }
 
+/** Коллектор смотрит график, но не правит суммы и не вносит платежи. */
+export function canRecordPayments(user: User | null | undefined): boolean {
+  return canManageClients(user);
+}
+
+export function canEditPaymentSchedule(user: User | null | undefined): boolean {
+  return canManageClients(user);
+}
+
 export function canUseQuestionnaires(user: User | null | undefined): boolean {
   const role = user?.role?.toLowerCase();
   return (
@@ -101,6 +120,7 @@ export function civilExecutorGroups(items: CivilCaseExecutorOption[]) {
 export function legalHomePath(user: User | null | undefined): string {
   if (isCivilExecutor(user)) return "/civil-cases";
   if (isRemoteAgent(user)) return "/agent";
+  if (isCollector(user)) return "/";
   if (isLeadSupervisor(user)) return "/questionnaires/stats";
   return isCollectionStaff(user) ? "/questionnaires" : "/";
 }

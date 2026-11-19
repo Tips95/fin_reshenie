@@ -10,8 +10,14 @@ from app.schemas.notification import (
     NotificationUnreadCount,
 )
 from app.services.notifications import LIST_LIMIT, list_notifications, mark_read, unread_count
+from app.services.overdues import OVERDUE_STAFF_ROLES, sync_promised_pay_notifications
 
 router = APIRouter()
+
+
+def _sync_promised_if_needed(db: Session, user: User) -> None:
+    if user.role in OVERDUE_STAFF_ROLES:
+        sync_promised_pay_notifications(db, organization_id=user.organization_id)
 
 
 @router.get("", response_model=NotificationList)
@@ -20,6 +26,7 @@ def get_notifications(
     current_user: User = Depends(require_any_authenticated),
     db: Session = Depends(get_db),
 ) -> NotificationList:
+    _sync_promised_if_needed(db, current_user)
     return list_notifications(db, current_user, limit=limit)
 
 
@@ -28,6 +35,7 @@ def get_unread_count(
     current_user: User = Depends(require_any_authenticated),
     db: Session = Depends(get_db),
 ) -> NotificationUnreadCount:
+    _sync_promised_if_needed(db, current_user)
     return NotificationUnreadCount(count=unread_count(db, current_user))
 
 

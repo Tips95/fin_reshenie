@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner
+from app.api.deps import get_current_active_user, require_overdue_staff, require_owner
 from app.core.database import get_db
 from app.models.enums import AuditAction
 from app.models.user import User
+from app.schemas.collector_dashboard import CollectorDashboard
 from app.schemas.dashboard import (
     CashBalanceActualUpdate,
     CashBalanceCarryForward,
@@ -19,6 +20,7 @@ from app.services.cash_balance import (
     opening_from_actual_cash,
     set_cash_balance,
 )
+from app.services.collector_dashboard import get_collector_dashboard
 from app.services.dashboard import get_dashboard_summary
 
 router = APIRouter()
@@ -31,6 +33,15 @@ def dashboard_summary(
     db: Session = Depends(get_db),
 ) -> DashboardSummary:
     return get_dashboard_summary(db, current_user, month=month)
+
+
+@router.get("/collector", response_model=CollectorDashboard)
+def collector_dashboard(
+    month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    current_user: User = Depends(require_overdue_staff),
+    db: Session = Depends(get_db),
+) -> CollectorDashboard:
+    return get_collector_dashboard(db, current_user, month=month)
 
 
 def _save_balance(

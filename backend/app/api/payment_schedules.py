@@ -5,11 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager
+from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager, require_overdue_staff
 from app.core.database import get_db
 from app.models.enums import AuditAction, PaymentScheduleStatus
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
+from app.schemas.overdue import CollectionUpdate
 from app.schemas.payment_schedule import (
     PaymentScheduleCreate,
     PaymentScheduleDefer,
@@ -18,6 +19,7 @@ from app.schemas.payment_schedule import (
     PaymentScheduleUpdate,
     PaymentScheduleWaiveOverdue,
 )
+from app.services.overdues import record_collection
 from app.services.access import (
     ensure_client_read_access,
     ensure_client_write_access,
@@ -174,6 +176,16 @@ def update_payment_schedule(
     db.commit()
     db.refresh(schedule)
     return schedule
+
+
+@router.post("/{schedule_id}/collection", response_model=PaymentScheduleResponse)
+def update_payment_schedule_collection(
+    schedule_id: UUID,
+    payload: CollectionUpdate,
+    current_user: User = Depends(require_overdue_staff),
+    db: Session = Depends(get_db),
+) -> PaymentScheduleResponse:
+    return record_collection(db, current_user, schedule_id, payload)
 
 
 @router.patch("/{schedule_id}/note", response_model=PaymentScheduleResponse)

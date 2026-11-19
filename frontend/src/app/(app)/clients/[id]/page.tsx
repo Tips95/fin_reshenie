@@ -13,6 +13,7 @@ import {
   Card,
   CollapsibleCard,
   EmptyState,
+  DatePicker,
   FormField,
   Input,
   LoadingState,
@@ -26,7 +27,19 @@ import {
 } from "@/components/ui";
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, questionnairesApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { sanitizeClientListReturnHref } from "@/lib/client-list-filters";
-import { contractStaffLabel, effectiveDueDate, documentCollectionStatusLabel, engagementStageLabel, formatAmountInput, formatDate, formatMoney, formatShortName, statusLabel, todayIsoDate } from "@/lib/format";
+import {
+  collectionCallResultLabel,
+  contractStaffLabel,
+  effectiveDueDate,
+  documentCollectionStatusLabel,
+  engagementStageLabel,
+  formatAmountInput,
+  formatDate,
+  formatMoney,
+  formatShortName,
+  statusLabel,
+  todayIsoDate,
+} from "@/lib/format";
 import { addOneMonth, ensurePhonePrefix, phoneToWhatsAppWebUrl } from "@/lib/phone";
 import {
   filterDecimalInput,
@@ -36,8 +49,31 @@ import {
   validatePositiveAmount,
   validateRequiredDate,
 } from "@/lib/validation";
-import type { AuditLogEntry, ClientBrief, ClientDetail, ClientStatus, MandatoryPayment, PaymentScheduleItem, ProcedureStage, User } from "@/lib/types";
-import { canManageClients, isContractStaffRole } from "@/lib/organization-features";
+import type {
+  AuditLogEntry,
+  ClientBrief,
+  ClientDetail,
+  ClientStatus,
+  CollectionCallResult,
+  MandatoryPayment,
+  PaymentScheduleItem,
+  ProcedureStage,
+  User,
+} from "@/lib/types";
+import {
+  canEditPaymentSchedule,
+  canManageClients,
+  canWorkOverdues,
+  isContractStaffRole,
+} from "@/lib/organization-features";
+
+const COLLECTION_CALL_RESULTS: CollectionCallResult[] = [
+  "reached",
+  "promised",
+  "no_answer",
+  "refused",
+  "other",
+];
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 import { cn } from "@/lib/cn";
 
@@ -235,6 +271,7 @@ export default function ClientDetailPage() {
   const [deferForm, setDeferForm] = useState({ deferred_until: "", comment: "" });
   const [notePanelId, setNotePanelId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [promiseDraft, setPromiseDraft] = useState("");
   const [noteSavingId, setNoteSavingId] = useState<string | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>(EMPTY_SCHEDULE_DRAFT);
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -957,15 +994,51 @@ export default function ClientDetailPage() {
     if (notePanelId === item.id) {
       setNotePanelId(null);
       setNoteDraft("");
+      setPromiseDraft("");
       return;
     }
     setNotePanelId(item.id);
     setNoteDraft(item.manager_note ?? "");
+    setPromiseDraft(item.promised_pay_date ?? "");
+  }
+
+  async function handleCollectionUpdate(
+    item: PaymentScheduleItem,
+    data: Parameters<typeof scheduleApi.collection>[1],
+    successMessage: string,
+  ) {
+    setNoteSavingId(item.id);
+    try {
+      await scheduleApi.collection(item.id, data);
+      await refreshClient();
+      showToast(successMessage);
+    } catch (error) {
+      showToast(
+        error instanceof ApiRequestError ? error.message : "Не удалось сохранить",
+        "error",
+      );
+    } finally {
+      setNoteSavingId(null);
+    }
   }
 
   async function handleSaveNote(item: PaymentScheduleItem) {
-    setNoteSavingId(item.id);
     const savedNote = noteDraft.trim() || null;
+    if (canWorkOverdues(user)) {
+      await handleCollectionUpdate(
+        item,
+        savedNote
+          ? { manager_note: savedNote }
+          : { clear_manager_note: true },
+        savedNote ? "Примечание сохранено" : "Примечание удалено",
+      );
+      if (!savedNote) {
+        setNotePanelId(null);
+        setNoteDraft("");
+      }
+      return;
+    }
+    setNoteSavingId(item.id);
     try {
       await scheduleApi.updateNote(item.id, savedNote);
       setNoteDraft(savedNote ?? "");
@@ -982,6 +1055,12 @@ export default function ClientDetailPage() {
   }
 
   async function handleClearNote(item: PaymentScheduleItem) {
+    if (canWorkOverdues(user)) {
+      await handleCollectionUpdate(item, { clear_manager_note: true }, "Примечание удалено");
+      setNotePanelId(null);
+      setNoteDraft("");
+      return;
+    }
     setNoteSavingId(item.id);
     try {
       await scheduleApi.updateNote(item.id, null);
@@ -1305,8 +1384,9 @@ export default function ClientDetailPage() {
   const isManager = user?.role === "manager" || user?.role === "head_manager";
   const isCollectionStaff = user?.role === "call_center";
   const canEditClient = canManageClients(user);
-  const canViewClientFinances = canEditClient || isCollectionStaff;
-  const canEditSchedule = canEditClient;
+  const canCollectOverdues = canWorkOverdues(user);
+  const canViewClientFinances = canEditClient || isCollectionStaff || canCollectOverdues;
+  const canEditSchedule = canEditPaymentSchedule(user);
   const canManageMandatory = isOwner;
   const canAssignManager = user?.role === "owner";
   const canRecordSchedulePayment = isOwner;
@@ -1670,6 +1750,169 @@ export default function ClientDetailPage() {
       !markedForDelete;
     const canDelete = canEditSchedule && Number(item.paid_amount) <= 0;
     return canDefer || canToggleCommission || canWaive || canDelete;
+  }
+
+  function renderCollectionPanel(item: PaymentScheduleItem) {
+    const events = item.collection_events ?? [];
+    const isOverdueMonth = item.status === "overdue" && !item.overdue_waived;
+    return (
+      <div className="space-y-2 py-1">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          Контакт · {item.month_number} мес.
+        </p>
+        {canCollectOverdues ? (
+          <>
+            <textarea
+              className="interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
+              rows={2}
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              placeholder="Обещал перезвонить, просит отсрочку, договорились на…"
+            />
+            <div className="flex flex-wrap gap-1">
+              <Button
+                type="button"
+                className="px-2 py-0.5"
+                onClick={() => void handleSaveNote(item)}
+                disabled={noteSavingId === item.id}
+              >
+                {noteSavingId === item.id ? "…" : "Сохранить заметку"}
+              </Button>
+              {(item.manager_note?.trim() ?? "") ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="px-2 py-0.5"
+                  onClick={() => void handleClearNote(item)}
+                  disabled={noteSavingId === item.id}
+                >
+                  Удалить
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-2 py-0.5"
+                onClick={() => {
+                  setNotePanelId(null);
+                  setNoteDraft("");
+                  setPromiseDraft("");
+                }}
+              >
+                Свернуть
+              </Button>
+            </div>
+            {isOverdueMonth ? (
+              <>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Результат звонка
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {COLLECTION_CALL_RESULTS.map((result) => (
+                    <Button
+                      key={result}
+                      type="button"
+                      size="sm"
+                      variant={item.last_call_result === result ? "primary" : "secondary"}
+                      disabled={noteSavingId === item.id}
+                      onClick={() =>
+                        void handleCollectionUpdate(
+                          item,
+                          {
+                            call_result: result,
+                            ...(result === "promised" && promiseDraft
+                              ? { promised_pay_date: promiseDraft }
+                              : {}),
+                          },
+                          "Результат звонка сохранён",
+                        )
+                      }
+                    >
+                      {collectionCallResultLabel(result)}
+                    </Button>
+                  ))}
+                </div>
+                <FormField label="Обещал оплатить">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <DatePicker
+                      value={promiseDraft}
+                      onChange={(event) => setPromiseDraft(event.target.value)}
+                      placeholder="дд.мм.гггг"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={noteSavingId === item.id || !promiseDraft}
+                      onClick={() =>
+                        void handleCollectionUpdate(
+                          item,
+                          {
+                            call_result: "promised",
+                            promised_pay_date: promiseDraft,
+                          },
+                          "Дата обещания сохранена",
+                        )
+                      }
+                    >
+                      Сохранить дату
+                    </Button>
+                    {item.promised_pay_date ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={noteSavingId === item.id}
+                        onClick={() =>
+                          void handleCollectionUpdate(
+                            item,
+                            { clear_promised_pay_date: true },
+                            "Дата обещания сброшена",
+                          )
+                        }
+                      >
+                        Сбросить
+                      </Button>
+                    ) : null}
+                  </div>
+                </FormField>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <p className="whitespace-pre-wrap text-xs text-foreground">
+            {item.manager_note?.trim() || "—"}
+          </p>
+        )}
+        {(item.last_call_result || item.promised_pay_date) && (
+          <p className="text-xs text-muted">
+            {item.last_call_result
+              ? `Звонок: ${collectionCallResultLabel(item.last_call_result)}`
+              : null}
+            {item.last_call_result && item.promised_pay_date ? " · " : null}
+            {item.promised_pay_date
+              ? `обещал ${formatDate(item.promised_pay_date)}`
+              : null}
+          </p>
+        )}
+        {events.length > 0 ? (
+          <div className="space-y-1 border-t border-border pt-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+              История
+            </p>
+            {events.slice(0, 5).map((event) => (
+              <p key={event.id} className="text-xs text-muted">
+                {formatDate(event.created_at.slice(0, 10))}
+                {event.result ? ` · ${collectionCallResultLabel(event.result)}` : ""}
+                {event.promised_pay_date
+                  ? ` · обещал ${formatDate(event.promised_pay_date)}`
+                  : ""}
+                {event.body ? ` — ${event.body}` : ""}
+              </p>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
   }
   const planContractTotal = detail?.installment_plan ? Number(detail.installment_plan.total_amount) : 0;
   const isManualInstallment = detail?.installment_plan?.pricing_tier_id == null;
@@ -3009,7 +3252,7 @@ export default function ClientDetailPage() {
                             )}
                           </td>
                           <td data-label="Примечание">
-                            {canEditClient ? (
+                            {canCollectOverdues ? (
                               <button
                                 type="button"
                                 className={cn(
@@ -3027,6 +3270,17 @@ export default function ClientDetailPage() {
                                 ) : (
                                   <span className="italic">+ примечание</span>
                                 )}
+                                {item.last_call_result || item.promised_pay_date ? (
+                                  <span className="mt-0.5 block text-[11px] text-muted">
+                                    {item.last_call_result
+                                      ? collectionCallResultLabel(item.last_call_result)
+                                      : null}
+                                    {item.last_call_result && item.promised_pay_date ? " · " : null}
+                                    {item.promised_pay_date
+                                      ? `обещал ${formatDate(item.promised_pay_date)}`
+                                      : null}
+                                  </span>
+                                ) : null}
                               </button>
                             ) : noteText ? (
                               <p className="line-clamp-2 whitespace-pre-wrap leading-snug text-foreground" title={noteText}>
@@ -3139,60 +3393,7 @@ export default function ClientDetailPage() {
                         </tr>
                         {notePanelId === item.id && (
                           <tr className="bg-surface-muted">
-                            <td colSpan={scheduleTableColSpan}>
-                              <div className="space-y-1.5 py-1">
-                                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                                  Примечание · {item.month_number} мес.
-                                </p>
-                                {canEditClient ? (
-                                  <>
-                                    <textarea
-                                      className="interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
-                                      rows={2}
-                                      value={noteDraft}
-                                      onChange={(e) => setNoteDraft(e.target.value)}
-                                      placeholder="Обещал перезвонить, просит отсрочку, договорились на…"
-                                    />
-                                    <div className="flex flex-wrap gap-1">
-                                      <Button
-                                        type="button"
-                                        className="px-2 py-0.5"
-                                        onClick={() => handleSaveNote(item)}
-                                        disabled={noteSavingId === item.id}
-                                      >
-                                        {noteSavingId === item.id ? "…" : "Сохранить"}
-                                      </Button>
-                                      {noteText && (
-                                        <Button
-                                          type="button"
-                                          variant="secondary"
-                                          className="px-2 py-0.5"
-                                          onClick={() => handleClearNote(item)}
-                                          disabled={noteSavingId === item.id}
-                                        >
-                                          Удалить
-                                        </Button>
-                                      )}
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="px-2 py-0.5"
-                                        onClick={() => {
-                                          setNotePanelId(null);
-                                          setNoteDraft("");
-                                        }}
-                                      >
-                                        Свернуть
-                                      </Button>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <p className="whitespace-pre-wrap text-xs text-foreground">
-                                    {noteText || "—"}
-                                  </p>
-                                )}
-                              </div>
-                            </td>
+                            <td colSpan={scheduleTableColSpan}>{renderCollectionPanel(item)}</td>
                           </tr>
                         )}
                         </Fragment>
@@ -3301,7 +3502,7 @@ export default function ClientDetailPage() {
                             ) : null}
                           </div>
                         </div>
-                        {scheduleRowHasMenu(item, rest, markedForDelete) || canEditClient ? (
+                        {scheduleRowHasMenu(item, rest, markedForDelete) || canCollectOverdues ? (
                           <ActionMenu label={`Действия по ${item.month_number} месяцу`}>
                             {canRecordSchedulePayment && rest > 0 && !markedForDelete ? (
                               <ActionMenuItem onClick={() => startDefer(item)}>
@@ -3333,9 +3534,9 @@ export default function ClientDetailPage() {
                                 {markedForWaive ? "Не снимать просрочку" : "Снять просрочку"}
                               </ActionMenuItem>
                             ) : null}
-                            {canEditClient ? (
+                            {canCollectOverdues ? (
                               <ActionMenuItem onClick={() => toggleNotePanel(item)}>
-                                {noteText ? "Примечание" : "Добавить примечание"}
+                                {noteText ? "Контакт / заметка" : "Добавить контакт"}
                               </ActionMenuItem>
                             ) : null}
                             {canEditSchedule && Number(item.paid_amount) <= 0 ? (
@@ -3377,52 +3578,8 @@ export default function ClientDetailPage() {
                       ) : null}
 
                       {notePanelId === item.id ? (
-                        <div className="mt-2 space-y-1.5 rounded-md border border-border bg-surface-muted p-2">
-                          {canEditClient ? (
-                            <>
-                              <textarea
-                                className="interactive w-full rounded-md border border-border bg-surface px-2 py-1 text-xs shadow-soft outline-none placeholder:text-muted focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
-                                rows={2}
-                                value={noteDraft}
-                                onChange={(e) => setNoteDraft(e.target.value)}
-                                placeholder="Обещал перезвонить, просит отсрочку…"
-                              />
-                              <div className="flex flex-wrap gap-1">
-                                <Button
-                                  type="button"
-                                  className="px-2 py-0.5"
-                                  onClick={() => handleSaveNote(item)}
-                                  disabled={noteSavingId === item.id}
-                                >
-                                  {noteSavingId === item.id ? "…" : "Сохранить"}
-                                </Button>
-                                {noteText ? (
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    className="px-2 py-0.5"
-                                    onClick={() => handleClearNote(item)}
-                                    disabled={noteSavingId === item.id}
-                                  >
-                                    Удалить
-                                  </Button>
-                                ) : null}
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  className="px-2 py-0.5"
-                                  onClick={() => {
-                                    setNotePanelId(null);
-                                    setNoteDraft("");
-                                  }}
-                                >
-                                  Свернуть
-                                </Button>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="whitespace-pre-wrap text-xs">{noteText || "—"}</p>
-                          )}
+                        <div className="mt-2 rounded-md border border-border bg-surface-muted p-2">
+                          {renderCollectionPanel(item)}
                         </div>
                       ) : null}
 

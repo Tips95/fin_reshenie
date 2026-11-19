@@ -18,6 +18,16 @@ class UserRole(str, enum.Enum):
     EXECUTOR = "executor"
     # Удалённый менеджер: заводит лидов и приглашает в офис, договор заключает штат.
     AGENT = "agent"
+    # Коллектор: просрочки, заметки, результат звонка и дата обещанной оплаты.
+    COLLECTOR = "collector"
+
+
+class CollectionCallResult(str, enum.Enum):
+    REACHED = "reached"
+    PROMISED = "promised"
+    NO_ANSWER = "no_answer"
+    REFUSED = "refused"
+    OTHER = "other"
 
 
 def parse_user_role(value: str | UserRole) -> UserRole:

@@ -28,6 +28,9 @@ class DashboardOverdueClientItem(BaseModel):
     contract_date: date
     status: ClientStatus
     contract_total: Decimal | None = None
+    overdue_amount: Decimal | None = None
+    overdue_days: int | None = None
+    promised_pay_date: date | None = None
 
 
 class DashboardClientRef(BaseModel):

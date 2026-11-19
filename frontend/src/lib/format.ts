@@ -154,6 +154,7 @@ export function statusLabel(status: string): string {
     call_center: "Сбор документов",
     executor: "Исполнитель",
     agent: "Удалённый менеджер",
+    collector: "Коллектор",
     salary: "Зарплата",
     rent: "Аренда",
     utilities: "Коммунальные",
@@ -177,6 +178,18 @@ export function contractStaffLabel(fullName: string, role?: string | null): stri
   if (role === "owner") return `${fullName} · Руководитель`;
   if (role === "head_manager") return `${fullName} · Начальник отдела`;
   return fullName;
+}
+
+export function collectionCallResultLabel(result: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    reached: "Дозвонились",
+    promised: "Обещал оплатить",
+    no_answer: "Не берёт",
+    refused: "Отказывается",
+    other: "Другое",
+  };
+  if (!result) return "—";
+  return labels[result] ?? result;
 }
 
 export function leadStatusLabel(status: string): string {

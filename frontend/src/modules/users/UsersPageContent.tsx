@@ -369,6 +369,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
             >
               <option value="manager">Менеджер</option>
               <option value="call_center">Сбор документов</option>
+              <option value="collector">Коллектор</option>
               <option value="head_manager">Начальник отдела</option>
               <option value="executor">Исполнитель</option>
               <option value="owner">Руководитель</option>
@@ -489,6 +490,7 @@ export function UsersPageContent({ homeHref = "/" }: { homeHref?: string }) {
                               >
                                 <option value="manager">Менеджер</option>
                                 <option value="call_center">Сбор документов</option>
+              <option value="collector">Коллектор</option>
                                 <option value="head_manager">Начальник отдела</option>
                                 <option value="executor">Исполнитель</option>
                                 <option value="owner">Руководитель</option>

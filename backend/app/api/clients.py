@@ -13,6 +13,7 @@ from app.models.client_mandatory_payment import ClientMandatoryPayment
 from app.models.enums import AuditAction, ClientStatus, EngagementStage, ProcedureStage, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment import Payment
+from app.models.collection_event import CollectionEvent
 from app.models.payment_schedule import PaymentSchedule
 from app.models.pricing_tier import PricingTier
 from app.models.user import User
@@ -47,7 +48,6 @@ from app.services.client_list import (
 )
 from app.schemas.installment_plan import InstallmentPlanResponse
 from app.schemas.payment import PaymentAlignResult, PaymentResponse
-from app.schemas.payment_schedule import PaymentScheduleResponse
 from app.services.installment_schedule import create_payment_schedule_models
 from app.services.client_deletion import hard_delete_client
 from app.services.client_duplicates import (
@@ -69,6 +69,7 @@ from app.services.payment_status import refresh_overdue_statuses
 from app.services.payment_dates import realign_client_legacy_finances
 from app.services.client_finances import contract_totals_by_client, get_client_contract_total
 from app.services.client_month_stats import compute_due_month_stats
+from app.services.overdues import clients_overdue_summaries, schedule_to_response
 
 router = APIRouter()
 
@@ -91,6 +92,11 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
         payment_schedule = list(
             db.scalars(
                 select(PaymentSchedule)
+                .options(
+                    selectinload(PaymentSchedule.collection_events).joinedload(
+                        CollectionEvent.author
+                    )
+                )
                 .where(PaymentSchedule.installment_plan_id == plan.id)
                 .order_by(PaymentSchedule.month_number)
             )
@@ -140,9 +146,7 @@ def _build_client_detail(db: Session, client: Client) -> ClientDetailResponse:
     return ClientDetailResponse(
         **base.model_dump(),
         installment_plan=installment_plan,
-        payment_schedule=[
-            PaymentScheduleResponse.model_validate(item) for item in payment_schedule
-        ],
+        payment_schedule=[schedule_to_response(item) for item in payment_schedule],
         matched_tier=matched_tier,
         payments=[PaymentResponse.model_validate(p) for p in payments],
         mandatory_payments=[
@@ -352,6 +356,7 @@ def list_clients(
 
     page_ids = [client.id for client in page_clients]
     overdue_map = clients_overdue_map(db, page_ids)
+    overdue_summaries = clients_overdue_summaries(db, page_ids)
     totals_map = contract_totals_by_client(db, page_ids)
     collections_map = document_collections_by_client(db, page_ids)
     collector_ids = [
@@ -394,6 +399,13 @@ def list_clients(
         note, notes_count = notes_map.get(item.id, (None, 0))
         item.latest_manager_note = note
         item.manager_notes_count = notes_count
+        summary = overdue_summaries.get(item.id)
+        if summary is not None:
+            item.overdue_amount = summary["overdue_amount"]
+            item.overdue_days = summary["overdue_days"]
+            item.promised_pay_date = summary["promised_pay_date"]
+            result = summary["last_call_result"]
+            item.last_call_result = result.value if result is not None else None
 
     return ClientListResponse(
         items=items,

@@ -36,6 +36,7 @@ from app.services.mandatory_payment_stats import (
 )
 from app.services.client_finances import contract_totals_by_client, sum_active_contract_totals
 from app.services.expense_totals import monthly_expenses_total, paid_fixed_expenses_total
+from app.services.overdues import clients_overdue_summaries
 from app.services.phone import month_bounds
 from app.services.schedule_dates import effective_due_date, payment_window_end
 
@@ -185,7 +186,13 @@ def _build_overdue_clients_preview(
     limit: int = 10,
 ) -> list[DashboardOverdueClientItem]:
     overdue_clients = [client for client in clients if overdue_map.get(client.id, False)]
-    overdue_clients.sort(key=lambda client: client.created_at, reverse=True)
+    summaries = clients_overdue_summaries(db, [client.id for client in overdue_clients])
+    overdue_clients.sort(
+        key=lambda client: (
+            -(summaries.get(client.id, {}).get("overdue_days") or 0),
+            client.full_name.lower(),
+        )
+    )
     preview_clients = overdue_clients[:limit]
     contract_totals = contract_totals_by_client(db, [client.id for client in preview_clients])
 
@@ -197,6 +204,9 @@ def _build_overdue_clients_preview(
             contract_date=client.contract_date,
             status=client.status,
             contract_total=contract_totals.get(client.id),
+            overdue_amount=(summaries.get(client.id) or {}).get("overdue_amount"),
+            overdue_days=(summaries.get(client.id) or {}).get("overdue_days"),
+            promised_pay_date=(summaries.get(client.id) or {}).get("promised_pay_date"),
         )
         for client in preview_clients
     ]

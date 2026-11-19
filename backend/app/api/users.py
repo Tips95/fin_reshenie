@@ -26,6 +26,7 @@ TEAM_ROLES = {
     UserRole.HEAD_MANAGER,
     UserRole.CALL_CENTER,
     UserRole.EXECUTOR,
+    UserRole.COLLECTOR,
 }
 
 

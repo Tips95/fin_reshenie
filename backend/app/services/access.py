@@ -63,7 +63,7 @@ def ensure_client_read_access(db: Session, user: User, client_id: UUID) -> Clien
 
 
 def ensure_client_write_access(db: Session, user: User, client_id: UUID) -> Client:
-    if user.role == UserRole.CALL_CENTER:
+    if user.role in (UserRole.CALL_CENTER, UserRole.COLLECTOR):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     return ensure_client_read_access(db, user, client_id)
 

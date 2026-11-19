@@ -11,10 +11,12 @@ import { cn } from "@/lib/cn";
 import {
   canUseCivilCases,
   canUseQuestionnaires,
+  canWorkOverdues,
   getOrganizationFeatures,
   isAgentPath,
   isCivilExecutor,
   isCollectionStaff,
+  isCollector,
   isRemoteAgent,
 } from "@/lib/organization-features";
 import { AgentOnboarding, startAgentTour } from "@/modules/agents/AgentOnboarding";
@@ -26,10 +28,18 @@ const navItems = [
   { href: "/agent", label: "Мой кабинет", icon: "◈", shortLabel: "Кабинет", roles: ["agent"] },
   { href: "/", label: "Дашборд", icon: "◈", shortLabel: "Дашборд", hideFor: ["call_center", "agent"] },
   {
+    href: "/overdues",
+    label: "Просрочки",
+    icon: "⚠",
+    shortLabel: "Просрочки",
+    roles: ["owner", "manager", "head_manager", "collector"],
+  },
+  {
     href: "/questionnaires",
     label: "Лиды и анкеты",
     icon: "▤",
     shortLabel: "Лиды",
+    hideFor: ["collector"],
   },
   { href: "/agent/chat", label: "Чат с куратором", icon: "✉", shortLabel: "Чат", roles: ["agent"] },
   { href: "/agent/rating", label: "Рейтинг", icon: "★", shortLabel: "Рейтинг", roles: ["agent"] },
@@ -63,12 +73,14 @@ const navItems = [
     icon: "◫",
     shortLabel: "Сбор",
     feature: "document_collection" as const,
+    hideFor: ["collector"],
   },
   {
     href: "/clients/contracts",
     label: "Договоры",
     icon: "◎",
     shortLabel: "Договоры",
+    roles: ["owner", "manager", "head_manager", "call_center", "collector"],
   },
   {
     href: "/analytics",
@@ -115,6 +127,7 @@ const navItems = [
 
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Дашборд";
+  if (pathname.startsWith("/overdues")) return "Просрочки";
   if (pathname.startsWith("/agents/chat")) return "Чат с удалёнными менеджерами";
   if (pathname.startsWith("/agents")) return "Удалённые менеджеры";
   if (pathname.startsWith("/agent/chat")) return "Чат с куратором";
@@ -186,9 +199,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ? ["/civil-cases"]
       : isRemoteAgent(user)
         ? ["/agent", "/questionnaires", "/agent/chat", "/agent/price"]
-        : isCollectionStaff(user)
-          ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
-          : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
+        : isCollector(user)
+          ? ["/", "/overdues", "/clients/contracts"]
+          : isCollectionStaff(user)
+            ? ["/questionnaires", "/clients/collection", "/clients/contracts"]
+            : canWorkOverdues(user)
+              ? ["/", "/overdues", "/questionnaires", "/clients/contracts"]
+              : ["/", "/questionnaires", "/questionnaires/stats", "/clients/contracts"]
   ).filter((href) => visibleNav.some((item) => item.href === href));
 
   return (

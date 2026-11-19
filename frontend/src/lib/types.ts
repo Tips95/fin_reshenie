@@ -4,7 +4,10 @@ export type UserRole =
   | "head_manager"
   | "call_center"
   | "executor"
-  | "agent";
+  | "agent"
+  | "collector";
+
+export type CollectionCallResult = "reached" | "promised" | "no_answer" | "refused" | "other";
 
 export type OrganizationType = "bankruptcy";
 
@@ -110,6 +113,10 @@ export interface Client {
   created_at: string;
   updated_at: string;
   has_overdue?: boolean;
+  overdue_amount?: string | null;
+  overdue_days?: number | null;
+  promised_pay_date?: string | null;
+  last_call_result?: CollectionCallResult | null;
   document_collection_status?: DocumentCollectionStatus | null;
   document_collection_paid_date?: string | null;
   contract_total?: string | null;
@@ -189,6 +196,18 @@ export interface InstallmentPlan {
   created_at: string;
 }
 
+export interface CollectionEvent {
+  id: string;
+  client_id: string;
+  payment_schedule_id: string;
+  author_id: string | null;
+  author_name?: string | null;
+  result: CollectionCallResult | null;
+  promised_pay_date: string | null;
+  body: string | null;
+  created_at: string;
+}
+
 export interface PaymentScheduleItem {
   id: string;
   installment_plan_id: string;
@@ -202,6 +221,31 @@ export interface PaymentScheduleItem {
   deferral_comment: string | null;
   manager_note: string | null;
   overdue_waived: boolean;
+  last_call_result?: CollectionCallResult | null;
+  last_call_at?: string | null;
+  promised_pay_date?: string | null;
+  collection_events?: CollectionEvent[];
+}
+
+export interface OverdueQueueItem {
+  client_id: string;
+  full_name: string;
+  phone: string;
+  status: ClientStatus;
+  overdue_amount: string;
+  overdue_days: number;
+  oldest_due_date: string;
+  payment_schedule_id: string;
+  month_number: number;
+  manager_note: string | null;
+  last_call_result: CollectionCallResult | null;
+  last_call_at: string | null;
+  promised_pay_date: string | null;
+}
+
+export interface OverdueQueueResponse {
+  items: OverdueQueueItem[];
+  total: number;
 }
 
 export interface Payment {
@@ -289,6 +333,9 @@ export interface DashboardOverdueClientItem {
   contract_date: string;
   status: ClientStatus;
   contract_total: string | null;
+  overdue_amount?: string | null;
+  overdue_days?: number | null;
+  promised_pay_date?: string | null;
 }
 
 export interface CashBalance {
@@ -296,6 +343,50 @@ export interface CashBalance {
   opening_amount: string;
   comment: string | null;
   cash_on_hand?: string | null;
+}
+
+export interface CollectorDueMonthItem {
+  client_id: string;
+  full_name: string;
+  phone: string;
+  due_date: string;
+  month_number: number;
+  remainder: string;
+  payment_schedule_id: string;
+}
+
+export interface CollectorOverduePreviewItem {
+  client_id: string;
+  full_name: string;
+  phone: string;
+  overdue_amount: string;
+  overdue_days: number;
+  promised_pay_date: string | null;
+  last_call_result: CollectionCallResult | null;
+}
+
+export interface CollectorPromisedTodayItem {
+  client_id: string;
+  full_name: string;
+  phone: string;
+  overdue_amount: string;
+  promised_pay_date: string;
+  payment_schedule_id: string;
+  manager_note: string | null;
+}
+
+export interface CollectorDashboard {
+  period_month: string;
+  is_current_month: boolean;
+  expected_this_month: string;
+  collected_this_month: string;
+  overdue_amount: string;
+  clients_overdue: number;
+  promised_today_count: number;
+  no_contact_count: number;
+  due_this_month_preview: CollectorDueMonthItem[];
+  overdue_preview: CollectorOverduePreviewItem[];
+  promised_today_preview: CollectorPromisedTodayItem[];
 }
 
 export interface DashboardSummary {

@@ -8,6 +8,7 @@ import { LoadingState } from "@/components/ui";
 import {
   isAgentPath,
   isCollectionStaff,
+  isCollector,
   isRemoteAgent,
   legalHomePath,
 } from "@/lib/organization-features";
@@ -39,6 +40,15 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
     }
     if (isCollectionStaff(user) && pathname === "/") {
       router.replace(legalHomePath(user));
+      return;
+    }
+    if (isCollector(user)) {
+      const allowed =
+        pathname === "/" ||
+        pathname.startsWith("/overdues") ||
+        pathname.startsWith("/clients") ||
+        pathname === "/login";
+      if (!allowed) router.replace("/");
     }
   }, [loading, user, router, pathname]);
 

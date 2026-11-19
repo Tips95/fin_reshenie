@@ -78,6 +78,34 @@ function formatRuDate(value: string | undefined): string {
   return `${String(parsed.day).padStart(2, "0")}.${String(parsed.month).padStart(2, "0")}.${parsed.year}`;
 }
 
+/** Пока печатают цифры — сами ставим точки: 12042026 → 12.04.2026 */
+function maskRuDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
+}
+
+function digitCaretIndex(value: string, caret: number): number {
+  let count = 0;
+  for (let index = 0; index < value.length && index < caret; index += 1) {
+    if (/\d/.test(value[index]!)) count += 1;
+  }
+  return count;
+}
+
+function caretFromDigitIndex(masked: string, digitIndex: number): number {
+  if (digitIndex <= 0) return 0;
+  let seen = 0;
+  for (let index = 0; index < masked.length; index += 1) {
+    if (/\d/.test(masked[index]!)) {
+      seen += 1;
+      if (seen >= digitIndex) return index + 1;
+    }
+  }
+  return masked.length;
+}
+
 function isRealDate(year: number, month: number, day: number): boolean {
   if (year < 1950 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
     return false;
@@ -232,6 +260,16 @@ type PickerBaseProps = Omit<
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
+const POPOVER_ESTIMATE_PX = 260;
+
+function shouldOpenUp(anchor: HTMLElement | null): boolean {
+  if (!anchor || typeof window === "undefined") return false;
+  const rect = anchor.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+  return spaceBelow < POPOVER_ESTIMATE_PX && spaceAbove > spaceBelow;
+}
+
 export function DatePicker({
   value = "",
   onChange,
@@ -249,7 +287,16 @@ export function DatePicker({
   const [viewYear, setViewYear] = useState(initialView.year);
   const [viewMonth, setViewMonth] = useState(initialView.month);
   const [typed, setTyped] = useState(() => formatRuDate(value));
+  const [openUp, setOpenUp] = useState(false);
   const focusedRef = useRef(false);
+
+  function toggleOpen() {
+    setOpen((current) => {
+      const next = !current;
+      if (next) setOpenUp(shouldOpenUp(rootRef.current));
+      return next;
+    });
+  }
 
   useEffect(() => {
     const parsed = parseIsoDate(value);
@@ -292,10 +339,15 @@ export function DatePicker({
     setTyped(formatRuDate(value));
   }
 
-  function handleTypedChange(next: string) {
-    const cleaned = next.replace(/[^\d.\-/]/g, "").slice(0, 10);
-    setTyped(cleaned);
-    const parsed = parseFlexibleDate(cleaned);
+  function handleTypedChange(next: string, input: HTMLInputElement) {
+    const digitIndex = digitCaretIndex(next, input.selectionStart ?? next.length);
+    const masked = maskRuDateInput(next);
+    setTyped(masked);
+    requestAnimationFrame(() => {
+      const pos = caretFromDigitIndex(masked, digitIndex);
+      input.setSelectionRange(pos, pos);
+    });
+    const parsed = parseFlexibleDate(masked);
     if (parsed === "") {
       emitChange(onChange, "");
       return;
@@ -310,8 +362,10 @@ export function DatePicker({
       <div className="flex items-stretch gap-1">
         <input
           type="text"
+          inputMode="numeric"
           autoComplete="off"
           id={id}
+          name={name}
           disabled={disabled}
           required={required}
           placeholder={placeholder || "дд.мм.гггг"}
@@ -325,7 +379,7 @@ export function DatePicker({
             focusedRef.current = false;
             commitTyped(typed);
           }}
-          onChange={(event) => handleTypedChange(event.target.value)}
+          onChange={(event) => handleTypedChange(event.target.value, event.currentTarget)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
@@ -340,7 +394,7 @@ export function DatePicker({
           aria-haspopup="dialog"
           aria-expanded={open}
           className="interactive flex w-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-brand-600 shadow-soft hover:border-brand-600 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => setOpen((current) => !current)}
+          onClick={toggleOpen}
         >
           <CalendarIcon className="h-4 w-4" />
         </button>
@@ -350,23 +404,26 @@ export function DatePicker({
         <div
           role="dialog"
           aria-label="Выбор даты"
-          className="absolute left-0 top-[calc(100%+6px)] z-50 w-[min(100vw-2rem,18rem)] rounded-xl border border-border bg-surface p-3 shadow-hover"
+          className={cn(
+            "absolute left-0 z-[80] w-[min(100vw-2rem,14rem)] rounded-lg border border-border bg-surface p-2 shadow-hover",
+            openUp ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]",
+          )}
         >
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-1.5 flex items-center justify-between gap-1">
             <button
               type="button"
-              className="interactive rounded-md border border-border p-1.5 text-muted hover:bg-surface-muted hover:text-foreground"
+              className="interactive rounded border border-border p-1 text-muted hover:bg-surface-muted hover:text-foreground"
               aria-label="Предыдущий месяц"
               onClick={() => shiftMonth(-1)}
             >
               <Chevron direction="left" />
             </button>
-            <p className="text-sm font-semibold capitalize text-foreground">
-              {MONTHS_FULL[viewMonth - 1]} {viewYear}
+            <p className="text-xs font-semibold capitalize text-foreground">
+              {MONTHS_SHORT[viewMonth - 1]} {viewYear}
             </p>
             <button
               type="button"
-              className="interactive rounded-md border border-border p-1.5 text-muted hover:bg-surface-muted hover:text-foreground"
+              className="interactive rounded border border-border p-1 text-muted hover:bg-surface-muted hover:text-foreground"
               aria-label="Следующий месяц"
               onClick={() => shiftMonth(1)}
             >
@@ -374,21 +431,21 @@ export function DatePicker({
             </button>
           </div>
 
-          <div className="mb-1 grid grid-cols-7 gap-1">
+          <div className="mb-0.5 grid grid-cols-7 gap-0.5">
             {WEEKDAYS.map((label) => (
               <span
                 key={label}
-                className="py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted"
+                className="py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-muted"
               >
                 {label}
               </span>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-0.5">
             {days.map((cell, index) => {
               if (!cell.inMonth) {
-                return <span key={`pad-${index}`} className="h-9" aria-hidden />;
+                return <span key={`pad-${index}`} className="h-7" aria-hidden />;
               }
               const isSelected =
                 selected?.year === viewYear &&
@@ -402,7 +459,7 @@ export function DatePicker({
                   type="button"
                   onClick={() => pickDay(cell.day)}
                   className={cn(
-                    "interactive h-9 rounded-lg text-xs font-medium transition-colors",
+                    "interactive h-7 rounded-md text-[11px] font-medium transition-colors",
                     isSelected
                       ? "bg-brand-600 text-white shadow-soft"
                       : isToday
@@ -416,10 +473,10 @@ export function DatePicker({
             })}
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+          <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-border pt-1.5">
             <button
               type="button"
-              className="interactive text-xs font-medium text-brand-700 hover:text-brand-600"
+              className="interactive text-[11px] font-medium text-brand-700 hover:text-brand-600"
               onClick={() => {
                 const next = toIsoDate(today);
                 emitChange(onChange, next);
@@ -434,7 +491,7 @@ export function DatePicker({
             {value ? (
               <button
                 type="button"
-                className="interactive text-xs font-medium text-muted hover:text-foreground"
+                className="interactive text-[11px] font-medium text-muted hover:text-foreground"
                 onClick={() => {
                   emitChange(onChange, "");
                   setTyped("");
@@ -464,6 +521,7 @@ export function MonthPicker({
   const selected = parseIsoMonth(value);
   const today = todayParts();
   const [viewYear, setViewYear] = useState(selected?.year ?? today.year);
+  const [openUp, setOpenUp] = useState(false);
 
   useEffect(() => {
     const parsed = parseIsoMonth(value);
@@ -484,7 +542,13 @@ export function MonthPicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         className={triggerClassName}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setOpen((current) => {
+            const next = !current;
+            if (next) setOpenUp(shouldOpenUp(rootRef.current));
+            return next;
+          });
+        }}
       >
         <span className={cn("truncate capitalize", !value && "text-muted")}>
           {formatDisplayMonth(value)}
@@ -496,7 +560,10 @@ export function MonthPicker({
         <div
           role="dialog"
           aria-label="Выбор месяца"
-          className="absolute left-0 top-[calc(100%+6px)] z-50 w-[min(100vw-2rem,16rem)] rounded-xl border border-border bg-surface p-3 shadow-hover"
+          className={cn(
+            "absolute left-0 z-[80] w-[min(100vw-2rem,16rem)] rounded-xl border border-border bg-surface p-3 shadow-hover",
+            openUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]",
+          )}
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <button

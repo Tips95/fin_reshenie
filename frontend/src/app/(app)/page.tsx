@@ -22,7 +22,6 @@ import {
   formatMoney,
   formatMonthLabel,
   formatShortName,
-  statusLabel,
 } from "@/lib/format";
 import type {
   DashboardOverdueClientItem,
@@ -31,8 +30,13 @@ import type {
   MandatoryPaymentBreakdown,
 } from "@/lib/types";
 import { clientListPath } from "@/lib/client-list-filters";
-import { canManageClients, canUseQuestionnaires } from "@/lib/organization-features";
+import {
+  canManageClients,
+  canUseQuestionnaires,
+  isCollector,
+} from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
+import { CollectorDashboard } from "@/modules/overdues/CollectorDashboard";
 
 const DASHBOARD_SECTIONS = [
   { id: "dash-flow", label: "Движение за месяц" },
@@ -209,6 +213,14 @@ function nextMonth(month: string): string {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  if (isCollector(user)) {
+    return <CollectorDashboard />;
+  }
+  return <OfficeDashboard />;
+}
+
+function OfficeDashboard() {
   const { user } = useAuth();
   const [month, setMonth] = useState(currentMonth);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -1003,8 +1015,8 @@ export default function DashboardPage() {
               >
                 {exportingOverdue ? "Выгрузка..." : "Excel"}
               </Button>
-              <Link href="/clients/contracts?overdue=true" className={PANEL_LINK}>
-                Все клиенты
+              <Link href="/overdues" className={PANEL_LINK}>
+                Все
               </Link>
             </>
           }
@@ -1019,26 +1031,32 @@ export default function DashboardPage() {
                     <tr>
                       <th>ФИО</th>
                       <th>Телефон</th>
-                      <th>Договор</th>
-                      <th className="text-right">Сумма</th>
-                      <th>Статус</th>
+                      <th className="text-right">Долг</th>
+                      <th>Дни</th>
+                      <th>Обещал</th>
                     </tr>
                   </thead>
                   <tbody>
                     {overdueClients.map((client: DashboardOverdueClientItem) => (
                       <tr key={client.id}>
                         <td>
-                          <Link href={`/clients/${client.id}`} className="link-brand">
+                          <Link href={`/clients/${client.id}?tab=payments`} className="link-brand">
                             {formatShortName(client.full_name)}
                           </Link>
                         </td>
-                        <td className="tabular text-muted">{client.phone}</td>
-                        <td className="tabular text-muted">{formatDate(client.contract_date)}</td>
+                        <td className="tabular text-muted">
+                          <a href={`tel:${client.phone}`} className="link-brand">
+                            {client.phone}
+                          </a>
+                        </td>
                         <td className="tabular text-right font-medium text-foreground">
-                          {formatMoney(client.contract_total ?? "0")}
+                          {formatMoney(client.overdue_amount ?? "0")}
                         </td>
                         <td>
-                          <Badge tone="danger">{statusLabel(client.status)}</Badge>
+                          <Badge tone="danger">{client.overdue_days ?? "—"} дн.</Badge>
+                        </td>
+                        <td className="tabular text-muted">
+                          {client.promised_pay_date ? formatDate(client.promised_pay_date) : "—"}
                         </td>
                       </tr>
                     ))}
@@ -1050,14 +1068,14 @@ export default function DashboardPage() {
                 {overdueClients.map((client: DashboardOverdueClientItem) => (
                   <Link
                     key={client.id}
-                    href={`/clients/${client.id}`}
+                    href={`/clients/${client.id}?tab=payments`}
                     className="row-card row-card-overdue block"
                   >
                     <div className="row-card-head">
                       <span className="text-sm font-semibold text-foreground">
                         {formatShortName(client.full_name)}
                       </span>
-                      <Badge tone="danger">{statusLabel(client.status)}</Badge>
+                      <Badge tone="danger">{client.overdue_days ?? "—"} дн.</Badge>
                     </div>
                     <div className="row-card-grid">
                       <div>
@@ -1065,13 +1083,15 @@ export default function DashboardPage() {
                         <p className="row-card-value">{client.phone}</p>
                       </div>
                       <div>
-                        <p className="row-card-label">Договор</p>
-                        <p className="row-card-value">{formatDate(client.contract_date)}</p>
+                        <p className="row-card-label">Долг</p>
+                        <p className="row-card-value">
+                          {formatMoney(client.overdue_amount ?? "0")}
+                        </p>
                       </div>
                       <div>
-                        <p className="row-card-label">Сумма</p>
+                        <p className="row-card-label">Обещал</p>
                         <p className="row-card-value">
-                          {formatMoney(client.contract_total ?? "0")}
+                          {client.promised_pay_date ? formatDate(client.promised_pay_date) : "—"}
                         </p>
                       </div>
                     </div>

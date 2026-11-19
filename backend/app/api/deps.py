@@ -74,6 +74,13 @@ require_owner_or_manager = require_roles(
     UserRole.MANAGER,
     UserRole.HEAD_MANAGER,
 )
+# Менеджеры офиса + коллектор (просрочки, без орг.финансов владельца).
+require_overdue_staff = require_roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.HEAD_MANAGER,
+    UserRole.COLLECTOR,
+)
 require_legal_staff = require_roles(
     UserRole.OWNER,
     UserRole.MANAGER,

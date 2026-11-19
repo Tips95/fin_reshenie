@@ -18,7 +18,12 @@ import { cn } from "@/lib/cn";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { collectErrors, hasErrors, validateFullName, validatePhone, validateRequiredDate } from "@/lib/validation";
 import type { Client, ClientBrief, ClientDueMonthSummary, ClientStatus, ProcedureStage, User } from "@/lib/types";
-import { canManageClients, canSuperviseLeads, isContractStaffRole } from "@/lib/organization-features";
+import {
+  canManageClients,
+  canSuperviseLeads,
+  canWorkOverdues,
+  isContractStaffRole,
+} from "@/lib/organization-features";
 import { useAuth, getAuthErrorMessage } from "@/modules/auth/AuthProvider";
 
 type SortField = ClientListSortField;
@@ -367,7 +372,8 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
   const canEdit = canCreate;
   const isManager = user?.role === "manager" || user?.role === "head_manager";
   const canAssignManager = user?.role === "owner";
-  const canSeeClientAmounts = canManageClients(user);
+  const canSeeClientAmounts = canManageClients(user) || canWorkOverdues(user);
+  const showOverdueDetails = canWorkOverdues(user);
   const isCollectionStaff = user?.role === "call_center";
 
   function clientLatestNote(client: Client | ClientBrief) {
@@ -861,7 +867,16 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                         {/* Статус и просрочка стоят рядом: оба отвечают на вопрос
                             «всё ли в порядке с клиентом». */}
                         <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                          {canSeeClientAmounts && !isCollectionView && isOverdue ? (
+                          {showOverdueDetails && !isCollectionView && isOverdue && isFullClient(client) ? (
+                            <>
+                              <Badge tone="danger">
+                                {client.overdue_days != null ? `${client.overdue_days} дн.` : "Просрочка"}
+                              </Badge>
+                              {client.overdue_amount != null ? (
+                                <Badge tone="danger">{formatMoney(client.overdue_amount)}</Badge>
+                              ) : null}
+                            </>
+                          ) : canSeeClientAmounts && !isCollectionView && isOverdue ? (
                             <Badge tone="danger">Просрочка</Badge>
                           ) : null}
                           <Badge
@@ -879,6 +894,13 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
                         <span>Договор: {formatDate(client.contract_date)}</span>
+                        {showOverdueDetails &&
+                        !isCollectionView &&
+                        isFullClient(client) &&
+                        isOverdue &&
+                        client.promised_pay_date ? (
+                          <span>Обещал: {formatDate(client.promised_pay_date)}</span>
+                        ) : null}
                         {canSeeClientAmounts && !isCollectionView && isFullClient(client) && filters.due_month ? (
                           <>
                             <span className="font-medium text-foreground">
@@ -1138,7 +1160,27 @@ export default function ClientsPageContent({ workspace }: { workspace: ClientWor
                     {canSeeClientAmounts && !isCollectionView && (
                       <td>
                         {isFullClient(client) && client.has_overdue ? (
-                          <Badge tone="danger">Есть</Badge>
+                          showOverdueDetails ? (
+                            <div className="space-y-0.5">
+                              <Badge tone="danger">
+                                {client.overdue_days != null
+                                  ? `${client.overdue_days} дн.`
+                                  : "Есть"}
+                              </Badge>
+                              {client.overdue_amount != null ? (
+                                <p className="tabular text-xs font-medium text-status-danger-text">
+                                  {formatMoney(client.overdue_amount)}
+                                </p>
+                              ) : null}
+                              {client.promised_pay_date ? (
+                                <p className="text-xs text-muted">
+                                  обещал {formatDate(client.promised_pay_date)}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <Badge tone="danger">Есть</Badge>
+                          )
                         ) : (
                           <span className="text-sm text-muted">—</span>
                         )}

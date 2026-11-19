@@ -71,6 +71,10 @@ class ClientResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     has_overdue: bool | None = None
+    overdue_amount: Decimal | None = None
+    overdue_days: int | None = None
+    promised_pay_date: date | None = None
+    last_call_result: str | None = None
     document_collection_status: DocumentCollectionStatus | None = None
     document_collection_paid_date: date | None = None
     contract_total: Decimal | None = None

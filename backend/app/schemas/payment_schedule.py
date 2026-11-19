@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import PaymentScheduleStatus
+from app.models.enums import CollectionCallResult, PaymentScheduleStatus
+from app.schemas.overdue import CollectionEventResponse
 
 
 class PaymentScheduleResponse(BaseModel):
@@ -22,6 +23,10 @@ class PaymentScheduleResponse(BaseModel):
     deferral_comment: str | None = None
     manager_note: str | None = None
     overdue_waived: bool = False
+    last_call_result: CollectionCallResult | None = None
+    last_call_at: datetime | None = None
+    promised_pay_date: date | None = None
+    collection_events: list[CollectionEventResponse] = []
 
 
 class PaymentScheduleNoteUpdate(BaseModel):

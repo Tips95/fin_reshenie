@@ -12,6 +12,7 @@ from app.models.client_questionnaire import (
     QuestionnaireCall,
     QuestionnaireComment,
 )
+from app.models.collection_event import CollectionEvent
 from app.models.court_deposit_tracking import CourtDepositTracking
 from app.models.document_collection import DocumentCollection
 from app.models.manager_task import ManagerTask
@@ -40,6 +41,7 @@ __all__ = [
     "ClientMandatoryPayment",
     "ClientMandatoryPaymentRecord",
     "ClientQuestionnaire",
+    "CollectionEvent",
     "CourtDepositTracking",
     "DocumentCollection",
     "InstallmentPlan",
