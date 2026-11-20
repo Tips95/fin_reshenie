@@ -20,3 +20,4 @@ class AuditLogResponse(BaseModel):
     changed_by: UUID
     changed_by_name: str | None = None
     changed_at: datetime
+    entity_label: str | None = None

@@ -66,6 +66,7 @@ export interface AuditLogEntry {
   changed_by: string;
   changed_by_name: string | null;
   changed_at: string;
+  entity_label?: string | null;
 }
 
 export interface User {

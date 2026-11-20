@@ -68,6 +68,15 @@ def ensure_client_write_access(db: Session, user: User, client_id: UUID) -> Clie
     return ensure_client_read_access(db, user, client_id)
 
 
+def ensure_schedule_write_access(db: Session, user: User, client_id: UUID) -> Client:
+    """Правка графика: менеджеры офиса и коллектор (с аудитом), без прав на карточку целиком."""
+    if user.role == UserRole.CALL_CENTER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+    if user.role == UserRole.COLLECTOR:
+        return ensure_client_read_access(db, user, client_id)
+    return ensure_client_write_access(db, user, client_id)
+
+
 def ensure_bankruptcy_client_module(user: User) -> None:
     if user.role == UserRole.EXECUTOR:
         raise HTTPException(

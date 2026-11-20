@@ -132,6 +132,24 @@ export function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+export function auditFieldLabel(fieldName: string | null | undefined): string {
+  if (!fieldName) return "";
+  const labels: Record<string, string> = {
+    planned_amount: "Сумма платежа",
+    due_date: "Дата платежа",
+    deferred_until: "Отсрочка до",
+    deferral_comment: "Комментарий отсрочки",
+    overdue_waived: "Снятие просрочки",
+    manager_note: "Заметка",
+    month_number: "Месяц графика",
+    call_result: "Результат звонка",
+    promised_pay_date: "Обещанная оплата",
+    total_amount: "Сумма договора",
+    from_tier: "График по тарифу",
+  };
+  return labels[fieldName] ?? fieldName;
+}
+
 export function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     active: "Активен",

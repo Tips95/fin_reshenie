@@ -751,6 +751,7 @@ export const auditApi = {
   list: (params?: {
     entity_type?: string;
     entity_id?: string;
+    client_id?: string;
     changed_by?: string;
     date_from?: string;
     date_to?: string;
@@ -759,6 +760,7 @@ export const auditApi = {
     const search = new URLSearchParams();
     if (params?.entity_type) search.set("entity_type", params.entity_type);
     if (params?.entity_id) search.set("entity_id", params.entity_id);
+    if (params?.client_id) search.set("client_id", params.client_id);
     if (params?.changed_by) search.set("changed_by", params.changed_by);
     if (params?.date_from) search.set("date_from", params.date_from);
     if (params?.date_to) search.set("date_to", params.date_to);

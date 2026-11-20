@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner, require_owner_or_manager, require_overdue_staff
+from app.api.deps import (
+    get_current_active_user,
+    require_owner,
+    require_owner_or_manager,
+    require_overdue_staff,
+    require_schedule_editor,
+)
 from app.core.database import get_db
 from app.models.enums import AuditAction, PaymentScheduleStatus
 from app.models.payment_schedule import PaymentSchedule
@@ -23,6 +29,7 @@ from app.services.overdues import record_collection
 from app.services.access import (
     ensure_client_read_access,
     ensure_client_write_access,
+    ensure_schedule_write_access,
     get_installment_plan_for_client,
 )
 from app.services.audit import log_audit
@@ -48,12 +55,12 @@ def _get_schedule_or_404(db: Session, schedule_id: UUID) -> PaymentSchedule:
 def defer_payment_schedule(
     schedule_id: UUID,
     payload: PaymentScheduleDefer,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_schedule_editor),
     db: Session = Depends(get_db),
 ) -> PaymentSchedule:
     schedule = _get_schedule_or_404(db, schedule_id)
     client_id = schedule.installment_plan.client_id
-    ensure_client_write_access(db, current_user, client_id)
+    ensure_schedule_write_access(db, current_user, client_id)
 
     if schedule.status == PaymentScheduleStatus.PAID:
         raise HTTPException(status_code=422, detail="Нельзя отсрочить полностью оплаченный платёж")
@@ -129,12 +136,12 @@ def waive_payment_schedule_overdue(
 def update_payment_schedule(
     schedule_id: UUID,
     payload: PaymentScheduleUpdate,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_schedule_editor),
     db: Session = Depends(get_db),
 ) -> PaymentSchedule:
     schedule = _get_schedule_or_404(db, schedule_id)
     client_id = schedule.installment_plan.client_id
-    ensure_client_write_access(db, current_user, client_id)
+    ensure_schedule_write_access(db, current_user, client_id)
 
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
@@ -222,13 +229,13 @@ def update_payment_schedule_note(
 @router.delete("/{schedule_id}", status_code=204)
 def delete_payment_schedule(
     schedule_id: UUID,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_schedule_editor),
     db: Session = Depends(get_db),
 ) -> None:
     schedule = _get_schedule_or_404(db, schedule_id)
     client_id = schedule.installment_plan.client_id
     plan_id = schedule.installment_plan_id
-    ensure_client_write_access(db, current_user, client_id)
+    ensure_schedule_write_access(db, current_user, client_id)
 
     log_audit(
         db,
@@ -255,10 +262,10 @@ def create_payment_schedule_item(
     client_id: UUID,
     plan_id: UUID,
     payload: PaymentScheduleCreate,
-    current_user: User = Depends(require_owner_or_manager),
+    current_user: User = Depends(require_schedule_editor),
     db: Session = Depends(get_db),
 ) -> PaymentSchedule:
-    ensure_client_write_access(db, current_user, client_id)
+    ensure_schedule_write_access(db, current_user, client_id)
     plan = get_installment_plan_for_client(db, plan_id=plan_id, client_id=client_id)
 
     item = add_schedule_month(

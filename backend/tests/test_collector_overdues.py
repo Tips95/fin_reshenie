@@ -187,13 +187,38 @@ class TestCollectorRoleAccess:
         )
         assert response.status_code == 403
 
-    def test_collector_forbidden_schedule_edit(self, api, office):
+    def test_collector_can_edit_schedule_with_audit(self, api, office):
         response = api.patch(
             f"{API}/payment-schedule/{office['schedule_id']}",
             headers=office["collector"],
             json={"planned_amount": "9000.00"},
         )
-        assert response.status_code == 403
+        assert response.status_code == 200, response.text
+        assert Decimal(response.json()["planned_amount"]) == Decimal("9000.00")
+
+        audit = api.get(
+            f"{API}/audit-logs",
+            headers=office["owner"],
+            params={
+                "client_id": office["client_id"],
+                "limit": 50,
+            },
+        )
+        assert audit.status_code == 200, audit.text
+        entries = audit.json()
+        match = next(
+            (
+                row
+                for row in entries
+                if row["entity_type"] == "payment_schedule"
+                and row["field_name"] == "planned_amount"
+                and row["new_value"] == "9000.00"
+            ),
+            None,
+        )
+        assert match is not None
+        assert match["changed_by_name"]
+        assert match.get("entity_label")
 
     def test_collector_write_access_blocked(self, session_factory, office):
         db = session_factory()

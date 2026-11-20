@@ -68,12 +68,18 @@ export function canOpenClientCards(user: User | null | undefined): boolean {
   return !isCivilExecutor(user) && !isRemoteAgent(user);
 }
 
-/** Коллектор смотрит график, но не правит суммы и не вносит платежи. */
+/** Внесение платежей по графику — только менеджеры офиса. */
 export function canRecordPayments(user: User | null | undefined): boolean {
   return canManageClients(user);
 }
 
+/** Суммы/даты/месяцы графика: менеджеры и коллектор (правки пишутся в журнал). */
 export function canEditPaymentSchedule(user: User | null | undefined): boolean {
+  return canManageClients(user) || isCollector(user);
+}
+
+/** Сумма договора и автографик по тарифу — без коллектора. */
+export function canEditInstallmentContract(user: User | null | undefined): boolean {
   return canManageClients(user);
 }
 

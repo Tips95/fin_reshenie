@@ -28,6 +28,7 @@ import {
 import { ApiRequestError, auditApi, clientsApi, documentCollectionApi, exportsApi, installmentApi, mandatoryPaymentsApi, paymentsApi, questionnairesApi, scheduleApi, usersApi } from "@/lib/api-client";
 import { sanitizeClientListReturnHref } from "@/lib/client-list-filters";
 import {
+  auditFieldLabel,
   collectionCallResultLabel,
   contractStaffLabel,
   effectiveDueDate,
@@ -61,6 +62,7 @@ import type {
   User,
 } from "@/lib/types";
 import {
+  canEditInstallmentContract,
   canEditPaymentSchedule,
   canManageClients,
   canWorkOverdues,
@@ -404,7 +406,7 @@ export default function ClientDetailPage() {
       return;
     }
     auditApi
-      .list({ entity_type: "client", entity_id: client.id, limit: 30 })
+      .list({ client_id: client.id, limit: 50 })
       .then(setAuditEntries)
       .catch(() => setAuditEntries([]));
   }, [client?.id, user?.role]);
@@ -1387,6 +1389,7 @@ export default function ClientDetailPage() {
   const canCollectOverdues = canWorkOverdues(user);
   const canViewClientFinances = canEditClient || isCollectionStaff || canCollectOverdues;
   const canEditSchedule = canEditPaymentSchedule(user);
+  const canEditContractTotal = canEditInstallmentContract(user);
   const canManageMandatory = isOwner;
   const canAssignManager = user?.role === "owner";
   const canRecordSchedulePayment = isOwner;
@@ -1919,7 +1922,7 @@ export default function ClientDetailPage() {
   const draftPlannedTotal = computeScheduleDraftPlannedTotal(schedule, scheduleDraft);
   const effectiveScheduleContract = Number(scheduleContractDraft) || planContractTotal;
   const contractDraftDirty =
-    canEditSchedule &&
+    canEditContractTotal &&
     scheduleContractDraft !== "" &&
     Math.round(effectiveScheduleContract) !== Math.round(planContractTotal);
   const contractScheduleDirty = scheduleDraftDirty || contractDraftDirty;
@@ -3012,9 +3015,11 @@ export default function ClientDetailPage() {
             title="График платежей"
             description={
               canEditSchedule
-                ? isManualInstallment
-                  ? "Задайте сумму договора и месяцы — сохранение выровняет расхождения автоматически"
-                  : "1-й месяц = дата договора, дальше по месяцам. Сумму договора можно менять прямо здесь"
+                ? canEditContractTotal
+                  ? isManualInstallment
+                    ? "Задайте сумму договора и месяцы — сохранение выровняет расхождения автоматически"
+                    : "1-й месяц = дата договора, дальше по месяцам. Сумму договора можно менять прямо здесь"
+                  : "Можно менять суммы и даты месяцев — изменения пишутся в журнал"
                 : "Раскройте, чтобы посмотреть помесячный график"
             }
             badge={
@@ -3032,7 +3037,7 @@ export default function ClientDetailPage() {
             open={scheduleOpen}
             onOpenChange={setScheduleOpen}
           >
-            {canEditSchedule && detail?.installment_plan ? (
+            {canEditContractTotal && detail?.installment_plan ? (
               <div className="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-border bg-surface-muted p-3">
                 <div className="min-w-[180px]">
                   <FormField label="Сумма договора, ₽">
@@ -3079,7 +3084,7 @@ export default function ClientDetailPage() {
                 {scheduleError}
               </p>
             )}
-            {canEditSchedule && schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
+            {canEditContractTotal && schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
               <div className="mb-4 rounded-md border border-border bg-surface-muted p-3">
                 <SectionTitle
                   title="Построить график по тарифу"
@@ -3123,9 +3128,11 @@ export default function ClientDetailPage() {
             ) : null}
             {schedule.length === 0 && scheduleDraft.pendingAdds.length === 0 ? (
               <EmptyState>
-                {canEditSchedule
+                {canEditContractTotal
                   ? "График не сформирован. Постройте автоматически по сумме долга или нажмите «+ Добавить месяц»."
-                  : "График не сформирован"}
+                  : canEditSchedule
+                    ? "График не сформирован. Нажмите «+ Добавить месяц»."
+                    : "График не сформирован"}
               </EmptyState>
             ) : (
               <>
@@ -3900,8 +3907,8 @@ export default function ClientDetailPage() {
 
       {effectiveTab === "journal" && canEditClient ? (
             <CollapsibleCard
-              title="История изменений карточки"
-              description="Изменения по этому клиенту. Общий журнал по организации — в разделе «Журнал изменений»."
+              title="История изменений"
+              description="Карточка, график платежей и договор. Видно, кто и когда менял — в том числе коллектор."
               defaultOpen
               badge={
                 auditEntries.length > 0 ? (
@@ -3910,7 +3917,7 @@ export default function ClientDetailPage() {
               }
             >
               {auditEntries.length === 0 ? (
-                <EmptyState>Изменений по карточке пока нет</EmptyState>
+                <EmptyState>Изменений пока нет</EmptyState>
               ) : (
                 <div className="space-y-3">
                   {auditEntries.map((entry) => (
@@ -3928,9 +3935,14 @@ export default function ClientDetailPage() {
                           >
                             {statusLabel(entry.action)}
                           </Badge>
+                          {entry.entity_label ? (
+                            <span className="text-sm font-semibold text-foreground">
+                              {entry.entity_label}
+                            </span>
+                          ) : null}
                           {entry.field_name && (
                             <span className="text-sm font-medium text-foreground">
-                              {entry.field_name}
+                              {auditFieldLabel(entry.field_name)}
                             </span>
                           )}
                         </div>

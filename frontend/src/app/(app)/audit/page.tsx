@@ -15,7 +15,7 @@ import {
   Select,
 } from "@/components/ui";
 import { auditApi } from "@/lib/api-client";
-import { statusLabel } from "@/lib/format";
+import { auditFieldLabel, statusLabel } from "@/lib/format";
 import type { AuditLogEntry } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
 
@@ -31,7 +31,7 @@ function formatEntry(entry: AuditLogEntry): string {
   if (entry.field_name) {
     const oldVal = entry.old_value ?? "—";
     const newVal = entry.new_value ?? "—";
-    return `${entry.field_name}: ${oldVal} → ${newVal}`;
+    return `${auditFieldLabel(entry.field_name)}: ${oldVal} → ${newVal}`;
   }
   return statusLabel(entry.action);
 }
@@ -145,7 +145,7 @@ export default function AuditPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={actionTone(entry.action)}>{statusLabel(entry.action)}</Badge>
                       <span className="text-sm font-semibold text-foreground">
-                        {entry.entity_type}
+                        {entry.entity_label || entry.entity_type}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-muted">{formatEntry(entry)}</p>
