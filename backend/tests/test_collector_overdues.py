@@ -341,6 +341,31 @@ class TestCollectorDashboard:
         assert any(item["client_id"] == office["client_id"] for item in body["overdue_preview"])
         assert any(item["client_id"] == office["client_id"] for item in body["due_this_month_preview"])
 
+    def test_overdue_amount_matches_queue_and_owner_dashboard(self, api, office):
+        """Дашборд коллектора, очередь и KPI владельца — одна сумма просрочки."""
+        queue = api.get(f"{API}/overdues", headers=office["collector"])
+        assert queue.status_code == 200, queue.text
+        queue_body = queue.json()
+
+        collector = api.get(f"{API}/dashboard/collector", headers=office["collector"])
+        assert collector.status_code == 200, collector.text
+        collector_body = collector.json()
+
+        owner = api.get(f"{API}/dashboard/summary", headers=office["owner"])
+        assert owner.status_code == 200, owner.text
+        owner_body = owner.json()
+
+        queue_total = Decimal(queue_body["total_overdue_amount"])
+        items_sum = sum(
+            (Decimal(item["overdue_amount"]) for item in queue_body["items"]),
+            Decimal("0.00"),
+        )
+        assert queue_total == items_sum
+        assert Decimal(collector_body["overdue_amount"]) == queue_total
+        assert collector_body["clients_overdue"] == queue_body["total"]
+        assert Decimal(owner_body["overdue_amount"]) == queue_total
+        assert owner_body["clients_overdue"] == queue_body["total"]
+
     def test_call_center_forbidden_on_collector_dashboard(self, api, office):
         created = api.post(
             f"{API}/users",

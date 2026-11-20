@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.client import Client
 from app.models.collection_event import CollectionEvent
-from app.models.enums import CollectionCallResult, UserRole
+from app.models.enums import AuditAction, ClientStatus, CollectionCallResult, UserRole
 from app.models.installment_plan import InstallmentPlan
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
@@ -23,7 +23,6 @@ from app.schemas.overdue import (
 from app.schemas.payment_schedule import PaymentScheduleResponse
 from app.services.access import apply_client_visibility_filter, ensure_client_read_access
 from app.services.audit import log_audit
-from app.models.enums import AuditAction
 from app.services.notifications import notify
 from app.services.schedule_dates import (
     effective_due_date,
@@ -31,6 +30,9 @@ from app.services.schedule_dates import (
     schedule_overdue_days,
     schedule_remainder,
 )
+
+# Как в clients_overdue_map: отменённые и завершённые не входят в просрочку.
+_INACTIVE_OVERDUE_STATUSES = {ClientStatus.CANCELLED, ClientStatus.COMPLETED}
 
 OVERDUE_STAFF_ROLES = {
     UserRole.OWNER,
@@ -97,11 +99,22 @@ def clients_overdue_summaries(
     *,
     today: date | None = None,
 ) -> dict[UUID, dict]:
-    """Сводка просрочки по клиентам: сумма, дни, обещание, звонок, заметка."""
+    """Сводка просрочки по клиентам: сумма, дни, обещание, звонок, заметка.
+
+    Единый источник для /overdues, дашборда владельца и дашборда коллектора.
+    """
     if not client_ids:
         return {}
 
     check_date = today or date.today()
+    inactive_ids = {
+        row_id
+        for row_id, row_status in db.execute(
+            select(Client.id, Client.status).where(Client.id.in_(client_ids))
+        )
+        if row_status in _INACTIVE_OVERDUE_STATUSES
+    }
+
     schedules_by_client: dict[UUID, list[PaymentSchedule]] = {cid: [] for cid in client_ids}
     rows = db.execute(
         select(InstallmentPlan.client_id, PaymentSchedule)
@@ -113,6 +126,8 @@ def clients_overdue_summaries(
 
     summaries: dict[UUID, dict] = {}
     for client_id, schedules in schedules_by_client.items():
+        if client_id in inactive_ids:
+            continue
         overdue_items = [item for item in schedules if is_schedule_overdue(item, check_date)]
         if not overdue_items:
             continue
@@ -150,12 +165,20 @@ def clients_overdue_summaries(
     return summaries
 
 
+def total_overdue_amount(summaries: dict[UUID, dict]) -> Decimal:
+    return sum((item["overdue_amount"] for item in summaries.values()), Decimal("0.00"))
+
+
 def list_overdue_queue(db: Session, user: User) -> OverdueQueueResponse:
     today = date.today()
     stmt = apply_client_visibility_filter(select(Client), user)
     clients = list(db.scalars(stmt).all())
     if not clients:
-        return OverdueQueueResponse(items=[], total=0)
+        return OverdueQueueResponse(
+            items=[],
+            total=0,
+            total_overdue_amount=Decimal("0.00"),
+        )
 
     summaries = clients_overdue_summaries(db, [client.id for client in clients], today=today)
     items: list[OverdueQueueItem] = []
@@ -182,7 +205,11 @@ def list_overdue_queue(db: Session, user: User) -> OverdueQueueResponse:
         )
 
     items.sort(key=lambda item: (-item.overdue_days, item.full_name.lower()))
-    return OverdueQueueResponse(items=items, total=len(items))
+    return OverdueQueueResponse(
+        items=items,
+        total=len(items),
+        total_overdue_amount=total_overdue_amount(summaries),
+    )
 
 
 def record_collection(

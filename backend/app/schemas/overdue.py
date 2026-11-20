@@ -50,3 +50,4 @@ class OverdueQueueItem(BaseModel):
 class OverdueQueueResponse(BaseModel):
     items: list[OverdueQueueItem]
     total: int
+    total_overdue_amount: Decimal = Decimal("0.00")

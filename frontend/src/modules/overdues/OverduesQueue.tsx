@@ -54,6 +54,7 @@ function matchesQuery(item: OverdueQueueItem, query: string): boolean {
 
 export function OverduesQueue() {
   const [items, setItems] = useState<OverdueQueueItem[]>([]);
+  const [totalOverdueAmount, setTotalOverdueAmount] = useState("0");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -69,6 +70,7 @@ export function OverduesQueue() {
     try {
       const data = await overduesApi.list();
       setItems(data.items);
+      setTotalOverdueAmount(data.total_overdue_amount ?? "0");
       setError(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить просрочки");
@@ -87,11 +89,6 @@ export function OverduesQueue() {
         (item) => matchesFilter(item, filter, today) && matchesQuery(item, query),
       ),
     [items, filter, query, today],
-  );
-
-  const totalDebt = useMemo(
-    () => items.reduce((sum, item) => sum + Number(item.overdue_amount || 0), 0),
-    [items],
   );
 
   const filterCounts = useMemo(() => {
@@ -157,7 +154,7 @@ export function OverduesQueue() {
         title="Просрочки"
         subtitle={
           items.length > 0
-            ? `${items.length} в очереди · ${formatMoney(Math.round(totalDebt))}`
+            ? `${items.length} в очереди · ${formatMoney(totalOverdueAmount)}`
             : "Очередь звонков по долгам"
         }
         action={

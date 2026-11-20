@@ -246,6 +246,7 @@ export interface OverdueQueueItem {
 export interface OverdueQueueResponse {
   items: OverdueQueueItem[];
   total: number;
+  total_overdue_amount: string;
 }
 
 export interface Payment {

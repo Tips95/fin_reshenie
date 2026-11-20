@@ -86,6 +86,10 @@ def patch_mandatory_pending(monkeypatch):
         "app.services.dashboard.get_clients_missing_deposit",
         lambda *_args, **_kwargs: [],
     )
+    monkeypatch.setattr(
+        "app.services.dashboard.clients_overdue_summaries",
+        lambda *_args, **_kwargs: {},
+    )
 
 
 class TestDashboardSummary:
@@ -184,6 +188,12 @@ class TestDashboardSummary:
             lambda *_args, **_kwargs: {CLIENT_ID: True},
         )
         monkeypatch.setattr(
+            "app.services.dashboard.clients_overdue_summaries",
+            lambda *_args, **_kwargs: {
+                CLIENT_ID: {"overdue_amount": Decimal("5000.00")},
+            },
+        )
+        monkeypatch.setattr(
             "app.services.dashboard._count_open_tasks",
             lambda *_args, **_kwargs: 2,
         )
@@ -196,6 +206,7 @@ class TestDashboardSummary:
 
         assert summary.clients_total == 1
         assert summary.clients_overdue == 1
+        assert summary.overdue_amount == Decimal("5000.00")
         assert summary.open_tasks_count == 2
         assert summary.expected_this_month == Decimal("0.00")
         assert summary.total_collected == Decimal("0.00")

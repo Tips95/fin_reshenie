@@ -19,7 +19,7 @@ from app.schemas.collector_dashboard import (
 )
 from app.services.access import apply_client_visibility_filter
 from app.services.dashboard import _resolve_period
-from app.services.overdues import clients_overdue_summaries
+from app.services.overdues import clients_overdue_summaries, total_overdue_amount
 from app.services.schedule_dates import effective_due_date, schedule_remainder
 
 PREVIEW_LIMIT = 8
@@ -98,10 +98,7 @@ def get_collector_dashboard(
         collected_this_month += signed
 
     summaries = clients_overdue_summaries(db, client_ids, today=today)
-    overdue_amount = sum(
-        (item["overdue_amount"] for item in summaries.values()),
-        Decimal("0.00"),
-    )
+    overdue_amount = total_overdue_amount(summaries)
     clients_overdue = len(summaries)
 
     overdue_preview: list[CollectorOverduePreviewItem] = []

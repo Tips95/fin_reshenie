@@ -36,9 +36,8 @@ from app.services.mandatory_payment_stats import (
 )
 from app.services.client_finances import contract_totals_by_client, sum_active_contract_totals
 from app.services.expense_totals import monthly_expenses_total, paid_fixed_expenses_total
-from app.services.overdues import clients_overdue_summaries
+from app.services.overdues import clients_overdue_summaries, total_overdue_amount
 from app.services.phone import month_bounds
-from app.services.schedule_dates import effective_due_date, payment_window_end
 
 
 def _month_bounds(today: date) -> tuple[date, date]:
@@ -249,7 +248,10 @@ def get_dashboard_summary(
         if client.engagement_stage == EngagementStage.DOCUMENT_COLLECTION
     )
     overdue_map = clients_overdue_map(db, client_ids)
-    clients_overdue = sum(1 for client_id in client_ids if overdue_map.get(client_id, False))
+    overdue_summaries = clients_overdue_summaries(db, client_ids, today=today)
+    # Сумма и счётчик — из того же источника, что /overdues и дашборд коллектора.
+    clients_overdue = len(overdue_summaries)
+    overdue_amount = total_overdue_amount(overdue_summaries)
     open_tasks_count, overdue_clients_preview = _dashboard_activity_fields(
         db,
         user,
@@ -271,7 +273,7 @@ def get_dashboard_summary(
             expected_this_month=Decimal("0.00"),
             collected_this_month=Decimal("0.00"),
             cash_received_this_month=Decimal("0.00"),
-            overdue_amount=Decimal("0.00"),
+            overdue_amount=overdue_amount,
             total_remainder=Decimal("0.00"),
             total_collected=Decimal("0.00"),
             active_contract_total=Decimal("0.00"),
@@ -303,22 +305,16 @@ def get_dashboard_summary(
     active_contract_total = sum_active_contract_totals(db, clients)
 
     expected_this_month = Decimal("0.00")
-    overdue_amount = Decimal("0.00")
     total_remainder = Decimal("0.00")
 
     if client_ids:
-        active_overdue_ids = {
-            client.id
-            for client in clients
-            if client.status == ClientStatus.ACTIVE
-        }
         schedule_rows = db.execute(
             select(InstallmentPlan.client_id, PaymentSchedule)
             .join(PaymentSchedule, PaymentSchedule.installment_plan_id == InstallmentPlan.id)
             .where(InstallmentPlan.client_id.in_(client_ids))
         )
 
-        for client_id, item in schedule_rows:
+        for _client_id, item in schedule_rows:
             remainder = _schedule_remainder(item.planned_amount, item.paid_amount)
             if remainder <= Decimal("0.00"):
                 continue
@@ -327,12 +323,6 @@ def get_dashboard_summary(
 
             if month_start <= item.due_date <= month_end:
                 expected_this_month += remainder
-
-            if (
-                client_id in active_overdue_ids
-                and payment_window_end(effective_due_date(item)) < today
-            ):
-                overdue_amount += remainder
 
     collected_this_month = Decimal("0.00")
     total_collected = Decimal("0.00")
