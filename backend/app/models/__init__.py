@@ -26,6 +26,7 @@ from app.models.payment_schedule import PaymentSchedule
 from app.models.pricing_tier import PricingTier
 from app.models.user import User
 from app.models.installment_plan import InstallmentPlan
+from app.models.whatsapp_reminder_log import WhatsappReminderLog
 
 __all__ = [
     "AgentAward",
@@ -57,4 +58,5 @@ __all__ = [
     "QuestionnaireCall",
     "QuestionnaireComment",
     "User",
+    "WhatsappReminderLog",
 ]

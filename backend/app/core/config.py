@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     DB_POOL_RECYCLE: int = 300
     DB_CONNECT_TIMEOUT: int = 20
 
+    # Green API (WhatsApp). Пустые значения — превью работает, отправка недоступна.
+    GREEN_API_URL: str = ""
+    GREEN_API_ID_INSTANCE: str = ""
+    GREEN_API_TOKEN_INSTANCE: str = ""
+    GREEN_API_SEND_DELAY_SECONDS: float = 0.7
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> list[str]:

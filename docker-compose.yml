@@ -48,6 +48,10 @@ services:
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
       INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Администратор}
+      GREEN_API_URL: ${GREEN_API_URL:-}
+      GREEN_API_ID_INSTANCE: ${GREEN_API_ID_INSTANCE:-}
+      GREEN_API_TOKEN_INSTANCE: ${GREEN_API_TOKEN_INSTANCE:-}
+      GREEN_API_SEND_DELAY_SECONDS: ${GREEN_API_SEND_DELAY_SECONDS:-0.7}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
       interval: 10s

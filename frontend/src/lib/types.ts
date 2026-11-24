@@ -1053,4 +1053,48 @@ export interface CivilCase extends CivilCaseBrief {
   payments: CivilCasePayment[];
 }
 
+export type PaymentReminderKind = "due" | "overdue";
+export type PaymentReminderSendStatus = "sent" | "failed" | "skipped";
+
+export interface PaymentReminderItem {
+  client_id: string;
+  full_name: string;
+  phone: string;
+  kind: PaymentReminderKind;
+  amount: string;
+  due_date: string;
+  message: string;
+  has_phone: boolean;
+  last_sent_at: string | null;
+}
+
+export interface PaymentRemindersPreview {
+  period_month: string;
+  green_api_configured: boolean;
+  total: number;
+  due_count: number;
+  overdue_count: number;
+  without_phone_count: number;
+  already_sent_this_month: number;
+  items: PaymentReminderItem[];
+}
+
+export interface PaymentReminderSendItemResult {
+  client_id: string;
+  full_name: string;
+  kind: PaymentReminderKind;
+  status: PaymentReminderSendStatus;
+  error: string | null;
+  id_message: string | null;
+}
+
+export interface PaymentRemindersSendResponse {
+  period_month: string;
+  batch_id: string;
+  sent: number;
+  failed: number;
+  skipped: number;
+  items: PaymentReminderSendItemResult[];
+}
+
 

@@ -54,6 +54,8 @@ import type {
   AgentInfo,
   AgentOverview,
   AppNotificationList,
+  PaymentRemindersPreview,
+  PaymentRemindersSendResponse,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -427,6 +429,18 @@ export const notificationsApi = {
 
 export const overduesApi = {
   list: () => apiFetch<OverdueQueueResponse>("/overdues"),
+};
+
+export const paymentRemindersApi = {
+  preview: (month?: string) =>
+    apiFetch<PaymentRemindersPreview>(
+      `/payment-reminders${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+    ),
+  send: (data: { month?: string; client_ids?: string[] }) =>
+    apiFetch<PaymentRemindersSendResponse>("/payment-reminders/send", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const organizationsApi = {

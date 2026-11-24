@@ -18,6 +18,7 @@ from app.api import (
     operating_expenses,
     organizations,
     overdues,
+    payment_reminders,
     payment_schedules,
     payments,
     pricing_tiers,
@@ -56,6 +57,11 @@ office_router.include_router(
 )
 office_router.include_router(exports.router, prefix="/exports", tags=["exports"])
 office_router.include_router(overdues.router, prefix="/overdues", tags=["overdues"])
+office_router.include_router(
+    payment_reminders.router,
+    prefix="/payment-reminders",
+    tags=["payment-reminders"],
+)
 office_router.include_router(clients.router, prefix="/clients", tags=["clients"])
 office_router.include_router(
     document_collection.router,

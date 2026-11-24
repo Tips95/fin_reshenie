@@ -23,6 +23,7 @@ import {
 } from "@/lib/format";
 import type { CollectorDashboard as CollectorDashboardData } from "@/lib/types";
 import { useAuth } from "@/modules/auth/AuthProvider";
+import { PaymentRemindersModal } from "@/modules/overdues/PaymentRemindersModal";
 
 function currentMonthKey(): string {
   return todayIsoDate().slice(0, 7);
@@ -42,6 +43,7 @@ export function CollectorDashboard() {
   const [data, setData] = useState<CollectorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [remindersOpen, setRemindersOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,46 +106,73 @@ export function CollectorDashboard() {
             <Button size="sm" variant="secondary" onClick={() => void load()} disabled={loading}>
               Обновить
             </Button>
+            <Button size="sm" onClick={() => setRemindersOpen(true)}>
+              WhatsApp
+            </Button>
           </div>
         }
       />
 
+      <PaymentRemindersModal
+        open={remindersOpen}
+        onClose={() => setRemindersOpen(false)}
+        month={month}
+      />
+
       {error ? <p className="alert-danger">{error}</p> : null}
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          label="Ожидается в месяце"
-          value={formatMoney(data.expected_this_month)}
-          tone="brand"
-        />
-        <StatCard
-          label="Собрано в месяце"
-          value={formatMoney(data.collected_this_month)}
-          tone="success"
-        />
-        <StatCard
-          label="Просрочка"
-          value={formatMoney(data.overdue_amount)}
-          tone="danger"
-          hint={`${data.clients_overdue} клиент.`}
-        />
-        <StatCard
-          label="Обещал сегодня"
-          value={String(data.promised_today_count)}
-          tone={data.promised_today_count > 0 ? "warning" : "default"}
-        />
-        <StatCard
-          label="Без контакта"
-          value={String(data.no_contact_count)}
-          tone={data.no_contact_count > 0 ? "warning" : "default"}
-          hint="Просрочка без звонка"
-        />
+      <div className="space-y-4">
+        <div>
+          <p className="type-caption">Выбранный месяц</p>
+          <p className="mb-2 text-xs text-muted">
+            Срок платежа в этом месяце. Старая просрочка сюда не входит и с этой суммой не складывается.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <StatCard
+              label="Ожидается по графику месяца"
+              value={formatMoney(data.expected_this_month)}
+              tone="brand"
+              hint="Ещё не оплачено, срок в выбранном месяце"
+            />
+            <StatCard
+              label="Уже собрано в месяце"
+              value={formatMoney(data.collected_this_month)}
+              tone="success"
+              hint="Фактически поступило"
+            />
+          </div>
+        </div>
+        <div>
+          <p className="type-caption">Уже просрочено на сегодня</p>
+          <p className="mb-2 text-xs text-muted">
+            Отдельная сумма: долги прошлых месяцев. К «ожидается по графику» её не прибавляют.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <StatCard
+              label="Просрочка"
+              value={formatMoney(data.overdue_amount)}
+              tone="danger"
+              hint={`${data.clients_overdue} клиент. · не часть месяца`}
+            />
+            <StatCard
+              label="Обещал сегодня"
+              value={String(data.promised_today_count)}
+              tone={data.promised_today_count > 0 ? "warning" : "default"}
+            />
+            <StatCard
+              label="Без контакта"
+              value={String(data.no_contact_count)}
+              tone={data.no_contact_count > 0 ? "warning" : "default"}
+              hint="Просрочка без звонка"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-3 xl:grid-cols-2">
         <Panel
           title="К оплате в этом месяце"
-          description="Остатки по графику с сроком в выбранном месяце"
+          description="Только срок в выбранном месяце. Просрочка прошлых месяцев в этом списке не сидит."
           action={
             <Link href="/clients/contracts" className={LINK}>
               Договоры

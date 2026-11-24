@@ -81,6 +81,11 @@ require_overdue_staff = require_roles(
     UserRole.HEAD_MANAGER,
     UserRole.COLLECTOR,
 )
+# Массовые WhatsApp-напоминания о платежах.
+require_payment_reminder_staff = require_roles(
+    UserRole.OWNER,
+    UserRole.COLLECTOR,
+)
 # Редактирование графика платежей (с записью в журнал аудита).
 require_schedule_editor = require_overdue_staff
 require_legal_staff = require_roles(

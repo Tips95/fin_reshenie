@@ -13,7 +13,6 @@ import {
   MetricStrip,
   PageHeader,
   Panel,
-  SectionNav,
 } from "@/components/ui";
 import { ApiRequestError, dashboardApi, exportsApi } from "@/lib/api-client";
 import {
@@ -37,28 +36,7 @@ import {
 } from "@/lib/organization-features";
 import { useAuth } from "@/modules/auth/AuthProvider";
 import { CollectorDashboard } from "@/modules/overdues/CollectorDashboard";
-
-const DASHBOARD_SECTIONS = [
-  { id: "dash-flow", label: "Движение за месяц" },
-  { id: "dash-cash", label: "Касса" },
-  { id: "dash-portfolio", label: "Портфель" },
-  { id: "dash-month", label: "Итоги месяца" },
-  { id: "dash-activity", label: "Активность" },
-  { id: "dash-civil", label: "Гражданка" },
-  { id: "dash-collection", label: "Сбор документов" },
-  { id: "dash-mandatory", label: "Обязательные" },
-  { id: "dash-expenses", label: "Расходы" },
-  { id: "dash-overdue", label: "Просрочка" },
-] as const;
-
-// Разделы, скрытые за кнопкой «Подробнее»: нужны реже, чем остальные.
-const DETAIL_SECTION_IDS: string[] = [
-  "dash-activity",
-  "dash-civil",
-  "dash-collection",
-  "dash-mandatory",
-  "dash-expenses",
-];
+import { PaymentRemindersModal } from "@/modules/overdues/PaymentRemindersModal";
 
 const PANEL_LINK = "interactive text-[13px] font-semibold text-brand-700 hover:text-brand-600";
 
@@ -101,24 +79,6 @@ function normalizeSummary(data: DashboardSummary): DashboardSummary {
     deposit_missing_count: data.deposit_missing_count ?? 0,
     deposit_missing_preview: data.deposit_missing_preview ?? [],
   };
-}
-
-function HeroStat({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "in" | "out";
-}) {
-  const colors = { default: "text-white", in: "text-white", out: "text-brand-100" };
-  return (
-    <div className="cash-hero-stat">
-      <p className="text-[11px] font-medium text-white/65">{label}</p>
-      <p className={`tabular mt-1 truncate text-[15px] font-semibold ${colors[tone]}`}>{value}</p>
-    </div>
-  );
 }
 
 function LedgerRow({
@@ -231,6 +191,7 @@ function OfficeDashboard() {
   const [cashActualDraft, setCashActualDraft] = useState("");
   const [cashSaving, setCashSaving] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
+  const [remindersOpen, setRemindersOpen] = useState(false);
   const isOwner = user?.role === "owner";
   const canEditClients = canManageClients(user);
   const showQuestionnaires = canUseQuestionnaires(user);
@@ -314,15 +275,6 @@ function OfficeDashboard() {
     Number(summary?.mandatory_paid_this_month?.total ?? 0) +
     Number(summary?.expenses_paid_this_month ?? 0);
 
-  function goToSection(id: string) {
-    if (DETAIL_SECTION_IDS.includes(id)) {
-      setShowDetails(true);
-    }
-    window.requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
   if (loading) return <LoadingState text="Загрузка дашборда..." />;
   if (!summary) return <LoadingState text="Не удалось загрузить дашборд" />;
 
@@ -369,10 +321,23 @@ function OfficeDashboard() {
                     </Button>
                   </Link>
                 )}
+                {isOwner ? (
+                  <Button type="button" onClick={() => setRemindersOpen(true)}>
+                    WhatsApp
+                  </Button>
+                ) : null}
               </div>
             ) : undefined
           }
         />
+
+        {isOwner ? (
+          <PaymentRemindersModal
+            open={remindersOpen}
+            onClose={() => setRemindersOpen(false)}
+            month={month}
+          />
+        ) : null}
 
         {!isCurrentMonth && (
           <p className="alert-warning">
@@ -389,62 +354,39 @@ function OfficeDashboard() {
         )}
 
         {showOrgFinance ? (
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <div className="cash-hero p-5 sm:p-6">
-              <div className="relative flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="cash-hero-label">Сейчас в кассе</p>
-                  <p
-                    className={`cash-hero-value mt-3 ${cashPositive ? "" : "text-brand-100"}`}
-                  >
-                    {formatMoney(summary.cash_on_hand)}
-                  </p>
-                </div>
-                <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium capitalize text-white/70">
-                  {monthLabel}
-                </span>
-              </div>
-              <p className="relative mt-3 text-[13px] leading-snug text-white/75">
-                {summary.cash_opening_is_set
-                  ? "Остаток на начало месяца плюс фактическое движение денег"
-                  : "Остаток на начало не указан — задайте его в разделе «Касса»"}
-              </p>
-              <div className="relative mt-5 grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
-                <HeroStat label="На начало" value={formatMoney(summary.cash_opening_balance)} />
-                <HeroStat
-                  label="Поступило"
-                  value={`+ ${formatMoney(summary.cash_in_this_month)}`}
-                  tone="in"
-                />
-                <HeroStat
-                  label="Выплачено"
-                  value={`− ${formatMoney(cashOutThisMonth)}`}
-                  tone="out"
-                />
-                <HeroStat label="Прогноз на конец" value={formatMoney(summary.cash_forecast_end)} />
-              </div>
-            </div>
-
-            <div className="metric-strip grid-cols-1 sm:grid-cols-3 lg:grid-cols-1">
+          <div className="space-y-2">
+            <MetricStrip columns={4}>
               <Metric
-                label="Чистая прибыль за месяц"
+                label="Сейчас в кассе"
+                value={formatMoney(summary.cash_on_hand)}
+                tone={cashPositive ? "success" : "danger"}
+                hint={
+                  summary.cash_opening_is_set
+                    ? "Начало месяца плюс поступления минус выплаты"
+                    : "Остаток на начало не задан — в разделе «Финансы»"
+                }
+              />
+              <Metric
+                label="Ещё должны по графикам"
+                value={formatMoney(summary.total_remainder)}
+                tone="brand"
+                hint={`Вся непогашенная сумма. Из неё просрочено ${formatMoney(summary.overdue_amount)}`}
+              />
+              <Metric
+                label="Ожидается в этом месяце"
+                value={formatMoney(summary.expected_this_month)}
+                hint="Только срок этого месяца. К просрочке не прибавлять"
+              />
+              <Metric
+                label="Прибыль за месяц"
                 value={formatMoney(summary.net_profit_this_month)}
                 tone={profitPositive ? "success" : "danger"}
-                hint="Банкротство: рассрочка и сбор минус обязательные и расходы"
+                hint="Рассрочка и сбор минус обязательные и расходы"
               />
-              <Metric
-                label="Ещё ожидается"
-                value={formatMoney(summary.expected_this_month)}
-                tone="brand"
-                hint="Платежи клиентов до конца месяца"
-              />
-              <Metric
-                label="Осталось оплатить расходов"
-                value={formatMoney(summary.expenses_remaining_this_month)}
-                tone="warning"
-                hint={`План ${formatMoney(summary.monthly_expenses)} · оплачено ${formatMoney(summary.expenses_paid_this_month)}`}
-              />
-            </div>
+            </MetricStrip>
+            <p className="type-hint">
+              «Ещё должны» уже включает просрочку. «Ожидается в этом месяце» — отдельный срез, это не вторая куча денег.
+            </p>
           </div>
         ) : (
           <MetricStrip columns={4}>
@@ -455,8 +397,6 @@ function OfficeDashboard() {
           </MetricStrip>
         )}
       </div>
-
-      {showOrgFinance ? <SectionNav items={DASHBOARD_SECTIONS} onSelect={goToSection} /> : null}
 
       {showQuestionnaires && !canEditClients ? (
         <Panel
@@ -476,8 +416,143 @@ function OfficeDashboard() {
         />
       ) : null}
 
+      {canEditClients && (
+        <Panel
+          id="dash-overdue"
+          dot="danger"
+          title={
+            <>
+              Клиенты с просрочкой
+              {overdueClients.length > 0 ? (
+                <Badge tone="danger">{summary.clients_overdue}</Badge>
+              ) : null}
+            </>
+          }
+          action={
+            <>
+              <Button
+                variant="secondary"
+                disabled={exportingOverdue}
+                onClick={async () => {
+                  setExportingOverdue(true);
+                  try {
+                    await exportsApi.overdueClients();
+                  } finally {
+                    setExportingOverdue(false);
+                  }
+                }}
+              >
+                {exportingOverdue ? "Выгрузка..." : "Excel"}
+              </Button>
+              <Link href="/overdues" className={PANEL_LINK}>
+                Все
+              </Link>
+            </>
+          }
+        >
+          {overdueClients.length === 0 ? (
+            <p className="alert-success">Просроченных платежей нет.</p>
+          ) : (
+            <>
+              <div className="desktop-only overflow-x-auto rounded-lg border border-border">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>ФИО</th>
+                      <th>Телефон</th>
+                      <th className="text-right">Долг</th>
+                      <th>Дни</th>
+                      <th>Обещал</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overdueClients.map((client: DashboardOverdueClientItem) => (
+                      <tr key={client.id}>
+                        <td>
+                          <Link href={`/clients/${client.id}?tab=payments`} className="link-brand">
+                            {formatShortName(client.full_name)}
+                          </Link>
+                        </td>
+                        <td className="tabular text-muted">
+                          <a href={`tel:${client.phone}`} className="link-brand">
+                            {client.phone}
+                          </a>
+                        </td>
+                        <td className="tabular text-right font-medium text-foreground">
+                          {formatMoney(client.overdue_amount ?? "0")}
+                        </td>
+                        <td>
+                          <Badge tone="danger">{client.overdue_days ?? "—"} дн.</Badge>
+                        </td>
+                        <td className="tabular text-muted">
+                          {client.promised_pay_date ? formatDate(client.promised_pay_date) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mobile-only space-y-2">
+                {overdueClients.map((client: DashboardOverdueClientItem) => (
+                  <Link
+                    key={client.id}
+                    href={`/clients/${client.id}?tab=payments`}
+                    className="row-card row-card-overdue block"
+                  >
+                    <div className="row-card-head">
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatShortName(client.full_name)}
+                      </span>
+                      <Badge tone="danger">{client.overdue_days ?? "—"} дн.</Badge>
+                    </div>
+                    <div className="row-card-grid">
+                      <div>
+                        <p className="row-card-label">Телефон</p>
+                        <p className="row-card-value">{client.phone}</p>
+                      </div>
+                      <div>
+                        <p className="row-card-label">Долг</p>
+                        <p className="row-card-value">
+                          {formatMoney(client.overdue_amount ?? "0")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="row-card-label">Обещал</p>
+                        <p className="row-card-value">
+                          {client.promised_pay_date ? formatDate(client.promised_pay_date) : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
+        </Panel>
+      )}
       {showOrgFinance && (
         <>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight text-foreground">
+                Финансы и разбивки
+              </h2>
+              <p className="type-hint">
+                Касса, движение денег, портфель, расходы и обязательные платежи
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              aria-expanded={showDetails}
+              onClick={() => setShowDetails((value) => !value)}
+            >
+              {showDetails ? "Скрыть" : "Показать"}
+            </Button>
+          </div>
+          {showDetails ? (
+            <>
           <Panel
             id="dash-flow"
             dot="brand"
@@ -546,7 +621,7 @@ function OfficeDashboard() {
                 <LedgerRow
                   sign="+"
                   label="Ожидается по графикам"
-                  hint="Неоплаченные платежи клиентов этого месяца"
+                  hint="Неоплаченное со сроком в этом месяце. Просрочку прошлых месяцев не прибавлять"
                   value={formatMoney(summary.expected_this_month)}
                 />
                 <LedgerRow
@@ -721,7 +796,7 @@ function OfficeDashboard() {
             <Panel
               id="dash-portfolio"
               title="Портфель"
-              description="Что клиенты ещё должны по графикам. Не зависит от выбранного месяца."
+              description="Всё, что ещё не оплачено по графикам. Просрочка уже внутри остатка — к «ожидается в этом месяце» её не прибавляют."
               action={
                 <Link href="/clients/contracts" className={PANEL_LINK}>
                   Договоры
@@ -736,10 +811,10 @@ function OfficeDashboard() {
                   hint="Сколько ещё предстоит получить"
                 />
                 <Metric
-                  label="Из них просрочено"
+                  label="Из них уже просрочено"
                   value={formatMoney(summary.overdue_amount)}
                   tone="danger"
-                  hint={`${summary.clients_overdue} клиентов`}
+                  hint={`${summary.clients_overdue} клиентов · это часть остатка, не вторая сумма`}
                 />
                 <Metric
                   label="Активные договоры"
@@ -801,27 +876,6 @@ function OfficeDashboard() {
             </Panel>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight text-foreground">
-                  Детализация
-                </h2>
-                <p className="type-hint">
-                  Активность, гражданка, сбор документов, обязательные платежи и расходы
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                aria-expanded={showDetails}
-                onClick={() => setShowDetails((value) => !value)}
-              >
-                {showDetails ? "Свернуть" : "Показать"}
-              </Button>
-            </div>
-
-            {showDetails ? (
               <div className="grid gap-5 xl:grid-cols-2">
                 <Panel
                   id="dash-activity"
@@ -982,126 +1036,11 @@ function OfficeDashboard() {
                   />
                 </Panel>
               </div>
-            ) : null}
-          </div>
+            </>
+          ) : null}
         </>
       )}
 
-      {canEditClients && (
-        <Panel
-          id="dash-overdue"
-          dot="danger"
-          title={
-            <>
-              Клиенты с просрочкой
-              {overdueClients.length > 0 ? (
-                <Badge tone="danger">{summary.clients_overdue}</Badge>
-              ) : null}
-            </>
-          }
-          action={
-            <>
-              <Button
-                variant="secondary"
-                disabled={exportingOverdue}
-                onClick={async () => {
-                  setExportingOverdue(true);
-                  try {
-                    await exportsApi.overdueClients();
-                  } finally {
-                    setExportingOverdue(false);
-                  }
-                }}
-              >
-                {exportingOverdue ? "Выгрузка..." : "Excel"}
-              </Button>
-              <Link href="/overdues" className={PANEL_LINK}>
-                Все
-              </Link>
-            </>
-          }
-        >
-          {overdueClients.length === 0 ? (
-            <p className="alert-success">Просроченных платежей нет.</p>
-          ) : (
-            <>
-              <div className="desktop-only overflow-x-auto rounded-lg border border-border">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>ФИО</th>
-                      <th>Телефон</th>
-                      <th className="text-right">Долг</th>
-                      <th>Дни</th>
-                      <th>Обещал</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overdueClients.map((client: DashboardOverdueClientItem) => (
-                      <tr key={client.id}>
-                        <td>
-                          <Link href={`/clients/${client.id}?tab=payments`} className="link-brand">
-                            {formatShortName(client.full_name)}
-                          </Link>
-                        </td>
-                        <td className="tabular text-muted">
-                          <a href={`tel:${client.phone}`} className="link-brand">
-                            {client.phone}
-                          </a>
-                        </td>
-                        <td className="tabular text-right font-medium text-foreground">
-                          {formatMoney(client.overdue_amount ?? "0")}
-                        </td>
-                        <td>
-                          <Badge tone="danger">{client.overdue_days ?? "—"} дн.</Badge>
-                        </td>
-                        <td className="tabular text-muted">
-                          {client.promised_pay_date ? formatDate(client.promised_pay_date) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="mobile-only space-y-2">
-                {overdueClients.map((client: DashboardOverdueClientItem) => (
-                  <Link
-                    key={client.id}
-                    href={`/clients/${client.id}?tab=payments`}
-                    className="row-card row-card-overdue block"
-                  >
-                    <div className="row-card-head">
-                      <span className="text-sm font-semibold text-foreground">
-                        {formatShortName(client.full_name)}
-                      </span>
-                      <Badge tone="danger">{client.overdue_days ?? "—"} дн.</Badge>
-                    </div>
-                    <div className="row-card-grid">
-                      <div>
-                        <p className="row-card-label">Телефон</p>
-                        <p className="row-card-value">{client.phone}</p>
-                      </div>
-                      <div>
-                        <p className="row-card-label">Долг</p>
-                        <p className="row-card-value">
-                          {formatMoney(client.overdue_amount ?? "0")}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="row-card-label">Обещал</p>
-                        <p className="row-card-value">
-                          {client.promised_pay_date ? formatDate(client.promised_pay_date) : "—"}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </>
-          )}
-        </Panel>
-      )}
     </div>
   );
 }

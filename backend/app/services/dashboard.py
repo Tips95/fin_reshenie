@@ -38,6 +38,7 @@ from app.services.client_finances import contract_totals_by_client, sum_active_c
 from app.services.expense_totals import monthly_expenses_total, paid_fixed_expenses_total
 from app.services.overdues import clients_overdue_summaries, total_overdue_amount
 from app.services.phone import month_bounds
+from app.services.schedule_dates import effective_due_date
 
 
 def _month_bounds(today: date) -> tuple[date, date]:
@@ -321,7 +322,8 @@ def get_dashboard_summary(
 
             total_remainder += remainder
 
-            if month_start <= item.due_date <= month_end:
+            due = effective_due_date(item)
+            if month_start <= due <= month_end:
                 expected_this_month += remainder
 
     collected_this_month = Decimal("0.00")
