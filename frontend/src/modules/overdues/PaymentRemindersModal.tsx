@@ -59,10 +59,10 @@ function buildMessages(
   overdueTemplate: string,
 ): Record<string, string> {
   const next: Record<string, string> = {};
-  for (const item of items) {
+  items.forEach((item) => {
     const template = item.kind === "overdue" ? overdueTemplate : dueTemplate;
     next[item.client_id] = applyTemplate(template, item);
-  }
+  });
   return next;
 }
 
@@ -147,10 +147,10 @@ export function PaymentRemindersModal({ open, onClose, month }: Props) {
     if (!preview?.green_api_configured || selectedCount === 0) return;
     const clientIds = phoneIds.filter((id) => selected.has(id));
     const payloadMessages: Record<string, string> = {};
-    for (const id of clientIds) {
+    clientIds.forEach((id) => {
       const text = (messages[id] ?? "").trim();
       if (text) payloadMessages[id] = text;
-    }
+    });
     setSending(true);
     setError(null);
     try {
@@ -168,7 +168,7 @@ export function PaymentRemindersModal({ open, onClose, month }: Props) {
       );
       setSelected((prev) => {
         const next = new Set(prev);
-        for (const id of sentIds) next.delete(id);
+        sentIds.forEach((id) => next.delete(id));
         return next;
       });
     } catch (err) {
