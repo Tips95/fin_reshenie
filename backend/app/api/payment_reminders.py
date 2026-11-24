@@ -34,4 +34,5 @@ def post_payment_reminders_send(
         current_user,
         month=body.month,
         client_ids=body.client_ids,
+        messages=body.messages,
     )

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_owner
+from app.api.deps import get_current_active_user, require_payment_reminder_staff
 from app.core.database import get_db
+from app.models.enums import UserRole
 from app.models.organization import Organization
 from app.models.user import User
 from app.schemas.organization import (
@@ -20,6 +21,11 @@ FEATURE_FIELDS = (
     "feature_pricing",
     "feature_analytics",
 )
+GREEN_API_FIELDS = (
+    "green_api_url",
+    "green_api_id_instance",
+    "green_api_token_instance",
+)
 
 
 @router.get("/current", response_model=OrganizationResponse)
@@ -36,7 +42,7 @@ def get_current_organization(
 @router.patch("/current", response_model=OrganizationResponse)
 def update_current_organization(
     payload: OrganizationUpdate,
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(require_payment_reminder_staff),
     db: Session = Depends(get_db),
 ) -> OrganizationResponse:
     organization = db.get(Organization, current_user.organization_id)
@@ -47,12 +53,20 @@ def update_current_organization(
     if not updates:
         return serialize_organization(organization)
 
-    if "name" in updates and updates["name"] is not None:
+    is_owner = current_user.role == UserRole.OWNER
+    if not is_owner and any(key not in GREEN_API_FIELDS for key in updates):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Коллектор может менять только настройки WhatsApp / Green API",
+        )
+
+    if is_owner and "name" in updates and updates["name"] is not None:
         organization.name = " ".join(updates["name"].strip().split())
 
-    for field in FEATURE_FIELDS:
-        if field in updates and updates[field] is not None:
-            setattr(organization, field, updates[field])
+    if is_owner:
+        for field in FEATURE_FIELDS:
+            if field in updates and updates[field] is not None:
+                setattr(organization, field, updates[field])
 
     if "green_api_url" in updates:
         value = updates["green_api_url"]

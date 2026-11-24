@@ -1081,6 +1081,8 @@ export interface PaymentRemindersPreview {
   overdue_count: number;
   without_phone_count: number;
   already_sent_this_month: number;
+  due_template: string;
+  overdue_template: string;
   items: PaymentReminderItem[];
 }
 

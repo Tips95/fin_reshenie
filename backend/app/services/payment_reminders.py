@@ -70,29 +70,59 @@ def _format_date(value: date) -> str:
     return value.strftime("%d.%m.%Y")
 
 
-def _first_name(full_name: str) -> str:
+def surname_and_name(full_name: str) -> str:
+    """«Иванов Иван» из ФИО (фамилия + имя, без отчества)."""
     parts = full_name.strip().split()
     if len(parts) >= 2:
-        return parts[1]
+        return f"{parts[0]} {parts[1]}"
     return parts[0] if parts else "клиент"
 
 
-def build_due_message(*, full_name: str, amount: Decimal, due_date: date) -> str:
+DEFAULT_DUE_TEMPLATE = (
+    "Здравствуйте, {name}!\n\n"
+    "Напоминаем о предстоящем платеже по рассрочке на сумму {amount}. "
+    "Просим оплатить до {date}.\n\n"
+    "С уважением, юридическая компания."
+)
+
+DEFAULT_OVERDUE_TEMPLATE = (
+    "Здравствуйте, {name}!\n\n"
+    "У вас имеется просроченная задолженность по рассрочке "
+    "на сумму {amount} (срок платежа {date}). "
+    "Просим погасить задолженность в ближайшее время.\n\n"
+    "С уважением, юридическая компания."
+)
+
+
+def render_reminder_template(
+    template: str,
+    *,
+    full_name: str,
+    amount: Decimal,
+    due_date: date,
+) -> str:
     return (
-        f"Здравствуйте, {_first_name(full_name)}!\n\n"
-        f"Напоминаем о предстоящем платеже по рассрочке на сумму {_format_money(amount)}. "
-        f"Просим оплатить до {_format_date(due_date)}.\n\n"
-        f"С уважением, юридическая компания."
+        template.replace("{name}", surname_and_name(full_name))
+        .replace("{amount}", _format_money(amount))
+        .replace("{date}", _format_date(due_date))
+    )
+
+
+def build_due_message(*, full_name: str, amount: Decimal, due_date: date) -> str:
+    return render_reminder_template(
+        DEFAULT_DUE_TEMPLATE,
+        full_name=full_name,
+        amount=amount,
+        due_date=due_date,
     )
 
 
 def build_overdue_message(*, full_name: str, amount: Decimal, due_date: date) -> str:
-    return (
-        f"Здравствуйте, {_first_name(full_name)}!\n\n"
-        f"У вас имеется просроченная задолженность по рассрочке "
-        f"на сумму {_format_money(amount)} (срок платежа {_format_date(due_date)}). "
-        f"Просим погасить задолженность в ближайшее время.\n\n"
-        f"С уважением, юридическая компания."
+    return render_reminder_template(
+        DEFAULT_OVERDUE_TEMPLATE,
+        full_name=full_name,
+        amount=amount,
+        due_date=due_date,
     )
 
 
@@ -259,6 +289,8 @@ def preview_payment_reminders(
         overdue_count=sum(1 for item in items if item.kind == KIND_OVERDUE),
         without_phone_count=sum(1 for item in items if not item.has_phone),
         already_sent_this_month=sum(1 for item in items if item.last_sent_at is not None),
+        due_template=DEFAULT_DUE_TEMPLATE,
+        overdue_template=DEFAULT_OVERDUE_TEMPLATE,
         items=items,
     )
 
@@ -269,6 +301,7 @@ def send_payment_reminders(
     *,
     month: str | None = None,
     client_ids: list[UUID] | None = None,
+    messages: dict[UUID, str] | None = None,
 ) -> PaymentRemindersSendResponse:
     organization = db.get(Organization, user.organization_id)
     credentials = resolve_credentials(organization)
@@ -323,12 +356,15 @@ def send_payment_reminders(
             )
             continue
 
+        custom = (messages or {}).get(client_id)
+        text = (custom or "").strip() or item.message
+
         try:
             if index > 0 and delay > 0:
                 time.sleep(delay)
             send_result = send_text_message(
                 item.client.phone,
-                item.message,
+                text,
                 credentials=credentials,
             )
             sent += 1

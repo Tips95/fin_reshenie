@@ -28,12 +28,16 @@ class PaymentRemindersPreview(BaseModel):
     overdue_count: int
     without_phone_count: int
     already_sent_this_month: int
+    due_template: str
+    overdue_template: str
     items: list[PaymentReminderItem]
 
 
 class PaymentRemindersSendRequest(BaseModel):
     month: str | None = None
     client_ids: list[UUID] | None = Field(default=None)
+    # Готовые тексты по client_id (после правок в UI).
+    messages: dict[UUID, str] | None = Field(default=None)
 
     @field_validator("month")
     @classmethod

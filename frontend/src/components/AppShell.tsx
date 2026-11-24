@@ -113,7 +113,13 @@ const navItems = [
     ownerOnly: true,
     feature: "pricing" as const,
   },
-  { href: "/settings", label: "Настройки", icon: "⚙", shortLabel: "Настр.", ownerOnly: true },
+  {
+    href: "/settings",
+    label: "Настройки",
+    icon: "⚙",
+    shortLabel: "Настр.",
+    roles: ["owner", "collector"],
+  },
 ] as Array<{
   href: string;
   label: string;

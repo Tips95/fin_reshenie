@@ -49,6 +49,8 @@ const FEATURES: { key: FeatureKey; label: string; hint: string }[] = [
 export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) {
   const { user, refreshUser } = useAuth();
   const router = useRouter();
+  const isOwner = user?.role === "owner";
+  const canAccess = user?.role === "owner" || user?.role === "collector";
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [name, setName] = useState("");
   const [features, setFeatures] = useState<OrganizationFeatures | null>(null);
@@ -61,13 +63,13 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (user && user.role !== "owner") {
+    if (user && !canAccess) {
       router.replace(homeHref);
     }
-  }, [user, router, homeHref]);
+  }, [user, router, homeHref, canAccess]);
 
   useEffect(() => {
-    if (user?.role !== "owner") return;
+    if (!canAccess) return;
     void (async () => {
       setLoading(true);
       try {
@@ -84,25 +86,27 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
         setLoading(false);
       }
     })();
-  }, [user?.role]);
+  }, [canAccess, user?.role]);
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    if (!features) return;
+    if (isOwner && !features) return;
     setSaving(true);
     setError(null);
     setSaved(false);
     try {
       const payload: Record<string, unknown> = {
-        name: name.trim(),
-        feature_document_collection: features.document_collection,
-        feature_tasks: features.tasks,
-        feature_expenses: features.expenses,
-        feature_pricing: features.pricing,
-        feature_analytics: features.analytics,
         green_api_url: greenApiUrl.trim(),
         green_api_id_instance: greenApiId.trim(),
       };
+      if (isOwner && features) {
+        payload.name = name.trim();
+        payload.feature_document_collection = features.document_collection;
+        payload.feature_tasks = features.tasks;
+        payload.feature_expenses = features.expenses;
+        payload.feature_pricing = features.pricing;
+        payload.feature_analytics = features.analytics;
+      }
       if (greenApiToken.trim()) {
         payload.green_api_token_instance = greenApiToken.trim();
       }
@@ -122,11 +126,11 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
     }
   }
 
-  if (user?.role !== "owner") {
-    return <LoadingState text="Доступ только для руководителя" />;
+  if (!canAccess) {
+    return <LoadingState text="Недостаточно прав" />;
   }
 
-  if (loading || !features) {
+  if (loading || (isOwner && !features)) {
     return <LoadingState text="Загрузка настроек..." />;
   }
 
@@ -134,42 +138,49 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
     <div className="page-stack">
       <PageHeader
         title="Настройки компании"
-        subtitle="Подстройте название и разделы под себя"
+        subtitle={
+          isOwner
+            ? "Подстройте название, WhatsApp и разделы"
+            : "Подключение WhatsApp (Green API) для рассылки"
+        }
       />
 
       {error && <p className="alert-danger">{error}</p>}
       {saved && (
         <p className="alert-success px-2 py-1.5 text-xs">
-          Сохранено. Меню обновится сразу — данные клиентов не затронуты.
+          Сохранено
+          {isOwner ? ". Меню обновится сразу — данные клиентов не затронуты." : "."}
         </p>
       )}
 
       <form onSubmit={handleSave} className="page-stack">
-        <Card>
-          <SectionTitle
-            title="Компания"
-            description="Это имя видят сотрудники в меню. На платформе у каждой компании своё."
-          />
-          <FormField label="Название компании">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="ООО «Ваша компания»"
-              required
-              minLength={2}
+        {isOwner ? (
+          <Card>
+            <SectionTitle
+              title="Компания"
+              description="Это имя видят сотрудники в меню. На платформе у каждой компании своё."
             />
-          </FormField>
-          {organization && (
-            <p className="mt-2 text-[11px] text-muted">
-              id {organization.id.slice(0, 8)}…
-            </p>
-          )}
-        </Card>
+            <FormField label="Название компании">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="ООО «Ваша компания»"
+                required
+                minLength={2}
+              />
+            </FormField>
+            {organization && (
+              <p className="mt-2 text-[11px] text-muted">
+                id {organization.id.slice(0, 8)}…
+              </p>
+            )}
+          </Card>
+        ) : null}
 
         <Card>
           <SectionTitle
             title="WhatsApp · Green API"
-            description="Ключи из консоли Green API. После сохранения кнопка массовой рассылки на дашборде заработает сразу — без переменных Timeweb."
+            description="Ключи из консоли Green API. После сохранения рассылка на дашборде заработает сразу."
           />
           {organization?.green_api_configured ? (
             <p className="mb-3 text-xs text-status-success-text">
@@ -219,36 +230,41 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
           </div>
         </Card>
 
-        <Card>
-          <SectionTitle
-            title="Разделы"
-            description="Выключите то, чем не пользуетесь. Скрытый раздел пропадает из меню; уже внесённые данные остаются в базе."
-          />
-          <div className="space-y-2">
-            {FEATURES.map((item) => (
-              <label
-                key={item.key}
-                className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-surface-muted px-3 py-2"
-              >
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={features[item.key]}
-                  onChange={(e) =>
-                    setFeatures({ ...features, [item.key]: e.target.checked })
-                  }
-                />
-                <span>
-                  <span className="block text-sm font-medium text-foreground">{item.label}</span>
-                  <span className="block text-[11px] text-muted">{item.hint}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </Card>
+        {isOwner && features ? (
+          <Card>
+            <SectionTitle
+              title="Разделы"
+              description="Выключите то, чем не пользуетесь. Скрытый раздел пропадает из меню; уже внесённые данные остаются в базе."
+            />
+            <div className="space-y-2">
+              {FEATURES.map((item) => (
+                <label
+                  key={item.key}
+                  className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-surface-muted px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={features[item.key]}
+                    onChange={(e) =>
+                      setFeatures({ ...features, [item.key]: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">{item.label}</span>
+                    <span className="block text-[11px] text-muted">{item.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={saving || name.trim().length < 2}>
+          <Button
+            type="submit"
+            disabled={saving || (isOwner && name.trim().length < 2)}
+          >
             {saving ? "Сохранение..." : "Сохранить"}
           </Button>
         </div>

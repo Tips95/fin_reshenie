@@ -436,7 +436,11 @@ export const paymentRemindersApi = {
     apiFetch<PaymentRemindersPreview>(
       `/payment-reminders${month ? `?month=${encodeURIComponent(month)}` : ""}`,
     ),
-  send: (data: { month?: string; client_ids?: string[] }) =>
+  send: (data: {
+    month?: string;
+    client_ids?: string[];
+    messages?: Record<string, string>;
+  }) =>
     apiFetch<PaymentRemindersSendResponse>("/payment-reminders/send", {
       method: "POST",
       body: JSON.stringify(data),
