@@ -4,11 +4,26 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _clean_env_str(value: object) -> object:
+    """Убрать пробелы/кавычки; числа из панелей → строка (idInstance)."""
+    if value is None:
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        # 720122811283 как число из YAML/панели
+        return str(int(value)) if float(value).is_integer() else str(value)
+    if isinstance(value, str):
+        cleaned = value.strip().strip('"').strip("'").strip()
+        return cleaned
+    return value
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=True,
+        # Timeweb/оболочки иногда отдают имена в другом регистре.
+        case_sensitive=False,
+        extra="ignore",
     )
 
     PROJECT_NAME: str = "Fin Reshenie"
@@ -49,6 +64,16 @@ class Settings(BaseSettings):
     GREEN_API_ID_INSTANCE: str = ""
     GREEN_API_TOKEN_INSTANCE: str = ""
     GREEN_API_SEND_DELAY_SECONDS: float = 0.7
+
+    @field_validator(
+        "GREEN_API_URL",
+        "GREEN_API_ID_INSTANCE",
+        "GREEN_API_TOKEN_INSTANCE",
+        mode="before",
+    )
+    @classmethod
+    def clean_green_api_strings(cls, value: object) -> object:
+        return _clean_env_str(value)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

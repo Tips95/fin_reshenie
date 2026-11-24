@@ -80,7 +80,11 @@ export function PaymentRemindersModal({ open, onClose, month }: Props) {
         <div className="space-y-3">
           {!preview.green_api_configured ? (
             <p className="alert-warning">
-              Green API не настроен на сервере. Превью доступно, отправка пока невозможна.
+              Green API не виден backend-у. Проверьте в Timeweb переменные{" "}
+              <code>GREEN_API_URL</code>, <code>GREEN_API_ID_INSTANCE</code>,{" "}
+              <code>GREEN_API_TOKEN_INSTANCE</code> в настройках деплоя приложения (не
+              только глобальные) и запустите новый деплой. Статус:{" "}
+              <code>/api/health</code> → <code>green_api: configured</code>.
             </p>
           ) : null}
 

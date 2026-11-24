@@ -58,4 +58,9 @@ app.include_router(api_router, prefix=settings.API_PREFIX)
 
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+    from app.services.green_api import is_green_api_configured
+
+    return {
+        "status": "ok",
+        "green_api": "configured" if is_green_api_configured() else "missing",
+    }

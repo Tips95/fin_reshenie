@@ -54,5 +54,11 @@ if [ "${RUN_SEED:-true}" = "true" ]; then
   fi
 fi
 
+if [ -n "${GREEN_API_URL:-}" ] && [ -n "${GREEN_API_ID_INSTANCE:-}" ] && [ -n "${GREEN_API_TOKEN_INSTANCE:-}" ]; then
+  echo "Green API WhatsApp: configured (idInstance=${GREEN_API_ID_INSTANCE})"
+else
+  echo "Green API WhatsApp: NOT configured (set GREEN_API_URL, GREEN_API_ID_INSTANCE, GREEN_API_TOKEN_INSTANCE and redeploy)"
+fi
+
 echo "Starting API server..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
