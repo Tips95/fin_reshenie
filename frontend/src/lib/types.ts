@@ -91,6 +91,11 @@ export interface Organization {
   organization_type: OrganizationType;
   features: OrganizationFeatures;
   created_at: string;
+  green_api_configured?: boolean;
+  green_api_url?: string | null;
+  green_api_id_instance?: string | null;
+  green_api_token_set?: boolean;
+  green_api_from_env?: boolean;
 }
 
 export interface TokenResponse {

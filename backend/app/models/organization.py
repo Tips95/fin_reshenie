@@ -34,6 +34,11 @@ class Organization(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
         Boolean, default=False, server_default=false(), nullable=False
     )
 
+    # Green API WhatsApp: приоритетнее env, чтобы не зависеть от Timeweb compose.
+    green_api_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    green_api_id_instance: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    green_api_token_instance: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     users: Mapped[list["User"]] = relationship(back_populates="organization")
     clients: Mapped[list["Client"]] = relationship(back_populates="organization")
     pricing_tiers: Mapped[list["PricingTier"]] = relationship(back_populates="organization")

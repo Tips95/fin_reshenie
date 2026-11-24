@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.models.client import Client
 from app.models.enums import ClientStatus
 from app.models.installment_plan import InstallmentPlan
+from app.models.organization import Organization
 from app.models.payment_schedule import PaymentSchedule
 from app.models.user import User
 from app.models.whatsapp_reminder_log import WhatsappReminderLog
@@ -33,6 +34,7 @@ from app.services.green_api import (
     GreenApiNotConfiguredError,
     is_green_api_configured,
     phone_to_chat_id,
+    resolve_credentials,
     send_text_message,
 )
 from app.services.overdues import clients_overdue_summaries
@@ -233,6 +235,7 @@ def preview_payment_reminders(
     *,
     month: str | None = None,
 ) -> PaymentRemindersPreview:
+    organization = db.get(Organization, user.organization_id)
     period_month, candidates = collect_reminder_candidates(db, user, month=month)
     items = [
         PaymentReminderItem(
@@ -250,7 +253,7 @@ def preview_payment_reminders(
     ]
     return PaymentRemindersPreview(
         period_month=period_month,
-        green_api_configured=is_green_api_configured(),
+        green_api_configured=is_green_api_configured(organization),
         total=len(items),
         due_count=sum(1 for item in items if item.kind == KIND_DUE),
         overdue_count=sum(1 for item in items if item.kind == KIND_OVERDUE),
@@ -267,10 +270,15 @@ def send_payment_reminders(
     month: str | None = None,
     client_ids: list[UUID] | None = None,
 ) -> PaymentRemindersSendResponse:
-    if not is_green_api_configured():
+    organization = db.get(Organization, user.organization_id)
+    credentials = resolve_credentials(organization)
+    if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Green API не настроен. Укажите GREEN_API_URL, GREEN_API_ID_INSTANCE и GREEN_API_TOKEN_INSTANCE.",
+            detail=(
+                "Green API не настроен. Откройте Настройки компании и укажите "
+                "URL, idInstance и apiTokenInstance."
+            ),
         )
 
     period_month, candidates = collect_reminder_candidates(db, user, month=month)
@@ -318,7 +326,11 @@ def send_payment_reminders(
         try:
             if index > 0 and delay > 0:
                 time.sleep(delay)
-            send_result = send_text_message(item.client.phone, item.message)
+            send_result = send_text_message(
+                item.client.phone,
+                item.message,
+                credentials=credentials,
+            )
             sent += 1
             log = WhatsappReminderLog(
                 organization_id=user.organization_id,

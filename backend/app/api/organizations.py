@@ -54,6 +54,19 @@ def update_current_organization(
         if field in updates and updates[field] is not None:
             setattr(organization, field, updates[field])
 
+    if "green_api_url" in updates:
+        value = updates["green_api_url"]
+        organization.green_api_url = value or None
+    if "green_api_id_instance" in updates:
+        value = updates["green_api_id_instance"]
+        organization.green_api_id_instance = value or None
+    if "green_api_token_instance" in updates:
+        value = updates["green_api_token_instance"]
+        # Пустую строку не принимаем как сброс — чтобы форма без ввода токена
+        # не затирала сохранённый секрет.
+        if value:
+            organization.green_api_token_instance = value
+
     db.commit()
     db.refresh(organization)
     return serialize_organization(organization)

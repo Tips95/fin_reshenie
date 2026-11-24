@@ -52,6 +52,9 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [name, setName] = useState("");
   const [features, setFeatures] = useState<OrganizationFeatures | null>(null);
+  const [greenApiUrl, setGreenApiUrl] = useState("");
+  const [greenApiId, setGreenApiId] = useState("");
+  const [greenApiToken, setGreenApiToken] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +75,9 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
         setOrganization(data);
         setName(data.name);
         setFeatures(data.features);
+        setGreenApiUrl(data.green_api_url ?? "");
+        setGreenApiId(data.green_api_id_instance ?? "");
+        setGreenApiToken("");
       } catch (err) {
         setError(err instanceof ApiRequestError ? err.message : "Не удалось загрузить настройки");
       } finally {
@@ -87,17 +93,26 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
     setError(null);
     setSaved(false);
     try {
-      const updated = await organizationsApi.update({
+      const payload: Record<string, unknown> = {
         name: name.trim(),
         feature_document_collection: features.document_collection,
         feature_tasks: features.tasks,
         feature_expenses: features.expenses,
         feature_pricing: features.pricing,
         feature_analytics: features.analytics,
-      });
+        green_api_url: greenApiUrl.trim(),
+        green_api_id_instance: greenApiId.trim(),
+      };
+      if (greenApiToken.trim()) {
+        payload.green_api_token_instance = greenApiToken.trim();
+      }
+      const updated = await organizationsApi.update(payload);
       setOrganization(updated);
       setName(updated.name);
       setFeatures(updated.features);
+      setGreenApiUrl(updated.green_api_url ?? "");
+      setGreenApiId(updated.green_api_id_instance ?? "");
+      setGreenApiToken("");
       await refreshUser();
       setSaved(true);
     } catch (err) {
@@ -149,6 +164,59 @@ export function OrganizationSettingsContent({ homeHref }: { homeHref: string }) 
               id {organization.id.slice(0, 8)}…
             </p>
           )}
+        </Card>
+
+        <Card>
+          <SectionTitle
+            title="WhatsApp · Green API"
+            description="Ключи из консоли Green API. После сохранения кнопка массовой рассылки на дашборде заработает сразу — без переменных Timeweb."
+          />
+          {organization?.green_api_configured ? (
+            <p className="mb-3 text-xs text-status-success-text">
+              Подключено
+              {organization.green_api_from_env ? " (из переменных сервера)" : ""}.
+              {organization.green_api_token_set ? " Токен сохранён." : ""}
+            </p>
+          ) : (
+            <p className="mb-3 text-xs text-status-warning-text">
+              Пока не подключено — вставьте значения со страницы instance в Green API.
+            </p>
+          )}
+          <div className="space-y-3">
+            <FormField label="apiUrl">
+              <Input
+                value={greenApiUrl}
+                onChange={(e) => setGreenApiUrl(e.target.value)}
+                placeholder="https://7201.api.green-api.com"
+                autoComplete="off"
+              />
+            </FormField>
+            <FormField label="idInstance">
+              <Input
+                value={greenApiId}
+                onChange={(e) => setGreenApiId(e.target.value)}
+                placeholder="720122811283"
+                autoComplete="off"
+              />
+            </FormField>
+            <FormField
+              label={
+                organization?.green_api_token_set
+                  ? "apiTokenInstance (оставьте пустым, чтобы не менять)"
+                  : "apiTokenInstance"
+              }
+            >
+              <Input
+                type="password"
+                value={greenApiToken}
+                onChange={(e) => setGreenApiToken(e.target.value)}
+                placeholder={
+                  organization?.green_api_token_set ? "•••••••• (сохранён)" : "токен из консоли"
+                }
+                autoComplete="new-password"
+              />
+            </FormField>
+          </div>
         </Card>
 
         <Card>
