@@ -676,6 +676,14 @@ export interface QuestionnaireDebt {
   debt_amount: string;
 }
 
+export type InstallmentMode = "auto" | "manual";
+
+export interface QuestionnaireInstallmentMonth {
+  month: number;
+  /** Сумма платежа строкой — как остальные денежные поля формы. */
+  amount: string;
+}
+
 export interface QuestionnaireAsset {
   key: string;
   label: string;
@@ -799,6 +807,8 @@ export interface Questionnaire extends QuestionnaireBrief {
   has_weapon: boolean | null;
   weapon_details: string | null;
   notes: string | null;
+  installment_mode?: InstallmentMode;
+  installment_schedule?: QuestionnaireInstallmentMonth[];
   debts: QuestionnaireDebt[];
   assets?: QuestionnaireAsset[];
   documents?: QuestionnaireDocumentItem[];

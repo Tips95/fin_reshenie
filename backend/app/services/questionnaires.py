@@ -386,6 +386,10 @@ def create_questionnaire(
         lead_status=LeadStatus.IN_PROGRESS if payload.appointment_at else LeadStatus.NEW,
         full_name=payload.full_name,
         service_cost=payload.service_cost,
+        installment_mode=payload.installment_mode or "auto",
+        installment_schedule=[
+            row.model_dump(mode="json") for row in payload.installment_schedule
+        ],
         phone=payload.phone,
         registration_region=payload.registration_region,
         fake_income_documents=payload.fake_income_documents,
@@ -468,6 +472,10 @@ def update_questionnaire(
         item.client_id = _maybe_bind_client(db, user, payload.client_id)
     item.full_name = payload.full_name
     item.service_cost = payload.service_cost
+    item.installment_mode = payload.installment_mode or "auto"
+    item.installment_schedule = [
+        row.model_dump(mode="json") for row in payload.installment_schedule
+    ]
     item.phone = payload.phone
     item.registration_region = payload.registration_region
     item.fake_income_documents = payload.fake_income_documents
@@ -1105,6 +1113,8 @@ def to_questionnaire_response(item: ClientQuestionnaire) -> QuestionnaireRespons
         has_weapon=getattr(item, "has_weapon", None),
         weapon_details=getattr(item, "weapon_details", None),
         notes=item.notes,
+        installment_mode=getattr(item, "installment_mode", None) or "auto",
+        installment_schedule=getattr(item, "installment_schedule", None) or [],
         debts=item.debts or empty_debts(),
         assets=item.assets or empty_assets(),
         documents=item.documents or empty_documents(),

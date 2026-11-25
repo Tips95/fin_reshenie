@@ -22,6 +22,11 @@ class QuestionnaireDebt(BaseModel):
     debt_amount: str = ""
 
 
+class QuestionnaireInstallmentMonth(BaseModel):
+    month: int = Field(ge=1, le=36)
+    amount: Decimal = Field(ge=0, decimal_places=2)
+
+
 class QuestionnaireAsset(BaseModel):
     key: str
     label: str
@@ -65,6 +70,8 @@ class QuestionnaireBase(BaseModel):
     filled_date: date | None = None
     appointment_at: date | None = None
     appointment_note: str | None = Field(default=None, max_length=2000)
+    installment_mode: str = Field(default="auto", pattern="^(auto|manual)$")
+    installment_schedule: list[QuestionnaireInstallmentMonth] = Field(default_factory=list)
     debts: list[QuestionnaireDebt] = Field(default_factory=lambda: [
         QuestionnaireDebt.model_validate(row) for row in empty_debts()
     ])
@@ -89,6 +96,28 @@ class QuestionnaireBase(BaseModel):
     def normalize_appointment_note(cls, value: str | None) -> str | None:
         text = (value or "").strip()
         return text or None
+
+    @field_validator("installment_mode", mode="before")
+    @classmethod
+    def coerce_installment_mode(cls, value: Any) -> str:
+        mode = str(value or "auto").strip().lower()
+        return mode if mode in {"auto", "manual"} else "auto"
+
+    @field_validator("installment_schedule", mode="before")
+    @classmethod
+    def coerce_installment_schedule(cls, value: Any) -> list[dict[str, Any]]:
+        if not value:
+            return []
+        if not isinstance(value, list):
+            return []
+        rows: list[dict[str, Any]] = []
+        for index, row in enumerate(value, start=1):
+            if not isinstance(row, dict):
+                continue
+            month = row.get("month", index)
+            amount = row.get("amount", 0)
+            rows.append({"month": month, "amount": amount})
+        return rows
 
     @field_validator("debts", mode="before")
     @classmethod
@@ -285,6 +314,8 @@ class QuestionnaireResponse(QuestionnaireBrief):
     has_weapon: bool | None = None
     weapon_details: str | None = None
     notes: str | None
+    installment_mode: str = "auto"
+    installment_schedule: list[QuestionnaireInstallmentMonth] = Field(default_factory=list)
     debts: list[QuestionnaireDebt]
     assets: list[QuestionnaireAsset]
     documents: list[QuestionnaireDocument]

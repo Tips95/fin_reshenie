@@ -268,7 +268,7 @@ def download_questionnaire_pdf(
         user=current_user,
     )
     try:
-        content = build_questionnaire_pdf(item)
+        content = build_questionnaire_pdf(item, db=db)
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -107,6 +107,18 @@ class ClientQuestionnaire(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     weapon_details: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     filled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # auto — график по прайсу; manual — installment_schedule из анкеты.
+    installment_mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="auto",
+        server_default="auto",
+    )
+    installment_schedule: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
     debts: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     assets: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     documents: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)

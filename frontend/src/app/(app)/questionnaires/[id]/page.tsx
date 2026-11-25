@@ -128,6 +128,15 @@ export default function QuestionnaireDetailPage() {
   }
 
   async function handlePdf() {
+    // PDF строится с сервера: сначала сохраняем форму, иначе график рассрочки
+    // из несохранённых долгов на экране в файл не попадёт.
+    if (dirty) {
+      try {
+        await saveQuestionnaire();
+      } catch {
+        return;
+      }
+    }
     setDownloading(true);
     try {
       await questionnairesApi.downloadPdf(params.id, `anketa_${params.id.slice(0, 8)}.pdf`);
@@ -290,7 +299,16 @@ export default function QuestionnaireDetailPage() {
         <LeadSectionNav active={active} onSelect={scrollTo} />
 
         <div className="min-w-0 flex-1 space-y-4">
-          <LeadOverview item={item} form={form} />
+          <LeadOverview
+            item={item}
+            form={form}
+            onChange={(partial) => {
+              setForm((prev) => (prev ? { ...prev, ...partial } : prev));
+            }}
+            onApplyServiceCost={(cost) => {
+              setForm((prev) => (prev ? { ...prev, service_cost: cost } : prev));
+            }}
+          />
 
           <LeadPanel
             item={item}

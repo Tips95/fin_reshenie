@@ -1,4 +1,9 @@
-import type { Questionnaire, QuestionnaireDebt } from "@/lib/types";
+import type {
+  InstallmentMode,
+  Questionnaire,
+  QuestionnaireDebt,
+  QuestionnaireInstallmentMonth,
+} from "@/lib/types";
 import { PHONE_PREFIX } from "@/lib/phone";
 import { todayIsoDate } from "@/lib/format";
 import {
@@ -136,8 +141,22 @@ export function emptyQuestionnaireForm(
     notes: "",
     appointment_at: null,
     appointment_note: "",
+    installment_mode: "auto",
+    installment_schedule: [],
     ...partial,
   };
+}
+
+function normalizeInstallmentSchedule(
+  rows: QuestionnaireInstallmentMonth[] | null | undefined,
+): QuestionnaireInstallmentMonth[] {
+  if (!rows?.length) return [];
+  return rows
+    .map((row, index) => ({
+      month: Number(row.month) || index + 1,
+      amount: String(row.amount ?? "").trim(),
+    }))
+    .sort((a, b) => a.month - b.month);
 }
 
 export function questionnaireToForm(item: Questionnaire): QuestionnaireFormValue {
@@ -176,6 +195,8 @@ export function questionnaireToForm(item: Questionnaire): QuestionnaireFormValue
     notes: item.notes ?? "",
     appointment_at: item.appointment_at,
     appointment_note: item.appointment_note ?? "",
+    installment_mode: (item.installment_mode === "manual" ? "manual" : "auto") as InstallmentMode,
+    installment_schedule: normalizeInstallmentSchedule(item.installment_schedule),
     debts: debts.length > 0 ? debts : [emptyDebt()],
     has_property_debtor: choiceFromStoredText(item.property_debtor),
     has_property_spouse: keepSpouseProperty ? choiceFromStoredText(item.property_spouse) : null,
@@ -234,6 +255,14 @@ export function formToPayload(form: QuestionnaireFormValue): Record<string, unkn
     notes: trimmedOrNull(form.notes),
     appointment_at: form.appointment_at || null,
     appointment_note: trimmedOrNull(form.appointment_note),
+    installment_mode: form.installment_mode === "manual" ? "manual" : "auto",
+    installment_schedule:
+      form.installment_mode === "manual"
+        ? normalizeInstallmentSchedule(form.installment_schedule).map((row, index) => ({
+            month: row.month || index + 1,
+            amount: row.amount.trim() || "0",
+          }))
+        : [],
     debts: form.debts.map((row) => ({
       creditor: row.creditor,
       origin_date: row.origin_date || null,
@@ -242,6 +271,25 @@ export function formToPayload(form: QuestionnaireFormValue): Record<string, unkn
       debt_amount: row.debt_amount,
     })),
   };
+}
+
+export function emptyInstallmentMonth(month = 1): QuestionnaireInstallmentMonth {
+  return { month, amount: "" };
+}
+
+export function addInstallmentMonth(
+  rows: QuestionnaireInstallmentMonth[],
+): QuestionnaireInstallmentMonth[] {
+  const nextMonth = rows.length > 0 ? Math.max(...rows.map((row) => row.month)) + 1 : 1;
+  return [...rows, emptyInstallmentMonth(nextMonth)];
+}
+
+export function removeInstallmentMonth(
+  rows: QuestionnaireInstallmentMonth[],
+  index: number,
+): QuestionnaireInstallmentMonth[] {
+  const next = rows.filter((_, itemIndex) => itemIndex !== index);
+  return next.map((row, itemIndex) => ({ ...row, month: itemIndex + 1 }));
 }
 
 export function addDebtRow(debts: QuestionnaireDebt[]): QuestionnaireDebt[] {
