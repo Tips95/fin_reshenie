@@ -272,6 +272,7 @@ def get_dashboard_summary(
             clients_new_this_month=clients_new_this_month,
             collection_in_progress=collection_in_progress,
             expected_this_month=Decimal("0.00"),
+            collectable_by_month_end=Decimal("0.00"),
             collected_this_month=Decimal("0.00"),
             cash_received_this_month=Decimal("0.00"),
             overdue_amount=overdue_amount,
@@ -325,6 +326,14 @@ def get_dashboard_summary(
             due = effective_due_date(item)
             if month_start <= due <= month_end:
                 expected_this_month += remainder
+
+    # В текущем месяце «ожидается» и «просрочка» не пересекаются: платёж
+    # становится просроченным только после конца месяца срока.
+    collectable_by_month_end = (
+        expected_this_month + overdue_amount
+        if is_current_month
+        else expected_this_month
+    )
 
     collected_this_month = Decimal("0.00")
     total_collected = Decimal("0.00")
@@ -441,14 +450,14 @@ def get_dashboard_summary(
 
     cash_forecast_end = (
         cash_on_hand
-        + expected_this_month
+        + collectable_by_month_end
         - expenses_remaining_this_month
         - mandatory_pending.total
     )
     month_net_flow = cash_in_this_month - mandatory_paid_this_month.total - expenses_paid_this_month
     month_net_forecast = (
         month_net_flow
-        + expected_this_month
+        + collectable_by_month_end
         - mandatory_pending.total
         - expenses_remaining_this_month
     )
@@ -462,6 +471,7 @@ def get_dashboard_summary(
         clients_new_this_month=clients_new_this_month,
         collection_in_progress=collection_in_progress,
         expected_this_month=expected_this_month,
+        collectable_by_month_end=collectable_by_month_end,
         collected_this_month=collected_this_month,
         cash_received_this_month=cash_received_this_month,
         overdue_amount=overdue_amount,

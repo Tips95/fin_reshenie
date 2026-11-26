@@ -363,6 +363,9 @@ class TestCollectorDashboard:
         assert Decimal(body["overdue_amount"]) >= Decimal("10000.00")
         assert body["clients_overdue"] >= 1
         assert Decimal(body["expected_this_month"]) >= Decimal("8000.00")
+        assert Decimal(body["collectable_by_month_end"]) == (
+            Decimal(body["expected_this_month"]) + Decimal(body["overdue_amount"])
+        )
         assert any(item["client_id"] == office["client_id"] for item in body["overdue_preview"])
         assert any(item["client_id"] == office["client_id"] for item in body["due_this_month_preview"])
 

@@ -167,6 +167,7 @@ class TestDashboardSummary:
         assert summary.clients_total == 1
         assert summary.clients_active == 1
         assert summary.expected_this_month == Decimal("7000.00")
+        assert summary.collectable_by_month_end == Decimal("7000.00")
         assert summary.collected_this_month == Decimal("3000.00")
         assert summary.cash_received_this_month == Decimal("3000.00")
         assert summary.total_remainder == Decimal("7000.00")
@@ -462,10 +463,80 @@ class TestDashboardSummary:
         assert summary.expenses_remaining_this_month == Decimal("600.00")
         assert summary.cash_on_hand == Decimal("507600.00")
         assert summary.cash_forecast_end == (
-            summary.cash_on_hand + summary.expected_this_month - Decimal("600.00")
+            summary.cash_on_hand + summary.collectable_by_month_end - Decimal("600.00")
         )
         # За месяц без остатка на начало: 8000 поступило − 400 оплачено расходов.
         assert summary.month_net_flow == Decimal("7600.00")
+
+    def test_collectable_by_month_end_sums_overdue_and_expected(self, monkeypatch):
+        client = make_client()
+        schedule = SimpleNamespace(
+            planned_amount=Decimal("8000.00"),
+            paid_amount=Decimal("0.00"),
+            due_date=date.today(),
+            deferred_until=None,
+        )
+        db = MagicMock()
+        db.scalars.side_effect = [[client], []]
+        db.execute.return_value = [(CLIENT_ID, schedule)]
+        monkeypatch.setattr(
+            "app.services.dashboard.clients_overdue_map",
+            lambda *_args, **_kwargs: {CLIENT_ID: True},
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.clients_overdue_summaries",
+            lambda *_args, **_kwargs: {
+                CLIENT_ID: {"overdue_amount": Decimal("5000.00")},
+            },
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._count_open_tasks",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard._build_overdue_clients_preview",
+            lambda *_args, **_kwargs: [],
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.sum_active_contract_totals",
+            lambda *_args, **_kwargs: Decimal("0.00"),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_mandatory_paid_totals",
+            lambda *_args, **_kwargs: _totals(),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.get_document_collection_paid_totals",
+            lambda *_args, **_kwargs: __import__(
+                "app.services.document_collection_stats",
+                fromlist=["DocumentCollectionTotals"],
+            ).DocumentCollectionTotals(
+                collection_cash=Decimal("0.00"),
+                notary_fee=Decimal("0.00"),
+                manager_commission=Decimal("0.00"),
+                paid_count=0,
+            ),
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.count_contracts_signed_in_period",
+            lambda *_args, **_kwargs: 0,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.monthly_expenses_total",
+            lambda *_args, **_kwargs: (Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
+        )
+        patch_civil_income(monkeypatch)
+        patch_paid_expenses(monkeypatch)
+        patch_cash_balance(monkeypatch)
+
+        summary = get_dashboard_summary(db, make_user())
+
+        assert summary.expected_this_month == Decimal("8000.00")
+        assert summary.overdue_amount == Decimal("5000.00")
+        assert summary.collectable_by_month_end == Decimal("13000.00")
+        assert summary.cash_forecast_end == (
+            summary.cash_on_hand + Decimal("13000.00")
+        )
 
     def test_month_flow_subtracts_unpaid_mandatory(self, monkeypatch):
         client = make_client()

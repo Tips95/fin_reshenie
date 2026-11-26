@@ -41,6 +41,7 @@ class CollectorDashboard(BaseModel):
     period_month: str
     is_current_month: bool
     expected_this_month: Decimal
+    collectable_by_month_end: Decimal = Decimal("0.00")
     collected_this_month: Decimal
     overdue_amount: Decimal
     clients_overdue: int

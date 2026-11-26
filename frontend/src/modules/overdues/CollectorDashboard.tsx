@@ -123,15 +123,26 @@ export function CollectorDashboard() {
 
       <div className="space-y-4">
         <div>
-          <p className="type-caption">Выбранный месяц</p>
+          <p className="type-caption">К получению до конца месяца</p>
           <p className="mb-2 text-xs text-muted">
-            Срок платежа в этом месяце. Старая просрочка сюда не входит и с этой суммой не складывается.
+            {data.is_current_month
+              ? "Просрочка плюс платежи со сроком в этом месяце — без двойного счёта."
+              : "Для прошлого месяца — только сроки выбранного месяца."}
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <StatCard
-              label="Ожидается по графику месяца"
-              value={formatMoney(data.expected_this_month)}
+              label="Всего к получению"
+              value={formatMoney(data.collectable_by_month_end)}
               tone="brand"
+              hint={
+                data.is_current_month
+                  ? `${formatMoney(data.overdue_amount)} + ${formatMoney(data.expected_this_month)}`
+                  : "Только график выбранного месяца"
+              }
+            />
+            <StatCard
+              label="Сроки этого месяца"
+              value={formatMoney(data.expected_this_month)}
               hint="Ещё не оплачено, срок в выбранном месяце"
             />
             <StatCard
@@ -145,14 +156,14 @@ export function CollectorDashboard() {
         <div>
           <p className="type-caption">Уже просрочено на сегодня</p>
           <p className="mb-2 text-xs text-muted">
-            Отдельная сумма: долги прошлых месяцев. К «ожидается по графику» её не прибавляют.
+            Долги прошлых месяцев. В текущем месяце входят в «к получению».
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <StatCard
               label="Просрочка"
               value={formatMoney(data.overdue_amount)}
               tone="danger"
-              hint={`${data.clients_overdue} клиент. · не часть месяца`}
+              hint={`${data.clients_overdue} клиент.`}
             />
             <StatCard
               label="Обещал сегодня"

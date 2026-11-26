@@ -72,6 +72,9 @@ class DashboardSummary(BaseModel):
     clients_new_this_month: int = 0
     collection_in_progress: int = 0
     expected_this_month: Decimal
+    # Просрочка + сроки выбранного месяца без двойного счёта (в текущем месяце
+    # пересечения нет: просрочка текущего месяца наступает только после его конца).
+    collectable_by_month_end: Decimal = Decimal("0.00")
     collected_this_month: Decimal
     cash_received_this_month: Decimal
     overdue_amount: Decimal

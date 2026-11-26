@@ -59,6 +59,7 @@ function normalizeSummary(data: DashboardSummary): DashboardSummary {
     civil_cases_this_month: data.civil_cases_this_month ?? 0,
     civil_income_total: data.civil_income_total ?? "0",
     civil_income_this_month: data.civil_income_this_month ?? "0",
+    collectable_by_month_end: data.collectable_by_month_end ?? data.expected_this_month ?? "0",
     cash_opening_balance: data.cash_opening_balance ?? "0",
     cash_opening_is_set: data.cash_opening_is_set ?? false,
     cash_in_this_month: data.cash_in_this_month ?? "0",
@@ -373,9 +374,14 @@ function OfficeDashboard() {
                 hint={`Вся непогашенная сумма. Из неё просрочено ${formatMoney(summary.overdue_amount)}`}
               />
               <Metric
-                label="Ожидается в этом месяце"
-                value={formatMoney(summary.expected_this_month)}
-                hint="Только срок этого месяца. К просрочке не прибавлять"
+                label="К получению до конца месяца"
+                value={formatMoney(summary.collectable_by_month_end)}
+                tone="brand"
+                hint={
+                  summary.is_current_month
+                    ? `Просрочка ${formatMoney(summary.overdue_amount)} + сроки месяца ${formatMoney(summary.expected_this_month)}`
+                    : `Только сроки выбранного месяца ${formatMoney(summary.expected_this_month)}`
+                }
               />
               <Metric
                 label="Прибыль за месяц"
@@ -385,7 +391,7 @@ function OfficeDashboard() {
               />
             </MetricStrip>
             <p className="type-hint">
-              «Ещё должны» уже включает просрочку. «Ожидается в этом месяце» — отдельный срез, это не вторая куча денег.
+              «К получению» — если закроют всю просрочку и внесут платежи этого месяца. «Ещё должны» шире: там ещё будущие месяцы.
             </p>
           </div>
         ) : (
@@ -620,9 +626,13 @@ function OfficeDashboard() {
                 <p className="type-caption mb-1">Ещё предстоит</p>
                 <LedgerRow
                   sign="+"
-                  label="Ожидается по графикам"
-                  hint="Неоплаченное со сроком в этом месяце. Просрочку прошлых месяцев не прибавлять"
-                  value={formatMoney(summary.expected_this_month)}
+                  label="К получению до конца месяца"
+                  hint={
+                    summary.is_current_month
+                      ? `Просрочка ${formatMoney(summary.overdue_amount)} + сроки месяца ${formatMoney(summary.expected_this_month)}`
+                      : "Только неоплаченное со сроком в выбранном месяце"
+                  }
+                  value={formatMoney(summary.collectable_by_month_end)}
                 />
                 <LedgerRow
                   sign="−"
@@ -796,7 +806,7 @@ function OfficeDashboard() {
             <Panel
               id="dash-portfolio"
               title="Портфель"
-              description="Всё, что ещё не оплачено по графикам. Просрочка уже внутри остатка — к «ожидается в этом месяце» её не прибавляют."
+              description="Всё, что ещё не оплачено по графикам. «К получению до конца месяца» — просрочка плюс сроки текущего месяца."
               action={
                 <Link href="/clients/contracts" className={PANEL_LINK}>
                   Договоры

@@ -386,6 +386,7 @@ export interface CollectorDashboard {
   period_month: string;
   is_current_month: boolean;
   expected_this_month: string;
+  collectable_by_month_end: string;
   collected_this_month: string;
   overdue_amount: string;
   clients_overdue: number;
@@ -405,6 +406,7 @@ export interface DashboardSummary {
   clients_new_this_month: number;
   collection_in_progress: number;
   expected_this_month: string;
+  collectable_by_month_end: string;
   collected_this_month: string;
   cash_received_this_month: string;
   overdue_amount: string;

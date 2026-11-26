@@ -42,6 +42,7 @@ def get_collector_dashboard(
             period_month=period_month,
             is_current_month=is_current_month,
             expected_this_month=Decimal("0.00"),
+            collectable_by_month_end=Decimal("0.00"),
             collected_this_month=Decimal("0.00"),
             overdue_amount=Decimal("0.00"),
             clients_overdue=0,
@@ -100,6 +101,11 @@ def get_collector_dashboard(
     summaries = clients_overdue_summaries(db, client_ids, today=today)
     overdue_amount = total_overdue_amount(summaries)
     clients_overdue = len(summaries)
+    collectable_by_month_end = (
+        expected_this_month + overdue_amount
+        if is_current_month
+        else expected_this_month
+    )
 
     overdue_preview: list[CollectorOverduePreviewItem] = []
     promised_today: list[CollectorPromisedTodayItem] = []
@@ -142,6 +148,7 @@ def get_collector_dashboard(
         period_month=period_month,
         is_current_month=is_current_month,
         expected_this_month=expected_this_month,
+        collectable_by_month_end=collectable_by_month_end,
         collected_this_month=collected_this_month,
         overdue_amount=overdue_amount,
         clients_overdue=clients_overdue,
